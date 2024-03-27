@@ -178,7 +178,7 @@ func (t *TxRelayerImpl) sendTransactionLocked(txn *types.Transaction, key crypto
 
 		if txn.GetGasFeeCap() == nil {
 			// retrieve the latest base fee
-			feeHist, err := t.Client().Eth().FeeHistory(1, ethgo.Latest, nil)
+			feeHist, err := t.Client().Eth().FeeHistory(1, ethgo.Latest, []float64{})
 			if err != nil {
 				return ethgo.ZeroHash, fmt.Errorf("failed to get fee history: %w", err)
 			}
@@ -204,7 +204,9 @@ func (t *TxRelayerImpl) sendTransactionLocked(txn *types.Transaction, key crypto
 	if txn.Gas() == 0 {
 		gasLimit, err := t.client.Eth().EstimateGas(ConvertTxnToCallMsg(txn))
 		if err != nil {
-			return ethgo.ZeroHash, fmt.Errorf("failed to estimate gas: %w", err)
+			// TODO: Add Logger and write the err return ethgo.ZeroHash, fmt.Errorf("failed to estimate gas: %w", err)
+			// return ethgo.ZeroHash, fmt.Errorf("failed to estimate gas: %w", err)
+			gasLimit = DefaultGasLimit * 2
 		}
 
 		txn.SetGas(gasLimit + (gasLimit * gasLimitIncreasePercentage / 100))
