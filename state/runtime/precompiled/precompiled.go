@@ -37,7 +37,7 @@ func init() {
 }
 
 type contract interface {
-	gas(input []byte, config *chain.ForksInTime) uint64
+	gas(input []byte, caller types.Address, config *chain.ForksInTime) uint64
 	run(input []byte, caller types.Address, host runtime.Host) ([]byte, error)
 }
 
@@ -49,14 +49,14 @@ type Precompiled struct {
 }
 
 // NewPrecompiled creates a new runtime for the precompiled contracts
-func NewPrecompiled() *Precompiled {
+func NewPrecompiled(validatorSetBackend ValidatorSetPrecompileBackend) *Precompiled {
 	p := &Precompiled{}
-	p.setupContracts()
+	p.setupContracts(validatorSetBackend)
 
 	return p
 }
 
-func (p *Precompiled) setupContracts() {
+func (p *Precompiled) setupContracts(validatorSetBackend ValidatorSetPrecompileBackend) {
 	p.register("1", &ecrecover{p})
 	p.register("2", &sha256h{})
 	p.register("3", &ripemd160h{p})
@@ -79,6 +79,11 @@ func (p *Precompiled) setupContracts() {
 
 	// BLS aggregated signatures verification precompile
 	p.register(contracts.BLSAggSigsVerificationPrecompile.String(), &blsAggSignsVerification{})
+
+	// ValidatorSet precompile
+	p.register(contracts.ValidatorSetPrecompile.String(), &validatorSetPrecompile{
+		backend: validatorSetBackend,
+	})
 }
 
 func (p *Precompiled) register(precompileAddrRaw string, b contract) {
@@ -134,7 +139,7 @@ func (p *Precompiled) Name() string {
 // Run runs an execution
 func (p *Precompiled) Run(c *runtime.Contract, host runtime.Host, config *chain.ForksInTime) *runtime.ExecutionResult {
 	contract := p.contracts[c.CodeAddress]
-	gasCost := contract.gas(c.Input, config)
+	gasCost := contract.gas(c.Input, c.Caller, config)
 
 	// In the case of not enough gas for precompiled execution we return ErrOutOfGas
 	if c.Gas < gasCost {

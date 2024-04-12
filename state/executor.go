@@ -45,6 +45,10 @@ type Executor struct {
 
 	PostHook        func(txn *Transition)
 	GenesisPostHook func(*Transition) error
+
+	// this value should be set if we want to enable validator set precompile
+	// note that this precompile WONT be enabled for WriteGenesis
+	validatorSetBackend precompiled.ValidatorSetPrecompileBackend
 }
 
 // NewExecutor creates a new executor
@@ -81,7 +85,7 @@ func (e *Executor) WriteGenesis(
 		ChainID: e.config.ChainID,
 	}
 
-	transition := NewTransition(e.logger, config, snap, txn)
+	transition := NewTransition(e.logger, config, snap, txn, nil)
 	transition.ctx = env
 
 	for addr, account := range alloc {
@@ -199,7 +203,7 @@ func (e *Executor) BeginTxn(
 		BurnContract: burnContract,
 	}
 
-	t := NewTransition(e.logger, forkConfig, snap, newTxn)
+	t := NewTransition(e.logger, forkConfig, snap, newTxn, e.validatorSetBackend)
 	t.PostHook = e.PostHook
 	t.getHash = e.GetHash(header)
 	t.ctx = txCtx
@@ -233,6 +237,10 @@ func (e *Executor) BeginTxn(
 	}
 
 	return t, nil
+}
+
+func (e *Executor) SetValidatorSetBackend(validatorSetBackend precompiled.ValidatorSetPrecompileBackend) {
+	e.validatorSetBackend = validatorSetBackend
 }
 
 type Transition struct {
@@ -272,14 +280,15 @@ type Transition struct {
 	accessList *runtime.AccessList
 }
 
-func NewTransition(logger hclog.Logger, config chain.ForksInTime, snap Snapshot, radix *Txn) *Transition {
+func NewTransition(logger hclog.Logger, config chain.ForksInTime,
+	snap Snapshot, radix *Txn, validatorSetBackend precompiled.ValidatorSetPrecompileBackend) *Transition {
 	return &Transition{
 		logger:      logger,
 		config:      config,
 		state:       radix,
 		snap:        snap,
 		evm:         evm.NewEVM(),
-		precompiles: precompiled.NewPrecompiled(),
+		precompiles: precompiled.NewPrecompiled(validatorSetBackend),
 		journal:     &runtime.Journal{},
 		accessList:  runtime.NewAccessList(),
 	}

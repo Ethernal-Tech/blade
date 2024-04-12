@@ -32,7 +32,7 @@ type blsAggSignsVerification struct {
 }
 
 // gas returns the gas required to execute the pre-compiled contract
-func (c *blsAggSignsVerification) gas(input []byte, _ *chain.ForksInTime) uint64 {
+func (c *blsAggSignsVerification) gas(_ []byte, _ types.Address, _ *chain.ForksInTime) uint64 {
 	return 150000
 }
 

@@ -37,7 +37,7 @@ func TestOverride(t *testing.T) {
 	balance := big.NewInt(2)
 	code := []byte{0x1}
 
-	tt := NewTransition(hclog.NewNullLogger(), chain.ForksInTime{}, state, newTxn(state))
+	tt := NewTransition(hclog.NewNullLogger(), chain.ForksInTime{}, state, newTxn(state), nil)
 
 	require.Empty(t, tt.state.GetCode(types.ZeroAddress))
 
@@ -260,7 +260,7 @@ func Test_Transition_EIP2929(t *testing.T) {
 			txn.SetCode(addr, tt.code)
 
 			enabledForks := chain.AllForksEnabled.At(0)
-			transition := NewTransition(hclog.NewNullLogger(), enabledForks, state, txn)
+			transition := NewTransition(hclog.NewNullLogger(), enabledForks, state, txn, nil)
 			initialAccessList := runtime.NewAccessList()
 			initialAccessList.PrepareAccessList(transition.ctx.Origin, &addr, transition.precompiles.Addrs, nil)
 			transition.accessList = initialAccessList

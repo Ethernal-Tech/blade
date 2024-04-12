@@ -17,7 +17,7 @@ type ecrecover struct {
 	p *Precompiled
 }
 
-func (e *ecrecover) gas(input []byte, config *chain.ForksInTime) uint64 {
+func (e *ecrecover) gas(_ []byte, _ types.Address, _ *chain.ForksInTime) uint64 {
 	return 3000
 }
 
@@ -57,7 +57,7 @@ func (e *ecrecover) run(input []byte, caller types.Address, _ runtime.Host) ([]b
 type identity struct {
 }
 
-func (i *identity) gas(input []byte, config *chain.ForksInTime) uint64 {
+func (i *identity) gas(input []byte, _ types.Address, _ *chain.ForksInTime) uint64 {
 	return baseGasCalc(input, 15, 3)
 }
 
@@ -68,7 +68,7 @@ func (i *identity) run(input []byte, _ types.Address, _ runtime.Host) ([]byte, e
 type sha256h struct {
 }
 
-func (s *sha256h) gas(input []byte, config *chain.ForksInTime) uint64 {
+func (s *sha256h) gas(input []byte, _ types.Address, _ *chain.ForksInTime) uint64 {
 	return baseGasCalc(input, 60, 12)
 }
 
@@ -82,7 +82,7 @@ type ripemd160h struct {
 	p *Precompiled
 }
 
-func (r *ripemd160h) gas(input []byte, config *chain.ForksInTime) uint64 {
+func (r *ripemd160h) gas(input []byte, _ types.Address, _ *chain.ForksInTime) uint64 {
 	return baseGasCalc(input, 600, 120)
 }
 

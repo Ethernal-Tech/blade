@@ -466,6 +466,9 @@ func (p *Polybft) Initialize() error {
 		executor:   p.config.Executor,
 	}
 
+	// enable validatorset precompile
+	p.config.Executor.SetValidatorSetBackend(p)
+
 	// create bridge and consensus topics
 	if err = p.createTopics(); err != nil {
 		return fmt.Errorf("cannot create topics: %w", err)
@@ -749,6 +752,10 @@ func (p *Polybft) GetValidators(blockNumber uint64, parents []*types.Header) (va
 	return p.validatorsCache.GetSnapshot(blockNumber, parents, nil)
 }
 
+func (p *Polybft) GetValidatorsForBlock(blockNumber uint64) (validator.AccountSet, error) {
+	return p.validatorsCache.GetSnapshot(blockNumber, nil, nil)
+}
+
 func (p *Polybft) GetValidatorsWithTx(blockNumber uint64, parents []*types.Header,
 	dbTx *bolt.Tx) (validator.AccountSet, error) {
 	return p.validatorsCache.GetSnapshot(blockNumber, parents, dbTx)
@@ -812,6 +819,20 @@ func (p *Polybft) GetLatestChainConfig() (*chain.Params, error) {
 	}
 
 	return nil, nil
+}
+
+func (p *Polybft) GetMaxValidatorSetSize() (uint64, error) {
+	params, err := p.GetLatestChainConfig()
+	if err != nil {
+		return 0, err
+	}
+
+	polyBFTConfig, err := GetPolyBFTConfig(params)
+	if err != nil {
+		return 0, err
+	}
+
+	return polyBFTConfig.MaxValidatorSetSize, nil
 }
 
 // GetBridgeProvider is an implementation of Consensus interface

@@ -11,7 +11,7 @@ import (
 
 type nativeTransfer struct{}
 
-func (c *nativeTransfer) gas(input []byte, _ *chain.ForksInTime) uint64 {
+func (c *nativeTransfer) gas(_ []byte, _ types.Address, _ *chain.ForksInTime) uint64 {
 	return 21000
 }
 

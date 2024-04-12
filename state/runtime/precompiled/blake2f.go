@@ -14,7 +14,7 @@ type blake2f struct {
 	p *Precompiled
 }
 
-func (e *blake2f) gas(input []byte, config *chain.ForksInTime) uint64 {
+func (e *blake2f) gas(input []byte, _ types.Address, _ *chain.ForksInTime) uint64 {
 	if len(input) != 213 {
 		return 0
 	}

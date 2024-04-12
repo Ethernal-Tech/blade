@@ -66,13 +66,14 @@ var (
 
 	// test smart contracts
 	//go:embed test-contracts/*
-	testContracts          embed.FS
-	TestWriteBlockMetadata *contracts.Artifact
-	RootERC20              *contracts.Artifact
-	TestSimple             *contracts.Artifact
-	TestRewardToken        *contracts.Artifact
-	Wrapper                *contracts.Artifact
-	NumberPersister        *contracts.Artifact
+	testContracts              embed.FS
+	TestWriteBlockMetadata     *contracts.Artifact
+	RootERC20                  *contracts.Artifact
+	TestSimple                 *contracts.Artifact
+	TestRewardToken            *contracts.Artifact
+	Wrapper                    *contracts.Artifact
+	NumberPersister            *contracts.Artifact
+	TestValidatorSetPrecompile *contracts.Artifact
 
 	contractArtifacts map[string]*contracts.Artifact
 )
@@ -270,6 +271,11 @@ func init() {
 		log.Fatal(err)
 	}
 
+	TestValidatorSetPrecompile, err = contracts.DecodeArtifact(readTestContractContent("TestValidatorSetPrecompile.json"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	StakeManager, err = contracts.DecodeArtifact([]byte(StakeManagerArtifact))
 	if err != nil {
 		log.Fatal(err)
@@ -381,6 +387,7 @@ func init() {
 		"RootERC20":                       RootERC20,
 		"TestSimple":                      TestSimple,
 		"TestRewardToken":                 TestRewardToken,
+		"TestValidatorSetPrecompile":      TestValidatorSetPrecompile,
 	}
 }
 

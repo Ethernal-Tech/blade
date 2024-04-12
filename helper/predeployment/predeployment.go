@@ -68,7 +68,7 @@ func getPredeployAccount(address types.Address, input []byte,
 	config := chain.AllForksEnabled.At(0)
 
 	// Create a transition
-	transition := state.NewTransition(hclog.NewNullLogger(), config, snapshot, radix)
+	transition := state.NewTransition(hclog.NewNullLogger(), config, snapshot, radix, nil)
 	transition.ContextPtr().ChainID = chainID
 
 	// Run the transition through the EVM
