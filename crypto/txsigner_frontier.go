@@ -82,11 +82,21 @@ func (signer *FrontierSigner) sender(tx *types.Transaction, isHomestead bool) (t
 		return types.Address{}, errors.New("failed to recover sender, because signature is unknown")
 	}
 
-	// Reverse the V calculation to find the parity of the Y coordinate
-	// v = {0, 1} + 27 -> {0, 1} = v - 27
-	parity := big.NewInt(0).Sub(v, big27)
+	parity := signer.calculateParity(v)
 
 	return recoverAddress(signer.Hash(tx), r, s, parity, isHomestead)
+}
+
+// SignCanonical this method should return the signature in 'canonical' format, with v 0 or 1.
+func (signer *FrontierSigner) SignCanonical(tx *types.Transaction, privateKey *ecdsa.PrivateKey) ([]byte, error) {
+	signedTx, err := signer.SignTx(tx, privateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	v, r, s := signedTx.RawSignatureValues()
+
+	return encodeSignature(r, s, signer.calculateParity(v), true)
 }
 
 // SignTx takes the original transaction as input and returns its signed version
@@ -144,4 +154,11 @@ func (signer *FrontierSigner) calculateV(parity byte) []byte {
 	result.Add(big.NewInt(int64(parity)), big27)
 
 	return result.Bytes()
+}
+
+// calculateParity returns the parity of the Y coordinate
+// Reverse the V calculation to find the parity of the Y coordinate
+// v = {0, 1} + 27 -> {0, 1} = v - 27
+func (signer *FrontierSigner) calculateParity(v *big.Int) *big.Int {
+	return big.NewInt(0).Sub(v, big27)
 }

@@ -114,6 +114,158 @@ func TestLondonSignerSender(t *testing.T) {
 	}
 }
 
+func TestTxSigner_SignCanonical(t *testing.T) {
+	t.Parallel()
+
+	key, err := GenerateECDSAPrivateKey()
+	require.NoError(t, err, "unable to generate private key")
+
+	to := types.StringToAddress("0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF")
+
+	cases := []struct {
+		name          string
+		txn           *types.Transaction
+		signer        TxSigner
+		errorExpected bool
+	}{
+		{
+			name: "LondonSigner - legacy tx",
+			txn: types.NewTx(types.NewLegacyTx(
+				types.WithGasPrice(big.NewInt(10000)),
+				types.WithGas(21000),
+				types.WithTo(&to),
+				types.WithValue(big.NewInt(1)),
+				types.WithNonce(1),
+			)),
+			signer: NewLondonSigner(100),
+		},
+		{
+			name: "LondonSigner - dynamic tx",
+			txn: types.NewTx(types.NewDynamicFeeTx(
+				types.WithGasFeeCap(ethgo.Gwei(10)),
+				types.WithGasTipCap(ethgo.Gwei(1)),
+				types.WithGas(21000),
+				types.WithTo(&to),
+				types.WithValue(big.NewInt(1)),
+				types.WithNonce(1),
+			)),
+			signer: NewLondonSigner(100),
+		},
+		{
+			name: "BerlinSigner - legacy tx",
+			txn: types.NewTx(types.NewLegacyTx(
+				types.WithGasPrice(big.NewInt(500)),
+				types.WithGas(21000),
+				types.WithTo(&to),
+				types.WithValue(big.NewInt(11)),
+				types.WithNonce(11),
+			)),
+			signer: NewBerlinSigner(100),
+		},
+		{
+			name: "BerlinSigner - dynamic tx",
+			txn: types.NewTx(types.NewDynamicFeeTx(
+				types.WithGasFeeCap(ethgo.Gwei(110)),
+				types.WithGasTipCap(ethgo.Gwei(121)),
+				types.WithGas(21000),
+				types.WithTo(&to),
+				types.WithValue(big.NewInt(21)),
+				types.WithNonce(1),
+			)),
+			signer:        NewBerlinSigner(100),
+			errorExpected: true,
+		},
+		{
+			name: "EIP155Signer - legacy tx",
+			txn: types.NewTx(types.NewLegacyTx(
+				types.WithGasPrice(big.NewInt(300)),
+				types.WithGas(21000),
+				types.WithTo(&to),
+				types.WithValue(big.NewInt(1311)),
+				types.WithNonce(1781),
+			)),
+			signer: NewEIP155Signer(100),
+		},
+		{
+			name: "EIP155Signer - dynamic tx",
+			txn: types.NewTx(types.NewDynamicFeeTx(
+				types.WithGasFeeCap(ethgo.Gwei(210)),
+				types.WithGasTipCap(ethgo.Gwei(221)),
+				types.WithGas(21000),
+				types.WithTo(&to),
+				types.WithValue(big.NewInt(221)),
+				types.WithNonce(11),
+			)),
+			signer:        NewEIP155Signer(100),
+			errorExpected: true,
+		},
+		{
+			name: "HomesteadSigner - legacy tx",
+			txn: types.NewTx(types.NewLegacyTx(
+				types.WithGasPrice(big.NewInt(700)),
+				types.WithGas(21000),
+				types.WithTo(&to),
+				types.WithValue(big.NewInt(151)),
+				types.WithNonce(111),
+			)),
+			signer: NewHomesteadSigner(),
+		},
+		{
+			name: "HomesteadSigner - dynamic tx",
+			txn: types.NewTx(types.NewDynamicFeeTx(
+				types.WithGasFeeCap(ethgo.Gwei(310)),
+				types.WithGasTipCap(ethgo.Gwei(321)),
+				types.WithGas(21000),
+				types.WithTo(&to),
+				types.WithValue(big.NewInt(321)),
+				types.WithNonce(111),
+			)),
+			signer:        NewHomesteadSigner(),
+			errorExpected: true,
+		},
+		{
+			name: "FrontierSigner - legacy tx",
+			txn: types.NewTx(types.NewLegacyTx(
+				types.WithGasPrice(big.NewInt(1200)),
+				types.WithGas(21000),
+				types.WithTo(&to),
+				types.WithValue(big.NewInt(121)),
+				types.WithNonce(113),
+			)),
+			signer: NewFrontierSigner(),
+		},
+		{
+			name: "FrontierSigner - dynamic tx",
+			txn: types.NewTx(types.NewDynamicFeeTx(
+				types.WithGasFeeCap(ethgo.Gwei(410)),
+				types.WithGasTipCap(ethgo.Gwei(521)),
+				types.WithGas(21000),
+				types.WithTo(&to),
+				types.WithValue(big.NewInt(421)),
+				types.WithNonce(1111),
+			)),
+			signer:        NewFrontierSigner(),
+			errorExpected: true,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			sig, err := tc.signer.SignCanonical(tc.txn, key)
+			if tc.errorExpected {
+				require.Error(t, err, "expected error")
+			} else {
+				require.NoError(t, err, "unable to sign transaction")
+				require.NotEmpty(t, sig)
+				require.Equal(t, 65, len(sig))
+			}
+		})
+	}
+}
+
 func Test_LondonSigner_Sender(t *testing.T) {
 	t.Parallel()
 

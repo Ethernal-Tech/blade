@@ -2,6 +2,7 @@ package jsonrpc
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -144,7 +145,7 @@ type header struct {
 	BaseFee         argUint64   `json:"baseFeePerGas,omitempty"`
 }
 
-type accessListResult struct {
+type AccessListResult struct {
 	Accesslist types.TxAccessList `json:"accessList"`
 	Error      error              `json:"error,omitempty"`
 	GasUsed    argUint64          `json:"gasUsed"`
@@ -436,19 +437,182 @@ func encodeToHex(b []byte) []byte {
 
 // txnArgs is the transaction argument for the rpc endpoints
 type txnArgs struct {
-	From       *types.Address      `json:"from"`
-	To         *types.Address      `json:"to"`
-	Gas        *argUint64          `json:"gas"`
-	GasPrice   *argBytes           `json:"gasPrice,omitempty"`
-	GasTipCap  *argBytes           `json:"maxFeePerGas,omitempty"`
-	GasFeeCap  *argBytes           `json:"maxPriorityFeePerGas,omitempty"`
-	Value      *argBytes           `json:"value"`
-	Data       *argBytes           `json:"data"`
-	Input      *argBytes           `json:"input"`
-	Nonce      *argUint64          `json:"nonce"`
-	Type       *argUint64          `json:"type"`
-	AccessList *types.TxAccessList `json:"accessList,omitempty"`
-	ChainID    *argUint64          `json:"chainId,omitempty"`
+	From                 *types.Address      `json:"from"`
+	To                   *types.Address      `json:"to"`
+	Gas                  *argUint64          `json:"gas"`
+	GasPrice             *argBytes           `json:"gasPrice"`
+	MaxFeePerGas         *argBytes           `json:"maxFeePerGas"`
+	MaxPriorityFeePerGas *argBytes           `json:"maxPriorityFeePerGas"`
+	Value                *argBytes           `json:"value"`
+	Data                 *argBytes           `json:"data"`
+	Input                *argBytes           `json:"input"`
+	Nonce                *argUint64          `json:"nonce"`
+	Type                 *argUint64          `json:"type"`
+	AccessList           *types.TxAccessList `json:"accessList,omitempty"`
+	ChainID              *argBytes           `json:"chainId,omitempty"`
+}
+
+// data retrieves the transaction calldata. Input field is preferred.
+func (args *txnArgs) data() []byte {
+	if args.Input != nil {
+		return *args.Input
+	}
+
+	if args.Data != nil {
+		return *args.Data
+	}
+
+	return nil
+}
+
+func (args *txnArgs) setDefaults(priceLimit uint64, eth *Eth) error {
+	if err := args.setFeeDefaults(priceLimit, eth.store); err != nil {
+		return err
+	}
+
+	if args.Nonce == nil {
+		args.Nonce = argUintPtr(eth.store.GetNonce(*args.From))
+	}
+
+	if args.Gas == nil {
+		// These fields are immutable during the estimation, safe to
+		// pass the pointer directly.
+		data := args.data()
+		callArgs := txnArgs{
+			From:                 args.From,
+			To:                   args.To,
+			GasPrice:             args.GasPrice,
+			MaxFeePerGas:         args.MaxFeePerGas,
+			MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
+			Value:                args.Value,
+			Data:                 argBytesPtr(data),
+		}
+
+		estimatedGas, err := eth.EstimateGas(&callArgs, nil)
+		if err != nil {
+			return err
+		}
+
+		estimatedGasUint64, ok := estimatedGas.(argUint64)
+		if !ok {
+			return errors.New("estimated gas not a uint64")
+		}
+
+		args.Gas = &estimatedGasUint64
+	}
+
+	// If chain id is provided, ensure it matches the local chain id. Otherwise, set the local
+	// chain id as the default.
+	want := eth.chainID
+
+	if args.ChainID != nil {
+		have := new(big.Int).SetBytes(*args.ChainID)
+		if have.Uint64() != want {
+			return fmt.Errorf("chainId does not match node's (have=%v, want=%v)", have, want)
+		}
+	} else {
+		args.ChainID = argBytesPtr(new(big.Int).SetUint64(want).Bytes())
+	}
+
+	return nil
+}
+
+// setFeeDefaults fills in default fee values for unspecified tx fields.
+func (args *txnArgs) setFeeDefaults(priceLimit uint64, store ethStore) error {
+	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
+	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	}
+
+	// If the tx has completely specified a fee mechanism, no default is needed.
+	// This allows users who are not yet synced past London to get defaults for
+	// other tx values. See https://github.com/ethereum/go-ethereum/pull/23274
+	// for more information.
+	eip1559ParamsSet := args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil
+
+	// Sanity check the EIP-1559 fee parameters if present.
+	if args.GasPrice == nil && eip1559ParamsSet {
+		maxFeePerGas := new(big.Int).SetBytes(*args.MaxFeePerGas)
+		maxPriorityFeePerGas := new(big.Int).SetBytes(*args.MaxPriorityFeePerGas)
+
+		if maxFeePerGas.Sign() == 0 {
+			return errors.New("maxFeePerGas must be non-zero")
+		}
+
+		if maxFeePerGas.Cmp(maxPriorityFeePerGas) < 0 {
+			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
+		}
+
+		args.Type = argUintPtr(uint64(types.DynamicFeeTxType))
+
+		return nil // No need to set anything, user already set MaxFeePerGas and MaxPriorityFeePerGas
+	}
+
+	// Sanity check the non-EIP-1559 fee parameters.
+	head := store.Header()
+	isLondon := store.GetForksInTime(head.Number).London
+
+	if args.GasPrice != nil && !eip1559ParamsSet {
+		// Zero gas-price is not allowed after London fork
+		if new(big.Int).SetBytes(*args.GasPrice).Sign() == 0 && isLondon {
+			return errors.New("gasPrice must be non-zero after london fork")
+		}
+
+		return nil // No need to set anything, user already set GasPrice
+	}
+
+	// Now attempt to fill in default value depending on whether London is active or not.
+	if isLondon {
+		// London is active, set maxPriorityFeePerGas and maxFeePerGas.
+		if err := args.setLondonFeeDefaults(head, store); err != nil {
+			return err
+		}
+	} else {
+		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
+			return errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active")
+		}
+
+		// London not active, set gas price.
+		avgGasPrice := store.GetAvgGasPrice()
+
+		args.GasPrice = argBytesPtr(common.BigMax(new(big.Int).SetUint64(priceLimit), avgGasPrice).Bytes())
+	}
+
+	return nil
+}
+
+// setLondonFeeDefaults fills in reasonable default fee values for unspecified fields.
+func (args *txnArgs) setLondonFeeDefaults(head *types.Header, store ethStore) error {
+	// Set maxPriorityFeePerGas if it is missing.
+	if args.MaxPriorityFeePerGas == nil {
+		tip, err := store.MaxPriorityFeePerGas()
+		if err != nil {
+			return err
+		}
+
+		args.MaxPriorityFeePerGas = argBytesPtr(tip.Bytes())
+	}
+
+	// Set maxFeePerGas if it is missing.
+	if args.MaxFeePerGas == nil {
+		// Set the max fee to be 2 times larger than the previous block's base fee.
+		// The additional slack allows the tx to not become invalidated if the base
+		// fee is rising.
+		val := new(big.Int).Add(
+			new(big.Int).SetBytes(*args.MaxPriorityFeePerGas),
+			new(big.Int).Mul(new(big.Int).SetUint64(head.BaseFee), big.NewInt(2)),
+		)
+		args.MaxFeePerGas = argBytesPtr(val.Bytes())
+	}
+
+	// Both EIP-1559 fee parameters are now set; sanity check them.
+	if new(big.Int).SetBytes(*args.MaxFeePerGas).Cmp(new(big.Int).SetBytes(*args.MaxPriorityFeePerGas)) < 0 {
+		return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
+	}
+
+	args.Type = argUintPtr(uint64(types.DynamicFeeTxType))
+
+	return nil
 }
 
 type progression struct {
@@ -481,6 +645,23 @@ func convertToArgUint64SliceSlice(slice [][]uint64) [][]argUint64 {
 	}
 
 	return argSlice
+}
+
+// Result structs for GetProof
+type AccountResult struct {
+	Address      types.Address   `json:"address"`
+	AccountProof []string        `json:"accountProof"`
+	Balance      *argBig         `json:"balance"`
+	CodeHash     types.Hash      `json:"codeHash"`
+	Nonce        uint64          `json:"nonce"`
+	StorageHash  types.Hash      `json:"storageHash"`
+	StorageProof []StorageResult `json:"storageProof"`
+}
+
+type StorageResult struct {
+	Key   string   `json:"key"`
+	Value *argBig  `json:"value"`
+	Proof []string `json:"proof"`
 }
 
 type OverrideAccount struct {
@@ -571,16 +752,19 @@ func (s StateOverride) MarshalJSON() ([]byte, error) {
 
 // CallMsg contains parameters for contract calls
 type CallMsg struct {
-	From       types.Address  // the sender of the 'transaction'
-	To         *types.Address // the destination contract (nil for contract creation)
-	Gas        uint64         // if 0, the call executes with near-infinite gas
-	GasPrice   *big.Int       // wei <-> gas exchange ratio
-	GasFeeCap  *big.Int       // EIP-1559 fee cap per gas
-	GasTipCap  *big.Int       // EIP-1559 tip per gas
-	Value      *big.Int       // amount of wei sent along with the call
-	Data       []byte         // input data, usually an ABI-encoded contract method invocation
-	Type       uint64
-	AccessList types.TxAccessList // EIP-2930 access list
+	From                 types.Address      // the sender of the 'transaction'
+	To                   *types.Address     // the destination contract (nil for contract creation)
+	Gas                  uint64             // if 0, the call executes with near-infinite gas
+	GasPrice             *big.Int           // wei <-> gas exchange ratio
+	MaxFeePerGas         *big.Int           // EIP-1559 fee cap per gas
+	MaxPriorityFeePerGas *big.Int           // EIP-1559 tip per gas
+	Value                *big.Int           // amount of wei sent along with the call
+	Data                 []byte             // input data, usually an ABI-encoded contract method invocation
+	Input                *big.Int           // input
+	Nonce                uint64             // nonce
+	Type                 uint64             // type
+	AccessList           types.TxAccessList // EIP-2930 access list
+	ChainID              *big.Int           // ChainID
 }
 
 // MarshalJSON implements the Marshal interface.
@@ -611,20 +795,27 @@ func (c *CallMsg) MarshalJSON() ([]byte, error) {
 		o.Set("value", a.NewString(fmt.Sprintf("0x%x", c.Value)))
 	}
 
-	if c.GasFeeCap != nil {
-		o.Set("maxFeePerGas", a.NewString(fmt.Sprintf("0x%x", c.GasFeeCap)))
+	if c.MaxFeePerGas != nil {
+		o.Set("maxFeePerGas", a.NewString(fmt.Sprintf("0x%x", c.MaxFeePerGas)))
 	}
 
-	if c.GasTipCap != nil {
-		o.Set("maxPriorityFeePerGas", a.NewString(fmt.Sprintf("0x%x", c.GasTipCap)))
+	if c.MaxPriorityFeePerGas != nil {
+		o.Set("maxPriorityFeePerGas", a.NewString(fmt.Sprintf("0x%x", c.MaxPriorityFeePerGas)))
 	}
 
-	if c.Type != 0 {
-		o.Set("type", a.NewString(fmt.Sprintf("0x%x", c.Type)))
+	if c.Input != nil {
+		o.Set("input", a.NewString(fmt.Sprintf("0x%x", c.Input)))
 	}
+
+	o.Set("nonce", a.NewString(fmt.Sprintf("0x%x", c.Nonce)))
+	o.Set("type", a.NewString(fmt.Sprintf("0x%x", c.Type)))
 
 	if c.AccessList != nil {
 		o.Set("accessList", c.AccessList.MarshalJSONWith(a))
+	}
+
+	if c.ChainID != nil {
+		o.Set("chainID", a.NewString(fmt.Sprintf("0x%x", c.ChainID)))
 	}
 
 	res := o.MarshalTo(nil)

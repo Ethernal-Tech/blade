@@ -114,8 +114,8 @@ func (e *EthClient) GetBlockReceipts(blockNumber BlockNumber) ([]*ethgo.Receipt,
 }
 
 // CreateAccessList creates a EIP-2930 type AccessList for the given transaction.
-func (e *EthClient) CreateAccessList(msg *CallMsg, blockNumber BlockNumberOrHash) (*accessListResult, error) {
-	var accessListResult accessListResult
+func (e *EthClient) CreateAccessList(msg *CallMsg, blockNumber BlockNumberOrHash) (*AccessListResult, error) {
+	var accessListResult AccessListResult
 	err := e.client.Call("eth_createAccessList", &accessListResult, msg, blockNumber.String())
 
 	return &accessListResult, err
@@ -135,6 +135,36 @@ func (e *EthClient) SendTransaction(txn *types.Transaction) (types.Hash, error) 
 	err := e.client.Call("eth_sendTransaction", &hash, txn)
 
 	return hash, err
+}
+
+// SendTransaction creates new message call transaction or a contract creation
+func (e *EthClient) SendTransactionCallMsg(msg *CallMsg) (types.Hash, error) {
+	var hash types.Hash
+	err := e.client.Call("eth_sendTransaction", &hash, msg)
+
+	return hash, err
+}
+
+// SendTransaction creates new message call transaction or a contract creation
+func (e *EthClient) SignTransaction(msg *CallMsg) ([]byte, error) {
+	var signTransactionResult string
+	if err := e.client.Call("eth_signTransaction", &signTransactionResult, msg); err != nil {
+		return nil, err
+	}
+
+	return hex.DecodeHex(signTransactionResult)
+}
+
+// Sign calculates an ECDSA signature
+func (e *EthClient) Sign(addr types.Address, data []byte) (string, error) {
+	var res string
+
+	hexData := "0x" + hex.EncodeToString(data)
+	if err := e.client.Call("eth_sign", &res, addr, hexData); err != nil {
+		return "", err
+	}
+
+	return res, nil
 }
 
 // GetTransactionReceipt returns the receipt of a transaction by transaction hash

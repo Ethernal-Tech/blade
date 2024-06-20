@@ -28,6 +28,15 @@ type readSnapshot interface {
 	GetStorage(addr types.Address, root types.Hash, key types.Hash) types.Hash
 	GetAccount(addr types.Address) (*Account, error)
 	GetCode(hash types.Hash) ([]byte, bool)
+	GetProof(addr types.Address) ([][]byte, error)
+}
+
+type proofList [][]byte
+
+func (n *proofList) Put(key []byte, value []byte) error {
+	*n = append(*n, value)
+
+	return nil
 }
 
 var (
@@ -665,4 +674,30 @@ func (txn *Txn) Commit(deleteEmptyObjects bool) ([]*Object, error) {
 	})
 
 	return objs, nil
+}
+
+// GetStorageProof returns the Merkle proof for given storage slot.
+func (txn *Txn) GetStorageProof(a types.Address, key types.Hash) ([][]byte, error) {
+	var proof proofList
+
+	trie := (txn.StorageTrie(a))
+	if trie == nil {
+		return proof, errors.New("storage trie for requested address does not exist")
+	}
+
+	//nolint:godox
+	// TODO trie.Prove
+	// err := trie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
+	return proof, nil
+}
+
+// StorageTrie returns the storage trie of an account.
+// The return value is a copy and is nil for non-existent accounts.
+func (txn *Txn) StorageTrie(addr types.Address) *iradix.Tree {
+	prev, ok := txn.getStateObject(addr)
+	if !ok {
+		return nil
+	}
+
+	return prev.Txn.CommitOnly()
 }

@@ -56,6 +56,19 @@ func (h *hasher) ReleaseArenas(idx int) {
 	h.arena = h.arena[:idx]
 }
 
+func newHasher() *hasher {
+	h, ok := hasherPool.Get().(*hasher)
+	if !ok {
+		return nil
+	}
+
+	return h
+}
+
+func returnHasherToPool(h *hasher) {
+	hasherPool.Put(h)
+}
+
 func (h *hasher) ReleaseArena(a *fastrlp.Arena) {
 	a.Reset()
 	arenaPool.Put(a)
@@ -200,4 +213,102 @@ func (t *Txn) hash(node Node, h *hasher, a *fastrlp.Arena, d int) *fastrlp.Value
 	}
 
 	return a.NewCopyBytes(hh)
+}
+
+// proofHash is used to construct trie proofs, and returns the 'collapsed'
+// node (for later RLP encoding) as well as the hashed node -- unless the
+// node is smaller than 32 bytes, in which case it will be returned as is.
+// This method does not do anything on value- or hash-nodes.
+func (h *hasher) proofHash(original Node) (collapsed, hashed Node) {
+	switch n := original.(type) {
+	case *ShortNode:
+		sn, _ := h.hashShortNodeChildren(n)
+
+		return sn, h.shortnodeToHash(sn, false)
+	case *FullNode:
+		fn, _ := h.hashFullNodeChildren(n)
+
+		return fn, h.fullnodeToHash(fn, false)
+	default:
+		// Value and hash nodes don't have children so they're left as were
+		return n, n
+	}
+}
+
+// hashShortNodeChildren collapses the short node. The returned collapsed node
+// holds a live reference to the Key, and must not be modified.
+// The cached
+func (h *hasher) hashShortNodeChildren(n *ShortNode) (collapsed, cached *ShortNode) {
+	// Hash the short node's child, caching the newly hashed subtree
+	collapsed, cached = n.copy(), n.copy()
+
+	//nolint:godox
+	// TODO:  Improve the method "hashShortNodeChildren"
+
+	// Previously, we did copy this one. We don't seem to need to actually
+	// do that, since we don't overwrite/reuse keys
+	// cached.Key = common.CopyBytes(n.Key)
+
+	collapsed.key = bytesToHexNibbles(n.key)
+
+	return collapsed, cached
+}
+
+func (h *hasher) hashFullNodeChildren(n *FullNode) (collapsed *FullNode, cached *FullNode) {
+	// Hash the full node's children, caching the newly hashed subtrees
+	cached = n.copy()
+	collapsed = n.copy()
+
+	//nolint:godox
+	// TODO It needs to be filled out collapsed.children[i]
+	/*for i := 0; i < 16; i++ {
+
+		 if child := n.children[i]; child != nil {
+			collapsed.children[i], cached.children[i] = h.Hash(child, false)
+		} else {
+			collapsed.children[i] = nil
+		}
+	} */
+
+	return collapsed, cached
+}
+
+// shortnodeToHash creates a hashNode from a shortNode. The supplied shortnode
+// should have hex-type Key, which will be converted (without modification)
+// into compact form for RLP encoding.
+// If the rlp data is smaller than 32 bytes, `nil` is returned.
+func (h *hasher) shortnodeToHash(_ *ShortNode, _ bool) Node {
+	var node Node
+	node = nil
+
+	//nolint:godox
+	// TODO It is necessary to sort out the method
+
+	/* n.encode(h.encbuf)
+	enc := h.encodedBytes()
+
+	if len(enc) < 32 && !force {
+		return n // Nodes smaller than 32 bytes are stored inside their parent
+	}
+	return h.hashData(enc) */
+
+	return node
+}
+
+// shortnodeToHash is used to creates a hashNode from a set of hashNodes, (which
+// may contain nil values)
+func (h *hasher) fullnodeToHash(_ *FullNode, _ bool) Node {
+	var node Node
+	node = nil
+	//nolint:godox
+	// TODO It is necessary to sort out the method
+	/* n.encode(h.encbuf)
+	enc := h.encodedBytes()
+
+	if len(enc) < 32 && !force {
+		return n // Nodes smaller than 32 bytes are stored inside their parent
+	}
+	return h.hashData(enc) */
+
+	return node
 }

@@ -36,15 +36,15 @@ func TestEth_DecodeTxn(t *testing.T) {
 		{
 			name: "should be successful",
 			arg: &txnArgs{
-				From:      &addr1,
-				To:        &addr2,
-				Gas:       toArgUint64Ptr(21000),
-				GasTipCap: toArgBytesPtr(big.NewInt(10000).Bytes()),
-				GasFeeCap: toArgBytesPtr(big.NewInt(10000).Bytes()),
-				Value:     toArgBytesPtr(oneEther.Bytes()),
-				Data:      nil,
-				Nonce:     toArgUint64Ptr(0),
-				Type:      toArgUint64Ptr(uint64(types.DynamicFeeTxType)),
+				From:                 &addr1,
+				To:                   &addr2,
+				Gas:                  toArgUint64Ptr(21000),
+				MaxPriorityFeePerGas: toArgBytesPtr(big.NewInt(10000).Bytes()),
+				MaxFeePerGas:         toArgBytesPtr(big.NewInt(10000).Bytes()),
+				Value:                toArgBytesPtr(oneEther.Bytes()),
+				Data:                 nil,
+				Nonce:                toArgUint64Ptr(0),
+				Type:                 toArgUint64Ptr(uint64(types.DynamicFeeTxType)),
 			},
 			res: types.NewTx(types.NewDynamicFeeTx(
 				types.WithGasTipCap(big.NewInt(10000)),
@@ -161,7 +161,7 @@ func TestEth_DecodeTxn(t *testing.T) {
 				store.SetAccount(addr, acc)
 			}
 
-			res, err := DecodeTxn(tt.arg, 1, store, false)
+			res, err := DecodeTxn(tt.arg, store, false)
 			assert.Equal(t, tt.res, res)
 			assert.Equal(t, tt.err, err)
 		})
@@ -257,16 +257,16 @@ func TestEth_TxnType(t *testing.T) {
 
 	// Setup Txn
 	args := &txnArgs{
-		From:      &addr1,
-		To:        &addr2,
-		Gas:       toArgUint64Ptr(21000),
-		GasPrice:  toArgBytesPtr(big.NewInt(10000).Bytes()),
-		GasTipCap: toArgBytesPtr(big.NewInt(10000).Bytes()),
-		GasFeeCap: toArgBytesPtr(big.NewInt(10000).Bytes()),
-		Value:     toArgBytesPtr(oneEther.Bytes()),
-		Data:      nil,
-		Nonce:     toArgUint64Ptr(0),
-		Type:      toArgUint64Ptr(uint64(types.DynamicFeeTxType)),
+		From:                 &addr1,
+		To:                   &addr2,
+		Gas:                  toArgUint64Ptr(21000),
+		GasPrice:             toArgBytesPtr(big.NewInt(10000).Bytes()),
+		MaxPriorityFeePerGas: toArgBytesPtr(big.NewInt(10000).Bytes()),
+		MaxFeePerGas:         toArgBytesPtr(big.NewInt(10000).Bytes()),
+		Value:                toArgBytesPtr(oneEther.Bytes()),
+		Data:                 nil,
+		Nonce:                toArgUint64Ptr(0),
+		Type:                 toArgUint64Ptr(uint64(types.DynamicFeeTxType)),
 	}
 
 	expectedRes := types.NewTx(types.NewDynamicFeeTx(
@@ -279,7 +279,7 @@ func TestEth_TxnType(t *testing.T) {
 		types.WithInput([]byte{}),
 		types.WithNonce(0),
 	))
-	res, err := DecodeTxn(args, 1, store, false)
+	res, err := DecodeTxn(args, store, false)
 
 	expectedRes.ComputeHash()
 	assert.NoError(t, err)
@@ -288,13 +288,23 @@ func TestEth_TxnType(t *testing.T) {
 
 func newTestEthEndpoint(store testStore) *Eth {
 	return &Eth{
-		hclog.NewNullLogger(), store, 100, nil, 0,
+		logger:        hclog.NewNullLogger(),
+		store:         store,
+		chainID:       100,
+		filterManager: nil,
+		priceLimit:    0,
+		ecdsaKey:      nil,
 	}
 }
 
 func newTestEthEndpointWithPriceLimit(store testStore, priceLimit uint64) *Eth {
 	return &Eth{
-		hclog.NewNullLogger(), store, 100, nil, priceLimit,
+		logger:        hclog.NewNullLogger(),
+		store:         store,
+		chainID:       100,
+		filterManager: nil,
+		priceLimit:    priceLimit,
+		ecdsaKey:      nil,
 	}
 }
 

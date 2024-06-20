@@ -113,6 +113,26 @@ func (signer *BerlinSigner) Sender(tx *types.Transaction) (types.Address, error)
 	return recoverAddress(signer.Hash(tx), r, s, v, true)
 }
 
+// SignCanonical this method should return the signature in 'canonical' format, with v 0 or 1.
+func (signer *BerlinSigner) SignCanonical(tx *types.Transaction, privateKey *ecdsa.PrivateKey) ([]byte, error) {
+	if tx.Type() == types.DynamicFeeTxType {
+		return nil, types.ErrTxTypeNotSupported
+	}
+
+	if tx.Type() != types.AccessListTxType {
+		return signer.EIP155Signer.SignCanonical(tx, privateKey)
+	}
+
+	signedTx, err := signer.SignTx(tx, privateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	v, r, s := signedTx.RawSignatureValues()
+
+	return encodeSignature(r, s, v, true)
+}
+
 // SignTx takes the original transaction as input and returns its signed version
 func (signer *BerlinSigner) SignTx(tx *types.Transaction, privateKey *ecdsa.PrivateKey) (*types.Transaction, error) {
 	if tx.Type() == types.DynamicFeeTxType {

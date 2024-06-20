@@ -8,6 +8,7 @@ import (
 
 	"github.com/0xPolygon/polygon-edge/blockchain"
 	"github.com/0xPolygon/polygon-edge/chain"
+	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/helper/hex"
 	"github.com/0xPolygon/polygon-edge/helper/progress"
 	"github.com/0xPolygon/polygon-edge/state/runtime"
@@ -154,6 +155,28 @@ func TestEth_Block_GetBlockTransactionCountByHash(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, res, "expected to return block, but got nil")
 	assert.Equal(t, "0xa", res)
+}
+
+func TestEth_Accounts(t *testing.T) {
+	store := &mockBlockStore{}
+	eth := newTestEthEndpoint(store)
+
+	res, err := eth.Accounts()
+
+	assert.Error(t, err)
+	assert.Nil(t, res)
+
+	contractKey, err := crypto.GenerateECDSAKey()
+	assert.NoError(t, err)
+
+	eth.ecdsaKey = contractKey
+
+	res, err = eth.Accounts()
+
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+	resAccounts := res.([]types.Address)
+	assert.Equal(t, contractKey.Address(), resAccounts[0])
 }
 
 func TestEth_Block_GetBlockTransactionCountByNumber(t *testing.T) {

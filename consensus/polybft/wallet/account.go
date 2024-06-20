@@ -110,7 +110,12 @@ func (a *Account) Save(secretsManager secrets.SecretsManager) (err error) {
 }
 
 func (a *Account) GetEcdsaPrivateKey() (*ecdsa.PrivateKey, error) {
-	ecdsaRaw, err := a.Ecdsa.MarshallPrivateKey()
+	return AdaptECDSAPrivKey(a.Ecdsa)
+}
+
+// AdaptECDSAPrivKey converts ecdsa private key from crypto.ECDSAKey to ecdsa.PrivateKey instance
+func AdaptECDSAPrivKey(ecdsaKey *crypto.ECDSAKey) (*ecdsa.PrivateKey, error) {
+	ecdsaRaw, err := ecdsaKey.MarshallPrivateKey()
 	if err != nil {
 		return nil, err
 	}

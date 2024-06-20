@@ -3,10 +3,15 @@ package jsonrpc
 import (
 	"math/big"
 	"sync"
+	"testing"
 
 	"github.com/0xPolygon/polygon-edge/blockchain"
+	"github.com/0xPolygon/polygon-edge/helper/hex"
+	"github.com/0xPolygon/polygon-edge/secrets"
 	"github.com/0xPolygon/polygon-edge/txpool/proto"
 	"github.com/0xPolygon/polygon-edge/types"
+	"github.com/stretchr/testify/require"
+	"github.com/umbracle/ethgo/wallet"
 )
 
 type mockAccount struct {
@@ -219,4 +224,20 @@ func (m *mockStore) GetStateSyncProof(stateSyncID uint64) (types.Proof, error) {
 
 func (m *mockStore) FilterExtra(extra []byte) ([]byte, error) {
 	return extra, nil
+}
+
+func setupSecretsManagerWithKey(tb testing.TB) *secrets.SecretsManagerMock {
+	tb.Helper()
+
+	ecdsaKey, err := wallet.GenerateKey()
+	require.NoError(tb, err)
+
+	ecdsaKeyRaw, err := ecdsaKey.MarshallPrivateKey()
+	require.NoError(tb, err)
+
+	sm := secrets.NewSecretsManagerMock()
+	err = sm.SetSecret(secrets.ValidatorKey, []byte(hex.EncodeToString(ecdsaKeyRaw)))
+	require.NoError(tb, err)
+
+	return sm
 }

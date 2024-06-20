@@ -95,8 +95,6 @@ func (signer *EIP155Signer) Sender(tx *types.Transaction) (types.Address, error)
 		return types.Address{}, errors.New("failed to recover sender, because signature is unknown")
 	}
 
-	bigV := big.NewInt(0).SetBytes(v.Bytes())
-
 	if vv := v.Uint64(); bits.Len(uint(vv)) <= 8 {
 		protected = vv != 27 && vv != 28
 	}
@@ -109,13 +107,25 @@ func (signer *EIP155Signer) Sender(tx *types.Transaction) (types.Address, error)
 		return types.ZeroAddress, err
 	}
 
-	// Reverse the V calculation to find the parity of the Y coordinate
-	// v = CHAIN_ID * 2 + 35 + {0, 1} -> {0, 1} = v - 35 - CHAIN_ID * 2
-	mulOperand := big.NewInt(0).Mul(big.NewInt(int64(signer.chainID)), big.NewInt(2))
-	bigV.Sub(bigV, mulOperand)
-	bigV.Sub(bigV, big35)
+	parity := signer.calculateParity(v)
 
-	return recoverAddress(signer.Hash(tx), r, s, bigV, true)
+	return recoverAddress(signer.Hash(tx), r, s, parity, true)
+}
+
+// SignCanonical this method should return the signature in 'canonical' format, with v 0 or 1.
+func (signer *EIP155Signer) SignCanonical(tx *types.Transaction, privateKey *ecdsa.PrivateKey) ([]byte, error) {
+	if tx.Type() != types.LegacyTxType && tx.Type() != types.StateTxType {
+		return nil, types.ErrTxTypeNotSupported
+	}
+
+	signedTx, err := signer.SignTx(tx, privateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	v, r, s := signedTx.RawSignatureValues()
+
+	return encodeSignature(r, s, signer.calculateParity(v), true)
 }
 
 // SignTx takes the original transaction as input and returns its signed version
@@ -175,4 +185,18 @@ func (signer *EIP155Signer) calculateV(parity byte) []byte {
 	a.Add(a, b)
 
 	return a.Bytes()
+}
+
+// calculateParity returns the parity of the Y coordinate
+// Reverse the V calculation to find the parity of the Y coordinate
+// v = CHAIN_ID * 2 + 35 + {0, 1} -> {0, 1} = v - 35 - CHAIN_ID * 2
+func (signer *EIP155Signer) calculateParity(v *big.Int) *big.Int {
+	// a = V - 35
+	a := big.NewInt(0).Sub(v, big35)
+
+	// b = CHAIN_ID * 2
+	b := big.NewInt(0).Mul(big.NewInt(int64(signer.chainID)), big.NewInt(2))
+
+	// parity = a - b
+	return big.NewInt(0).Sub(a, b)
 }

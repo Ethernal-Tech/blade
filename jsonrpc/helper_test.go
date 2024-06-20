@@ -694,16 +694,16 @@ func TestDecodeTxn(t *testing.T) {
 		{
 			name: "should return mapped transaction",
 			arg: &txnArgs{
-				From:      &from,
-				To:        &to,
-				Gas:       &gas,
-				GasPrice:  &gasPrice,
-				GasTipCap: &gasTipCap,
-				GasFeeCap: &gasFeeCap,
-				Value:     &value,
-				Input:     &input,
-				Nonce:     &nonce,
-				Type:      toArgUint64Ptr(uint64(types.DynamicFeeTxType)),
+				From:                 &from,
+				To:                   &to,
+				Gas:                  &gas,
+				GasPrice:             &gasPrice,
+				MaxPriorityFeePerGas: &gasTipCap,
+				MaxFeePerGas:         &gasFeeCap,
+				Value:                &value,
+				Input:                &input,
+				Nonce:                &nonce,
+				Type:                 toArgUint64Ptr(uint64(types.DynamicFeeTxType)),
 			},
 			store: &debugEndpointMockStore{},
 			expected: types.NewTx(types.NewDynamicFeeTx(
@@ -860,7 +860,7 @@ func TestDecodeTxn(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			tx, err := DecodeTxn(test.arg, 1, test.store, false)
+			tx, err := DecodeTxn(test.arg, test.store, false)
 
 			// DecodeTxn computes hash of tx
 			if !test.err {

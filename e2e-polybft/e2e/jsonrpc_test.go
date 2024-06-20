@@ -15,6 +15,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/e2e-polybft/framework"
+	"github.com/0xPolygon/polygon-edge/helper/hex"
 	"github.com/0xPolygon/polygon-edge/helper/tests"
 	"github.com/0xPolygon/polygon-edge/jsonrpc"
 	"github.com/0xPolygon/polygon-edge/txrelayer"
@@ -281,6 +282,110 @@ func TestE2E_JsonRPC(t *testing.T) {
 		hash, err := ethClient.SendRawTransaction(data)
 		require.NoError(t, err)
 		require.NotEqual(t, types.ZeroHash, hash)
+	})
+
+	t.Run("eth_sendTransaction", func(t *testing.T) {
+		deployTxn := cluster.Deploy(t, preminedAcct, contractsapi.TestSimple.Bytecode)
+		require.True(t, deployTxn.Succeed())
+
+		newNonce, err := ethClient.GetNonce(preminedAcct.Address(), jsonrpc.LatestBlockNumberOrHash)
+		require.NoError(t, err)
+
+		target := types.Address(deployTxn.Receipt().ContractAddress)
+		input := contractsapi.TestSimple.Abi.GetMethod("getValue").ID()
+
+		gasPrice, err := ethClient.GasPrice()
+		require.NoError(t, err)
+
+		txn := &jsonrpc.CallMsg{
+			From:     types.ZeroAddress,
+			To:       &target,
+			Gas:      92100,
+			GasPrice: new(big.Int).SetUint64(gasPrice),
+			Nonce:    newNonce,
+			Data:     input,
+		}
+
+		hash, err := ethClient.SendTransactionCallMsg(txn)
+		require.NoError(t, err)
+		require.NotEqual(t, types.ZeroHash, hash)
+	})
+
+	t.Run("eth_signTransaction", func(t *testing.T) {
+		nonce, err := ethClient.GetNonce(preminedAcct.Address(), jsonrpc.LatestBlockNumberOrHash)
+		require.NoError(t, err)
+
+		chainID, err := ethClient.ChainID()
+		require.NoError(t, err)
+
+		gasPrice, err := ethClient.GasPrice()
+		require.NoError(t, err)
+
+		target := types.StringToAddress("0xDEADBEEF")
+
+		txn := &jsonrpc.CallMsg{
+			From:     preminedAcct.Address(),
+			To:       &target,
+			Gas:      21000,
+			GasPrice: new(big.Int).SetUint64(gasPrice * 2),
+			Nonce:    nonce,
+			ChainID:  chainID,
+			Value:    big.NewInt(1),
+		}
+
+		res, err := ethClient.SignTransaction(txn)
+		require.NoError(t, err)
+		require.NotEmpty(t, res)
+
+		hash, err := ethClient.SendRawTransaction(res)
+		require.NoError(t, err)
+		require.NotEqual(t, types.ZeroHash, hash)
+
+		require.NoError(t, cluster.WaitUntil(6*time.Minute, 2*time.Second, func() bool {
+			receipt, err := ethClient.GetTransactionReceipt(hash)
+			if err != nil || receipt == nil {
+				return false
+			}
+
+			return true
+		}))
+	})
+
+	t.Run("eth_sign", func(t *testing.T) {
+		receiver := types.StringToAddress("0xDEADFFFF")
+		tokenAmount := ethgo.Ether(1)
+
+		gasPrice, err := ethClient.GasPrice()
+		require.NoError(t, err)
+
+		_, newAccountAddr := tests.GenerateKeyAndAddr(t)
+
+		transferTxn := cluster.Transfer(t, preminedAcct, newAccountAddr, tokenAmount)
+		require.True(t, transferTxn.Succeed())
+
+		newAccountBalance, err := ethClient.GetBalance(newAccountAddr, jsonrpc.LatestBlockNumberOrHash)
+		require.NoError(t, err)
+		require.Equal(t, tokenAmount, newAccountBalance)
+
+		txn := types.NewTx(
+			types.NewLegacyTx(
+				types.WithNonce(0),
+				types.WithFrom(newAccountAddr),
+				types.WithTo(&receiver),
+				types.WithValue(ethgo.Gwei(1)),
+				types.WithGas(21000),
+				types.WithGasPrice(new(big.Int).SetUint64(gasPrice)),
+			))
+
+		data := txn.MarshalRLPTo(nil)
+
+		dataSign, err := ethClient.Sign(preminedAcct.Address(), data)
+		require.NoError(t, err)
+
+		sig, err := hex.DecodeHex(dataSign)
+		require.NoError(t, err)
+		require.Len(t, sig, 65)
+		require.NotEqual(t, 0, sig[64])
 	})
 
 	t.Run("eth_getHeaderByNumber", func(t *testing.T) {

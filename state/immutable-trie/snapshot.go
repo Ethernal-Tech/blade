@@ -17,6 +17,14 @@ type Snapshot struct {
 
 var emptyStateHash = types.StringToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 
+type proofList [][]byte
+
+func (n *proofList) Put(key []byte, value []byte) error {
+	*n = append(*n, value)
+
+	return nil
+}
+
 func (s *Snapshot) GetStorage(addr types.Address, root types.Hash, rawkey types.Hash) types.Hash {
 	var (
 		err  error
@@ -149,4 +157,17 @@ func (s *Snapshot) Commit(objs []*state.Object) (state.Snapshot, []byte, error) 
 	s.state.AddState(types.BytesToHash(root), nTrie)
 
 	return &Snapshot{trie: nTrie, state: s.state}, root, nil
+}
+
+// GetProof returns the Merkle proof for a given account.
+func (s *Snapshot) GetProof(addr types.Address) ([][]byte, error) {
+	return s.GetProofByHash(crypto.Keccak256Hash(addr.Bytes()))
+}
+
+// GetProofByHash returns the Merkle proof for a given account.
+func (s *Snapshot) GetProofByHash(addrHash types.Hash) ([][]byte, error) {
+	var proof proofList
+	err := s.trie.Prove(addrHash[:], 0, &proof)
+
+	return proof, err
 }

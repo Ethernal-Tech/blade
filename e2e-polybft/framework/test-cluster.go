@@ -54,6 +54,10 @@ const (
 	NativeTokenMintableTestCfg = "Mintable Edge Coin:MEC:18" //nolint:gosec
 )
 
+var (
+	addressRegExp = regexp.MustCompile(`\(address\) = 0x([a-fA-F0-9]+)`)
+)
+
 type NodeType int
 
 const (
@@ -995,8 +999,7 @@ func (c *TestCluster) InitSecrets(prefix string, count int) ([]types.Address, er
 		return nil, err
 	}
 
-	re := regexp.MustCompile(`\(address\) = 0x([a-fA-F0-9]+)`)
-	parsed := re.FindAllStringSubmatch(b.String(), -1)
+	parsed := addressRegExp.FindAllStringSubmatch(b.String(), -1)
 	result := make([]types.Address, len(parsed))
 
 	for i, v := range parsed {

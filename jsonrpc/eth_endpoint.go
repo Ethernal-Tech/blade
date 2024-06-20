@@ -5,16 +5,24 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/hashicorp/go-hclog"
 
 	"github.com/0xPolygon/polygon-edge/chain"
+	polyWallet "github.com/0xPolygon/polygon-edge/consensus/polybft/wallet"
+	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/gasprice"
 	"github.com/0xPolygon/polygon-edge/helper/common"
 	"github.com/0xPolygon/polygon-edge/helper/progress"
+	"github.com/0xPolygon/polygon-edge/secrets"
 	"github.com/0xPolygon/polygon-edge/state"
 	"github.com/0xPolygon/polygon-edge/state/runtime"
 	"github.com/0xPolygon/polygon-edge/types"
+)
+
+var (
+	errMissingPrivateKey = errors.New("local private key is undefined")
 )
 
 type ethTxPoolStore interface {
@@ -37,6 +45,7 @@ type Account struct {
 }
 
 type ethStateStore interface {
+	NewSnapshotAt(stateRoot types.Hash) (state.Snapshot, error)
 	GetAccount(root types.Hash, addr types.Address) (*Account, error)
 	GetStorage(root types.Hash, addr types.Address, slot types.Hash) ([]byte, error)
 	GetForksInTime(blockNumber uint64) chain.ForksInTime
@@ -101,13 +110,53 @@ type Eth struct {
 	chainID       uint64
 	filterManager *FilterManager
 	priceLimit    uint64
+	ecdsaKey      *crypto.ECDSAKey
+	txSigner      crypto.TxSigner
+}
+
+func NewEth(
+	logger hclog.Logger,
+	store ethStore,
+	filterManager *FilterManager,
+	secretsManager secrets.SecretsManager,
+	chainID uint64,
+	priceLimit uint64,
+	txSigner crypto.TxSigner) (*Eth, error) {
+	var (
+		ecdsaKey *crypto.ECDSAKey
+		err      error
+	)
+
+	if secretsManager != nil && secretsManager.HasSecret(secrets.ValidatorKey) {
+		ecdsaKey, err = polyWallet.GetEcdsaFromSecret(secretsManager)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read account ECDSA key: %w", err)
+		}
+	}
+
+	return &Eth{
+		store:         store,
+		logger:        logger,
+		chainID:       chainID,
+		ecdsaKey:      ecdsaKey,
+		priceLimit:    priceLimit,
+		filterManager: filterManager,
+		txSigner:      txSigner,
+	}, nil
 }
 
 // ChainId returns the chain id of the client
-//
-//nolint:stylecheck
 func (e *Eth) ChainId() (interface{}, error) {
 	return argUintPtr(e.chainID), nil
+}
+
+// Accounts returns the collection of accounts this node manages.
+func (e *Eth) Accounts() (interface{}, error) {
+	if e.ecdsaKey == nil {
+		return nil, errMissingPrivateKey
+	}
+
+	return []types.Address{e.ecdsaKey.Address()}, nil
 }
 
 func (e *Eth) Syncing() (interface{}, error) {
@@ -228,7 +277,7 @@ func (e *Eth) CreateAccessList(arg *txnArgs, filter BlockNumberOrHash) (interfac
 		return nil, err
 	}
 
-	transaction, err := DecodeTxn(arg, header.Number, e.store, true)
+	transaction, err := DecodeTxn(arg, e.store, true)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +298,7 @@ func (e *Eth) CreateAccessList(arg *txnArgs, filter BlockNumberOrHash) (interfac
 		return nil, err
 	}
 
-	res := &accessListResult{
+	res := &AccessListResult{
 		Accesslist: result.AccessList.ToTxAccessList(),
 		Error:      result.Err,
 		GasUsed:    argUint64(result.GasUsed),
@@ -325,6 +374,8 @@ func (e *Eth) SendRawTransaction(buf argBytes) (interface{}, error) {
 		return nil, err
 	}
 
+	e.logger.Debug("SendRawTransaction", "tx", tx.String())
+
 	// tx hash will be calculated inside e.store.AddTx
 	if err := e.store.AddTx(tx); err != nil {
 		return nil, err
@@ -333,10 +384,73 @@ func (e *Eth) SendRawTransaction(buf argBytes) (interface{}, error) {
 	return tx.Hash().String(), nil
 }
 
-// SendTransaction rejects eth_sendTransaction json-rpc call as we don't support wallet management
-func (e *Eth) SendTransaction(_ *txnArgs) (interface{}, error) {
-	return nil, fmt.Errorf("request calls to eth_sendTransaction method are not supported," +
-		" use eth_sendRawTransaction instead")
+// SignTransaction will sign the given transaction with the from account.
+// The node needs to have the private key of the account corresponding with
+// the given from address and it needs to be unlocked.
+func (e *Eth) SignTransaction(args *txnArgs) (interface{}, error) {
+	if args.Gas == nil {
+		return nil, fmt.Errorf("gas not specified")
+	}
+
+	if args.GasPrice == nil && (args.MaxPriorityFeePerGas == nil || args.MaxFeePerGas == nil) {
+		return nil, fmt.Errorf("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
+	}
+
+	if args.Nonce == nil {
+		return nil, fmt.Errorf("nonce not specified")
+	}
+
+	signedTx, err := e.signTx(args)
+	if err != nil {
+		return nil, err
+	}
+
+	data := signedTx.MarshalRLP()
+
+	return argBytesPtr(data), nil
+}
+
+// SendTransaction creates a transaction for the given argument, sign it and submit it to the
+// transaction pool.
+func (e *Eth) SendTransaction(args *txnArgs) (interface{}, error) {
+	signedTx, err := e.signTx(args)
+	if err != nil {
+		return nil, err
+	}
+
+	err = e.store.AddTx(signedTx)
+	if err != nil {
+		return nil, err
+	}
+
+	return signedTx.Hash().String(), nil
+}
+
+func (e *Eth) signTx(args *txnArgs) (*types.Transaction, error) {
+	if e.ecdsaKey == nil {
+		return nil, errMissingPrivateKey
+	}
+
+	if err := args.setDefaults(e.priceLimit, e); err != nil {
+		return nil, err
+	}
+
+	tx, err := DecodeTxn(args, e.store, true)
+	if err != nil {
+		return nil, err
+	}
+
+	cryptoECDSAPrivKey, err := polyWallet.AdaptECDSAPrivKey(e.ecdsaKey)
+	if err != nil {
+		return nil, err
+	}
+
+	signedTx, err := e.txSigner.SignTx(tx, cryptoECDSAPrivKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return signedTx, nil
 }
 
 // GetTransactionByHash returns a transaction by its hash.
@@ -579,7 +693,7 @@ func (e *Eth) Call(arg *txnArgs, filter BlockNumberOrHash, apiOverride *StateOve
 		return nil, err
 	}
 
-	transaction, err := DecodeTxn(arg, header.Number, e.store, true)
+	transaction, err := DecodeTxn(arg, e.store, true)
 	if err != nil {
 		return nil, err
 	}
@@ -634,7 +748,7 @@ func (e *Eth) EstimateGas(arg *txnArgs, rawNum *BlockNumber) (interface{}, error
 	}
 
 	// testTransaction should execute tx with nonce always set to the current expected nonce for the account
-	transaction, err := DecodeTxn(arg, header.Number, e.store, true)
+	transaction, err := DecodeTxn(arg, e.store, true)
 	if err != nil {
 		return nil, err
 	}
@@ -1014,4 +1128,148 @@ func (e *Eth) FeeHistory(blockCount argUint64, newestBlock BlockNumber,
 	}
 
 	return result, nil
+}
+
+// Sign calculates an ECDSA signature for:
+// keccak256("\x19Ethereum Signed Message:\n" + len(message) + message).
+//
+// Note, the produced signature conforms to the secp256k1 curve R, S and V values,
+// where the V value will be 27 or 28 for legacy reasons.
+//
+// The account associated with addr must be unlocked.
+//
+// https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_sign
+func (e *Eth) Sign(_ types.Address, buf argBytes) (interface{}, error) {
+	tx := &types.Transaction{}
+	if err := tx.UnmarshalRLP(buf); err != nil {
+		return nil, err
+	}
+
+	if e.ecdsaKey == nil {
+		return nil, errMissingPrivateKey
+	}
+
+	cryptoECDSAPrivKey, err := polyWallet.AdaptECDSAPrivKey(e.ecdsaKey)
+	if err != nil {
+		return nil, err
+	}
+
+	signature, err := e.txSigner.SignCanonical(tx, cryptoECDSAPrivKey)
+	if err != nil {
+		return nil, err
+	} else {
+		signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
+	}
+
+	return argBytesPtr(signature), err
+}
+
+// GetProof returns the Merkle-proof for a given account and optionally some storage keys.
+func (e *Eth) GetProof(address types.Address, storageKeys []string, filter BlockNumberOrHash) (interface{}, error) {
+	header, err := GetHeaderFromBlockNumberOrHash(filter, e.store)
+	if err != nil {
+		return nil, err
+	}
+
+	snap, err := e.store.NewSnapshotAt(header.StateRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	account, err := snap.GetAccount(address)
+	if err != nil {
+		return nil, err
+	}
+
+	codeHash := crypto.Keccak256Hash(nil)
+	nonce := uint64(0)
+
+	storageHash := snap.GetStorage(address, header.StateRoot, types.Hash{})
+
+	var balance *argBig
+	balance = nil
+
+	if account != nil {
+		balance = argBigPtr(account.Balance)
+		nonce = account.Nonce
+
+		if len(storageHash) != 0 {
+			codeHash = types.BytesToHash(account.CodeHash)
+		} else {
+			storageHash = types.EmptyRootHash
+		}
+	}
+
+	storageProof := make([]StorageResult, len(storageKeys))
+	newTxn := state.NewTxn(snap)
+	// create the proof for the storageKeys
+	for i, hexKey := range storageKeys {
+		key, err := decodeHash(hexKey)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(storageHash) != 0 {
+			proof, storageError := newTxn.GetStorageProof(address, key)
+			if storageError != nil {
+				return nil, storageError
+			}
+
+			bigInt := newTxn.GetState(address, key).Big()
+			storageProof[i] = StorageResult{hexKey, argBigPtr(bigInt), toHexSlice(proof)}
+		} else {
+			storageProof[i] = StorageResult{hexKey, nil, []string{}}
+		}
+	}
+
+	// create the accountProof
+	accountProof, proofErr := snap.GetProof(address)
+	if proofErr != nil {
+		return nil, proofErr
+	}
+
+	res := &AccountResult{
+		Address:      address,
+		AccountProof: toHexSlice(accountProof),
+		Balance:      balance,
+		CodeHash:     codeHash,
+		Nonce:        nonce,
+		StorageHash:  storageHash,
+		StorageProof: storageProof,
+	}
+
+	return res, nil
+}
+
+// decodeHash parses a hex-encoded 32-byte hash. The input may optionally
+// be prefixed by 0x and can have an byte length up to 32.
+func decodeHash(s string) (types.Hash, error) {
+	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
+		s = s[2:]
+	}
+
+	if (len(s) & 1) > 0 {
+		s = "0" + s
+	}
+
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		return types.Hash{}, fmt.Errorf("hex string invalid")
+	}
+
+	if len(b) > 32 {
+		return types.Hash{}, fmt.Errorf("hex string too long, want at most 32 bytes")
+	}
+
+	return types.BytesToHash(b), nil
+}
+
+// toHexSlice creates a slice of hex-strings based on []byte.
+func toHexSlice(b [][]byte) []string {
+	r := make([]string, len(b))
+	for i := range b {
+		r[i] = *common.EncodeBytes(b[i])
+	}
+
+	return r
 }

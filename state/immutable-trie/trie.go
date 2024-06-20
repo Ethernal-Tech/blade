@@ -58,6 +58,14 @@ type ShortNode struct {
 	child Node
 }
 
+func (sn *ShortNode) copy() *ShortNode {
+	nc := &ShortNode{}
+	nc.child = sn.child
+	copy(nc.key, sn.key)
+
+	return nc
+}
+
 // FullNode is a node with several children
 type FullNode struct {
 	common
@@ -99,6 +107,14 @@ func NewTrie() *Trie {
 	return &Trie{}
 }
 
+func (t *Trie) SetRoot(node Node) {
+	t.root = node
+}
+
+func (t *Trie) SetEpoch(e uint32) {
+	t.epoch = e
+}
+
 func (t *Trie) Get(k []byte, storage Storage) ([]byte, bool) {
 	txn := t.Txn(storage)
 	res := txn.Lookup(k)
@@ -129,6 +145,87 @@ func (t *Trie) Hash() types.Hash {
 	return types.BytesToHash(hash)
 }
 
+// Prove constructs a merkle proof for key. The result contains all encoded nodes
+// on the path to the value at key. The value itself is also included in the last
+// node and can be retrieved by verifying the proof.
+//
+// If the trie does not contain a value for key, the returned proof contains all
+// nodes of the longest existing prefix of the key (at least the root node), ending
+// with the node that proves the absence of the key.
+func (t *Trie) Prove(key []byte, fromLevel uint, proof KeyValueWriter) error {
+	// Collect all nodes on the path to key.
+	var (
+		prefix []byte
+		nodes  []Node
+		tn     = t.root
+	)
+
+	key = bytesToHexNibbles(key)
+	for len(key) > 0 && tn != nil {
+		switch n := tn.(type) {
+		case *ShortNode:
+			if len(key) < len(n.key) || !bytes.Equal(n.key, key[:len(n.key)]) {
+				// The trie doesn't contain the key.
+				tn = nil
+			} else {
+				tn = n.child
+				prefix = append(prefix, n.key...)
+				key = key[len(n.key):]
+			}
+
+			nodes = append(nodes, n)
+		case *FullNode:
+			tn = n.children[key[0]]
+			prefix = append(prefix, key[0])
+			key = key[1:]
+
+			nodes = append(nodes, n)
+
+			//nolint:godox
+			// TODO Improve the usual case
+
+		default:
+			return fmt.Errorf("%T: invalid node: %v", tn, tn) // ( panic(fmt.Errorf("%T: invalid node: %v", tn, tn))
+		}
+	}
+
+	hasher := newHasher()
+	defer returnHasherToPool(hasher)
+
+	for i, n := range nodes {
+		if fromLevel > 0 {
+			fromLevel--
+
+			continue
+		}
+
+		var hn Node
+		_, hn = hasher.proofHash(n)
+
+		if hash, ok := hn.Hash(); ok || i == 0 {
+			err := proof.Put(hash, nil)
+
+			// If the node's database encoding is a hash (or is the
+			// root node), it becomes a proof element.
+
+			//nolint:godox
+			// TODO Sort the fill "proof.Put(hash, enc)"
+
+			/* enc := nodeToBytes(n.encode)
+			if !ok {
+				hash = hasher.hashData(enc)
+			}
+			*/
+
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (t *Trie) hashRoot() []byte {
 	hash, _ := t.root.Hash()
 
@@ -141,6 +238,12 @@ func (t *Trie) Txn(storage Storage) *Txn {
 
 type Putter interface {
 	Put(k, v []byte)
+}
+
+// KeyValueWriter wraps the Put method of a backing data store.
+type KeyValueWriter interface {
+	// Put inserts the given value into the key-value data store.
+	Put(key []byte, value []byte) error
 }
 
 type Txn struct {

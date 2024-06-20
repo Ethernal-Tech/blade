@@ -23,6 +23,12 @@ type Snapshot interface {
 	Commit(objs []*Object) (Snapshot, []byte, error)
 }
 
+// KeyValueWriter wraps the Put method of a backing data store.
+type KeyValueWriter interface {
+	// Put inserts the given value into the key-value data store.
+	Put(key []byte, value []byte) error
+}
+
 // Account is the account reference in the ethereum state
 type Account struct {
 	Nonce    uint64

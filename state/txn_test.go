@@ -47,6 +47,10 @@ func (m *mockSnapshot) GetCode(hash types.Hash) ([]byte, bool) {
 	return nil, false
 }
 
+func (m *mockSnapshot) GetProof(addr types.Address) ([][]byte, error) {
+	return nil, nil
+}
+
 func (m *mockSnapshot) Commit(objs []*Object) (Snapshot, []byte, error) {
 	return nil, nil, nil
 }

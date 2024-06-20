@@ -143,6 +143,22 @@ func (signer *LondonSigner) SignTx(tx *types.Transaction, privateKey *ecdsa.Priv
 	return tx, nil
 }
 
+// SignCanonical this method should return the signature in 'canonical' format, with v 0 or 1.
+func (signer *LondonSigner) SignCanonical(tx *types.Transaction, privateKey *ecdsa.PrivateKey) ([]byte, error) {
+	if tx.Type() != types.DynamicFeeTxType {
+		return signer.BerlinSigner.SignCanonical(tx, privateKey)
+	}
+
+	signedTx, err := signer.SignTx(tx, privateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	v, r, s := signedTx.RawSignatureValues()
+
+	return encodeSignature(r, s, v, true)
+}
+
 func (signer *LondonSigner) SignTxWithCallback(tx *types.Transaction,
 	signFn func(hash types.Hash) (sig []byte, err error)) (*types.Transaction, error) {
 	if tx.Type() != types.DynamicFeeTxType {

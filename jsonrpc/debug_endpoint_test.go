@@ -593,17 +593,17 @@ func TestTraceCall(t *testing.T) {
 		blockNumber = BlockNumber(testBlock10.Number())
 
 		txArg = &txnArgs{
-			From:      &from,
-			To:        &to,
-			Gas:       &gas,
-			GasPrice:  &gasPrice,
-			GasTipCap: &gasTipCap,
-			GasFeeCap: &gasFeeCap,
-			Value:     &value,
-			Data:      &data,
-			Input:     &input,
-			Nonce:     &nonce,
-			Type:      toArgUint64Ptr(uint64(types.DynamicFeeTxType)),
+			From:                 &from,
+			To:                   &to,
+			Gas:                  &gas,
+			GasPrice:             &gasPrice,
+			MaxPriorityFeePerGas: &gasTipCap,
+			MaxFeePerGas:         &gasFeeCap,
+			Value:                &value,
+			Data:                 &data,
+			Input:                &input,
+			Nonce:                &nonce,
+			Type:                 toArgUint64Ptr(uint64(types.DynamicFeeTxType)),
 		}
 		decodedTx = types.NewTx(types.NewDynamicFeeTx(
 			types.WithGasTipCap(new(big.Int).SetBytes([]byte(gasTipCap))),

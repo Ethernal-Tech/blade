@@ -69,6 +69,13 @@ func BytesToHash(b []byte) Hash {
 	return h
 }
 
+// Big converts b to a big integer.
+// Note: Converting a bloom filter to a big.Int and then calling GetBytes
+// does not return the same bytes, since big.Int will trim leading zeroes
+func (h Hash) Big() *big.Int {
+	return new(big.Int).SetBytes(h[:])
+}
+
 func (h Hash) Bytes() []byte {
 	return h[:]
 }
