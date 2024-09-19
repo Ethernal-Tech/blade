@@ -219,6 +219,81 @@ func (t *Txn) lookup(node interface{}, key []byte) (Node, []byte) {
 	}
 }
 
+func (t *Txn) Prove(key []byte, fromLevel uint) [][]byte {
+	res := t.prove(bytesToHexNibbles(key), fromLevel)
+
+	return res
+}
+
+// Prove constructs a merkle proof for key. The result contains all encoded nodes
+// on the path to the value at key. The value itself is also included in the last
+// node and can be retrieved by verifying the proof.
+//
+// If the trie does not contain a value for key, the returned proof contains all
+// nodes of the longest existing prefix of the key (at least the root node), ending
+// with the node that proves the absence of the key.
+func (t *Txn) prove(key []byte, fromLevel uint) [][]byte {
+	// Collect all noes on the path to key.
+	var (
+		nodes   []Node
+		results [][]byte
+		tn      = t.root
+	)
+
+	for len(key) > 0 && tn != nil {
+		switch n := tn.(type) {
+		case *ValueNode:
+			if n.hash {
+				nc, ok, err := GetNode(n.buf, t.storage)
+				if err != nil {
+					panic(err) //nolint:gocritic
+				}
+
+				if !ok {
+					tn = nil
+				} else {
+					tn = nc
+				}
+			} else {
+				tn = nil
+			}
+		case *ShortNode:
+			plen := len(n.key)
+			if plen > len(key) || !bytes.Equal(key[:plen], n.key) {
+				tn = nil
+			} else {
+				tn = n.child
+				key = key[plen:]
+			}
+
+			nodes = append(nodes, n)
+		case *FullNode:
+			tn = n.getEdge(key[0])
+			key = key[1:]
+
+			nodes = append(nodes, n)
+		default:
+			panic(fmt.Sprintf("unknown node type %v", n)) //nolint:gocritic
+		}
+	}
+
+	for _, n := range nodes {
+		if fromLevel > 0 {
+			fromLevel--
+
+			continue
+		}
+
+		if _, nodeToBytes, err := t.HashNode(n, true); err == nil {
+			if nodeToBytes != nil {
+				results = append(results, nodeToBytes)
+			}
+		}
+	}
+
+	return results
+}
+
 func (t *Txn) writeNode(n *FullNode) *FullNode {
 	if t.epoch == n.epoch {
 		return n

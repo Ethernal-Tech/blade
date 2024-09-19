@@ -433,6 +433,39 @@ func encodeToHex(b []byte) []byte {
 	return []byte("0x" + str)
 }
 
+// decodeHash parses a hex-encoded 32-byte hash. The input may optionally
+// be prefixed by 0x and can have an byte length up to 32.
+func decodeHash(s string) (types.Hash, error) {
+	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
+		s = s[2:]
+	}
+
+	if (len(s) & 1) > 0 {
+		s = "0" + s
+	}
+
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		return types.Hash{}, fmt.Errorf("hex string invalid")
+	}
+
+	if len(b) > 32 {
+		return types.Hash{}, fmt.Errorf("hex string too long, want at most 32 bytes")
+	}
+
+	return types.BytesToHash(b), nil
+}
+
+// toHexSlice creates a slice of hex-strings based on []byte.
+func toHexSlice(b [][]byte) []string {
+	r := make([]string, len(b))
+	for i := range b {
+		r[i] = *common.EncodeBytes(b[i])
+	}
+
+	return r
+}
+
 // txnArgs is the transaction argument for the rpc endpoints
 type txnArgs struct {
 	From       *types.Address      `json:"from"`
@@ -643,6 +676,23 @@ func convertToArgUint64SliceSlice(slice [][]uint64) [][]argUint64 {
 	}
 
 	return argSlice
+}
+
+// Result structs for GetProof
+type AccountResult struct {
+	Address      types.Address   `json:"address"`
+	AccountProof []string        `json:"accountProof"`
+	Balance      *argBig         `json:"balance"`
+	CodeHash     types.Hash      `json:"codeHash"`
+	Nonce        uint64          `json:"nonce"`
+	StorageHash  types.Hash      `json:"storageHash"`
+	StorageProof []StorageResult `json:"storageProof"`
+}
+
+type StorageResult struct {
+	Key   string   `json:"key"`
+	Value *argBig  `json:"value"`
+	Proof []string `json:"proof"`
 }
 
 type OverrideAccount struct {

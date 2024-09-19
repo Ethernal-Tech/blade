@@ -5,8 +5,10 @@ import (
 	"sync"
 
 	"github.com/0xPolygon/polygon-edge/blockchain"
+	"github.com/0xPolygon/polygon-edge/state"
 	"github.com/0xPolygon/polygon-edge/txpool/proto"
 	"github.com/0xPolygon/polygon-edge/types"
+	"github.com/stretchr/testify/mock"
 )
 
 type mockAccount struct {
@@ -42,8 +44,18 @@ type mockEvent struct {
 	NewChain []*mockHeader
 }
 
+type MockSnapshot struct {
+	state map[types.Address]*state.PreState
+	mock.Mock
+}
+
+type MockHeader struct {
+	StateRoot types.Hash
+}
+
 type mockStore struct {
 	JSONRPCStore
+	mock.Mock
 
 	header        *types.Header
 	subscription  *blockchain.MockSubscription
@@ -219,4 +231,60 @@ func (m *mockStore) GetStateSyncProof(stateSyncID uint64) (types.Proof, error) {
 
 func (m *mockStore) FilterExtra(extra []byte) ([]byte, error) {
 	return extra, nil
+}
+
+func (m *mockStore) NewSnapshotAt(stateRoot types.Hash) (state.Snapshot, error) {
+	args := m.Called(stateRoot)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+
+	return args.Get(0).(*MockSnapshot), args.Error(1)
+}
+
+func (m *MockSnapshot) Commit(objs []*state.Object) (state.Snapshot, []byte, error) {
+	return nil, nil, nil
+}
+
+func (m *MockSnapshot) GetAccount(address types.Address) (*state.Account, error) {
+	args := m.Called(address)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+
+	return args.Get(0).(*state.Account), args.Error(1)
+}
+
+func (m *MockSnapshot) GetStorageProof(stateRoot types.Hash, key types.Hash) ([][]byte, error) {
+	args := m.Called(stateRoot, key)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+
+	return args.Get(0).([][]byte), args.Error(1)
+}
+
+func (m *MockSnapshot) GetStorage(address types.Address, stateRoot types.Hash, key types.Hash) types.Hash {
+	args := m.Called(address, stateRoot, key)
+
+	return args.Get(0).(types.Hash)
+}
+
+func (m *MockSnapshot) GetProof(address types.Address) ([][]byte, error) {
+	args := m.Called(address)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+
+	return args.Get(0).([][]byte), args.Error(1)
+}
+
+func (m *MockSnapshot) GetCode(hash types.Hash) ([]byte, bool) {
+	return nil, false
+}
+func (m *MockSnapshot) GetTreeHash() types.Hash {
+	return hash1
+}
+func (m *MockSnapshot) GetProofByHash(addrHash []byte) ([][]byte, error) {
+	return nil, nil
 }

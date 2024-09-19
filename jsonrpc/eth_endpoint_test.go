@@ -5,9 +5,11 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/0xPolygon/polygon-edge/state"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -379,4 +381,91 @@ func TestOverrideAccount_ToType(t *testing.T) {
 	require.Equal(t, new(big.Int).SetUint64(balance), convertedAcc.Balance)
 	require.Equal(t, state, convertedAcc.State)
 	require.Equal(t, stateDiff, convertedAcc.StateDiff)
+}
+
+func TestGetProof_Success(t *testing.T) {
+	store := newMockStore()
+	snap := new(MockSnapshot)
+	header := &MockHeader{StateRoot: types.Hash{}}
+	address := types.Address{}
+	storageKeys := []string{"0x1", "0x2"}
+	blockFilter := BlockNumberOrHash{}
+
+	e := &Eth{store: store}
+	store.On("NewSnapshotAt", header.StateRoot).Return(snap, nil)
+	snap.On("GetAccount", address).Return(&state.Account{Balance: big.NewInt(1000), Nonce: 1, CodeHash: []byte{}}, nil)
+	snap.On("GetStorageProof", mock.Anything, mock.Anything).Return([][]byte{}, nil)
+	snap.On("GetStorage", mock.Anything, mock.Anything, mock.Anything).Return(types.Hash{})
+	snap.On("GetProof", address).Return([][]byte{}, nil)
+
+	res, err := e.GetProof(address, storageKeys, blockFilter)
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+}
+
+func TestGetProof_HeaderError(t *testing.T) {
+	store := newMockStore()
+	blockNum10 := BlockNumber(10)
+	blockFilter := BlockNumberOrHash{BlockNumber: &blockNum10}
+	address := types.Address{}
+	storageKeys := []string{}
+
+	e := &Eth{store: store}
+
+	res, err := e.GetProof(address, storageKeys, blockFilter)
+	assert.Error(t, err)
+	assert.Nil(t, res)
+}
+
+func TestGetProof_SnapshotError(t *testing.T) {
+	store := newMockStore()
+	header := &MockHeader{StateRoot: types.Hash{}}
+	address := types.Address{}
+	storageKeys := []string{}
+	blockFilter := BlockNumberOrHash{}
+
+	e := &Eth{store: store}
+	store.On("NewSnapshotAt", header.StateRoot).Return(nil, errors.New("snapshot error"))
+
+	res, err := e.GetProof(address, storageKeys, blockFilter)
+	assert.Error(t, err)
+	assert.Nil(t, res)
+}
+
+func TestGetProof_StorageProofError(t *testing.T) {
+	store := newMockStore()
+	snap := new(MockSnapshot)
+	header := &MockHeader{StateRoot: types.Hash{}}
+	address := types.Address{}
+	storageKeys := []string{"0x1", "0x2"}
+	blockFilter := BlockNumberOrHash{}
+
+	e := &Eth{store: store}
+	store.On("NewSnapshotAt", header.StateRoot).Return(snap, nil)
+	snap.On("GetAccount", address).Return(&state.Account{Balance: big.NewInt(1000), Nonce: 1, CodeHash: []byte{}}, nil)
+	snap.On("GetStorageProof", mock.Anything, mock.Anything).Return(nil, errors.New("storage proof error"))
+
+	res, err := e.GetProof(address, storageKeys, blockFilter)
+	assert.Error(t, err)
+	assert.Nil(t, res)
+}
+
+func TestGetProof_AccountProofError(t *testing.T) {
+	store := newMockStore()
+	snap := new(MockSnapshot)
+	header := &MockHeader{StateRoot: types.Hash{}}
+	address := types.Address{}
+	storageKeys := []string{"0x1", "0x2"}
+	blockFilter := BlockNumberOrHash{}
+
+	e := &Eth{store: store}
+	store.On("NewSnapshotAt", header.StateRoot).Return(snap, nil)
+	snap.On("GetAccount", address).Return(&state.Account{Balance: big.NewInt(1000), Nonce: 1, CodeHash: []byte{}}, nil)
+	snap.On("GetStorageProof", mock.Anything, mock.Anything).Return([][]byte{}, nil)
+	snap.On("GetStorage", mock.Anything, mock.Anything, mock.Anything).Return(types.Hash{10})
+	snap.On("GetProof", address).Return(nil, errors.New("account proof error"))
+
+	res, err := e.GetProof(address, storageKeys, blockFilter)
+	assert.Error(t, err)
+	assert.Nil(t, res)
 }

@@ -28,6 +28,10 @@ type readSnapshot interface {
 	GetStorage(addr types.Address, root types.Hash, key types.Hash) types.Hash
 	GetAccount(addr types.Address) (*Account, error)
 	GetCode(hash types.Hash) ([]byte, bool)
+	GetTreeHash() types.Hash
+	GetStorageProof(stateRoot types.Hash, key types.Hash) ([][]byte, error)
+	GetProofByHash(addrHash []byte) ([][]byte, error)
+	GetProof(addr types.Address) ([][]byte, error)
 }
 
 var (

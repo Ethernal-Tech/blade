@@ -707,6 +707,10 @@ func (j *jsonRPCHub) GetStorage(stateRoot types.Hash, addr types.Address, slot t
 	return res.Bytes(), nil
 }
 
+func (j *jsonRPCHub) NewSnapshotAt(stateRoot types.Hash) (state.Snapshot, error) {
+	return j.state.NewSnapshotAt(stateRoot)
+}
+
 func (j *jsonRPCHub) GetCode(root types.Hash, addr types.Address) ([]byte, error) {
 	account, err := getAccountImpl(j.state, root, addr)
 	if err != nil {

@@ -86,19 +86,28 @@ func (h *hasher) Hash(data []byte) []byte {
 }
 
 func (t *Txn) Hash() ([]byte, error) {
-	if t.root == nil {
-		return emptyRoot, nil
+	hasNode, _, err := t.HashNode(t.root, false)
+
+	return hasNode, err
+}
+
+func (t *Txn) HashNode(node Node, forceCalculate bool) ([]byte, []byte, error) {
+	if node == nil {
+		return emptyRoot, nil, nil
 	}
 
 	h, ok := hasherPool.Get().(*hasher)
 	if !ok {
-		return nil, errors.New("invalid type assertion")
+		return nil, nil, errors.New("invalid type assertion")
 	}
 
 	var root []byte
 
 	arena, _ := h.AcquireArena()
-	val := t.hash(t.root, h, arena, 0)
+	h.buf = h.buf[:0]
+
+	val := t.hash(node, h, arena, 0, forceCalculate)
+	collapsedNodeInBytes := h.buf
 
 	// REDO
 	if val.Type() == fastrlp.TypeBytes {
@@ -131,18 +140,20 @@ func (t *Txn) Hash() ([]byte, error) {
 	h.ReleaseArenas(0)
 	hasherPool.Put(h)
 
-	return root, nil
+	return root, collapsedNodeInBytes, nil
 }
 
-func (t *Txn) hash(node Node, h *hasher, a *fastrlp.Arena, d int) *fastrlp.Value {
+func (t *Txn) hash(node Node, h *hasher, a *fastrlp.Arena, d int, forceCalculate bool) *fastrlp.Value {
 	var val *fastrlp.Value
 
 	var aa *fastrlp.Arena
 
 	var idx int
 
-	if h, ok := node.Hash(); ok {
-		return a.NewCopyBytes(h)
+	if !forceCalculate {
+		if h, ok := node.Hash(); ok {
+			return a.NewCopyBytes(h)
+		}
 	}
 
 	switch n := node.(type) {
@@ -150,7 +161,7 @@ func (t *Txn) hash(node Node, h *hasher, a *fastrlp.Arena, d int) *fastrlp.Value
 		return a.NewCopyBytes(n.buf)
 
 	case *ShortNode:
-		child := t.hash(n.child, h, a, d+1)
+		child := t.hash(n.child, h, a, d+1, false)
 
 		val = a.NewArray()
 		val.Set(a.NewBytes(encodeCompact(n.key)))
@@ -165,7 +176,7 @@ func (t *Txn) hash(node Node, h *hasher, a *fastrlp.Arena, d int) *fastrlp.Value
 			if i == nil {
 				val.Set(a.NewNull())
 			} else {
-				val.Set(t.hash(i, h, aa, d+1))
+				val.Set(t.hash(i, h, aa, d+1, false))
 			}
 		}
 
@@ -173,7 +184,7 @@ func (t *Txn) hash(node Node, h *hasher, a *fastrlp.Arena, d int) *fastrlp.Value
 		if n.value == nil {
 			val.Set(a.NewNull())
 		} else {
-			val.Set(t.hash(n.value, h, a, d+1))
+			val.Set(t.hash(n.value, h, a, d+1, false))
 		}
 
 	default:

@@ -10,6 +10,7 @@ import (
 
 	"github.com/0xPolygon/polygon-edge/accounts"
 	"github.com/0xPolygon/polygon-edge/chain"
+	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/gasprice"
 	"github.com/0xPolygon/polygon-edge/helper/common"
 	"github.com/0xPolygon/polygon-edge/helper/progress"
@@ -38,6 +39,7 @@ type Account struct {
 }
 
 type ethStateStore interface {
+	NewSnapshotAt(stateRoot types.Hash) (state.Snapshot, error)
 	GetAccount(root types.Hash, addr types.Address) (*Account, error)
 	GetStorage(root types.Hash, addr types.Address, slot types.Hash) ([]byte, error)
 	GetForksInTime(blockNumber uint64) chain.ForksInTime
@@ -1086,4 +1088,84 @@ func (e *Eth) signTx(args *txnArgs) (*types.Transaction, error) {
 	}
 
 	return keyStore.SignTx(account, tx)
+}
+
+// GetProof returns the Merkle-proof for a given account and optionally some storage keys.
+func (e *Eth) GetProof(address types.Address, storageKeys []string, filter BlockNumberOrHash) (interface{}, error) {
+	header, err := GetHeaderFromBlockNumberOrHash(filter, e.store)
+	if err != nil {
+		return nil, err
+	}
+
+	snap, err := e.store.NewSnapshotAt(header.StateRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		codeHash    = crypto.Keccak256Hash(nil)
+		nonce       = uint64(0)
+		storageHash = snap.GetTreeHash()
+		balance     = argBigPtr(big.NewInt(0))
+	)
+
+	account, _ := snap.GetAccount(address)
+	if account != nil {
+		balance = argBigPtr(account.Balance)
+		nonce = account.Nonce
+		typesHash := types.Hash{}
+
+		if storageHash != typesHash {
+			codeHash = types.BytesToHash(account.CodeHash)
+		} else {
+			storageHash = types.EmptyRootHash
+		}
+	}
+
+	storageProof := make([]StorageResult, len(storageKeys))
+
+	// create the proof for the storageKeys
+	for i, hexKey := range storageKeys {
+		key, err := decodeHash(hexKey)
+		if err != nil {
+			return nil, err
+		}
+
+		var storageHBig *argBig
+
+		proof := []string{}
+
+		if storageHash != types.EmptyRootHash {
+			pr, storageError := snap.GetStorageProof(header.StateRoot, key)
+			if storageError != nil {
+				return nil, storageError
+			}
+
+			proof = toHexSlice(pr)
+			bigInt := new(big.Int).SetBytes(snap.GetStorage(address, header.StateRoot, key).Bytes())
+			storageHBig = argBigPtr(bigInt)
+		}
+
+		storageProof[i].Key = hexKey
+		storageProof[i].Value = storageHBig
+		storageProof[i].Proof = proof
+	}
+
+	// create the accountProof
+	accountProof, proofErr := snap.GetProof(address)
+	if proofErr != nil {
+		return nil, proofErr
+	}
+
+	res := &AccountResult{
+		Address:      address,
+		AccountProof: toHexSlice(accountProof),
+		Balance:      balance,
+		CodeHash:     codeHash,
+		Nonce:        nonce,
+		StorageHash:  storageHash,
+		StorageProof: storageProof,
+	}
+
+	return res, nil
 }

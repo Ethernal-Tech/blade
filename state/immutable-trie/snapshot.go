@@ -150,3 +150,36 @@ func (s *Snapshot) Commit(objs []*state.Object) (state.Snapshot, []byte, error) 
 
 	return &Snapshot{trie: nTrie, state: s.state}, root, nil
 }
+
+func (s *Snapshot) GetTreeHash() types.Hash {
+	tt := s.trie.Txn(s.state.storage)
+	res, err := tt.Hash()
+
+	if err != nil {
+		return types.Hash{}
+	}
+
+	return types.BytesToHash(res)
+}
+
+// GetProof returns the Merkle proof for a given account.
+func (s *Snapshot) GetProof(addr types.Address) ([][]byte, error) {
+	return s.GetProofByHash(crypto.Keccak256(addr.Bytes()))
+}
+
+// GetProofByHash returns the Merkle proof for a given account.
+func (s *Snapshot) GetProofByHash(addrHash []byte) ([][]byte, error) {
+	tt := s.trie.Txn(s.state.storage)
+
+	return tt.Prove(addrHash, 0), nil
+}
+
+// GetStorageProof returns the Merkle proof for given storage slot.
+func (s *Snapshot) GetStorageProof(stateRoot types.Hash, key types.Hash) ([][]byte, error) {
+	sn, err := s.state.NewSnapshotAt(stateRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	return sn.GetProofByHash(crypto.Keccak256(key.Bytes()))
+}

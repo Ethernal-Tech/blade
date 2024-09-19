@@ -51,6 +51,21 @@ func (m *mockSnapshot) Commit(objs []*Object) (Snapshot, []byte, error) {
 	return nil, nil, nil
 }
 
+func (m *mockSnapshot) GetTreeHash() types.Hash {
+	return types.Hash{}
+}
+
+func (m *mockSnapshot) GetStorageProof(stateRoot types.Hash, key types.Hash) ([][]byte, error) {
+	return nil, nil
+}
+func (m *mockSnapshot) GetProof(addr types.Address) ([][]byte, error) {
+	return nil, nil
+}
+
+func (m *mockSnapshot) GetProofByHash(addrHash []byte) ([][]byte, error) {
+	return nil, nil
+}
+
 func newStateWithPreState(preState map[types.Address]*PreState) Snapshot {
 	return &mockSnapshot{state: preState}
 }

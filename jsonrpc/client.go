@@ -315,3 +315,11 @@ func (e *EthClient) Sign(addr types.Address, data []byte) (string, error) {
 
 	return res, nil
 }
+
+// GetProof returns the value from a storage position at a given address
+func (e *EthClient) GetProof(add types.Address, sKeys []string, blockN BlockNumberOrHash) (AccountResult, error) {
+	var results AccountResult
+	err := e.client.Call("eth_getProof", &results, add, sKeys, blockN.String())
+
+	return results, err
+}

@@ -512,6 +512,37 @@ func TestE2E_JsonRPC(t *testing.T) {
 		require.Len(t, sig, 65)
 		require.NotEqual(t, 0, sig[64])
 	})
+
+	t.Run("eth_getProof", func(t *testing.T) {
+		key1, err := crypto.GenerateECDSAKey()
+		require.NoError(t, err)
+
+		txn := cluster.Transfer(t, preminedAcctOne, key1.Address(), ethgo.Ether(1))
+		require.True(t, txn.Succeed())
+
+		txn = cluster.Deploy(t, key1, contractsapi.TestSimple.Bytecode)
+		require.True(t, txn.Succeed())
+
+		target := types.Address(txn.Receipt().ContractAddress)
+
+		resp, err := ethClient.GetProof(target, []string{"0x12345"}, jsonrpc.LatestBlockNumberOrHash)
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+
+		setValueFn := contractsapi.TestSimple.Abi.GetMethod("setValue")
+
+		newVal := big.NewInt(1)
+
+		input, err := setValueFn.Encode([]interface{}{newVal})
+		require.NoError(t, err)
+
+		txn = cluster.SendTxn(t, key1, types.NewTx(types.NewLegacyTx(types.WithInput(input), types.WithTo(&target))))
+		require.True(t, txn.Succeed())
+
+		resp, err = ethClient.GetProof(target, []string{"0x12345"}, jsonrpc.LatestBlockNumberOrHash)
+		require.NoError(t, err)
+		require.Equal(t, uint64(0x1), resp.Nonce)
+	})
 }
 
 func TestE2E_JsonRPCSelfSignedTLS(t *testing.T) {
