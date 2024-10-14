@@ -64,6 +64,9 @@ var (
 	ChildGovernor *contracts.Artifact
 	ChildTimelock *contracts.Artifact
 
+	// Account Abstraction
+	EntryPoint *contracts.Artifact
+
 	// test smart contracts
 	//go:embed test-contracts/*
 	testContracts          embed.FS
@@ -342,6 +345,11 @@ func init() {
 		log.Fatal(err)
 	}
 
+	EntryPoint, err = contracts.DecodeArtifact([]byte(EntryPointArtifact))
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	contractArtifacts = map[string]*contracts.Artifact{
 		"CheckpointManager":               CheckpointManager,
 		"ExitHelper":                      ExitHelper,
@@ -395,6 +403,7 @@ func init() {
 		"TestRewardToken":                 TestRewardToken,
 		"ZexCoinERC20":                    ZexCoinERC20,
 		"ZexNFT":                          ZexNFT,
+		"EntryPoint":                      EntryPoint,
 	}
 }
 
