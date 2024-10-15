@@ -43,7 +43,7 @@ func GetCommand() *cobra.Command {
 	withdrawCmd.Flags().StringVar(
 		&wp.PredicateAddr,
 		common.ChildPredicateFlag,
-		contracts.ChildERC20PredicateContract.String(),
+		"",
 		"child ERC 20 predicate address",
 	)
 
@@ -93,7 +93,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	exitEventIDs := make([]*big.Int, 0, len(wp.Receivers))
+	bridgeMsgEventIDs := make([]*big.Int, 0, len(wp.Receivers))
 	blockNumbers := make([]uint64, len(wp.Receivers))
 
 	for i := range wp.Receivers {
@@ -129,15 +129,15 @@ func runCommand(cmd *cobra.Command, _ []string) {
 			return
 		}
 
-		if !wp.ChildChainMintable {
-			extractedExitEventIDs, err := common.ExtractExitEventIDs(receipt)
+		if !wp.InternalChainMintable {
+			extractedBridgeMsgEventIDs, err := common.ExtractBridgeMessageIDs(receipt)
 			if err != nil {
-				outputter.SetError(fmt.Errorf("failed to extract exit event: %w", err))
+				outputter.SetError(fmt.Errorf("failed to extract bridge message event: %w", err))
 
 				return
 			}
 
-			exitEventIDs = append(exitEventIDs, extractedExitEventIDs...)
+			bridgeMsgEventIDs = append(bridgeMsgEventIDs, extractedBridgeMsgEventIDs...)
 		}
 
 		blockNumbers[i] = receipt.BlockNumber
@@ -145,12 +145,12 @@ func runCommand(cmd *cobra.Command, _ []string) {
 
 	outputter.SetCommandResult(
 		&common.BridgeTxResult{
-			Sender:       senderAccount.Address().String(),
-			Receivers:    wp.Receivers,
-			Amounts:      wp.Amounts,
-			ExitEventIDs: exitEventIDs,
-			BlockNumbers: blockNumbers,
-			Title:        "WITHDRAW ERC 20",
+			Sender:            senderAccount.Address().String(),
+			Receivers:         wp.Receivers,
+			Amounts:           wp.Amounts,
+			BridgeMsgEventIDs: bridgeMsgEventIDs,
+			BlockNumbers:      blockNumbers,
+			Title:             "WITHDRAW ERC 20",
 		})
 }
 
@@ -170,5 +170,5 @@ func createWithdrawTxn(receiver types.Address, amount *big.Int) (*types.Transact
 	addr := types.StringToAddress(wp.PredicateAddr)
 
 	return helper.CreateTransaction(types.ZeroAddress, &addr, input,
-		nil, wp.ChildChainMintable), nil
+		nil, wp.InternalChainMintable), nil
 }

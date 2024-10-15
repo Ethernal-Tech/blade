@@ -27,7 +27,7 @@ const (
 )
 
 var (
-	ErrNoBlock              = errors.New("no block data passed in")
+	ErrNoBlock              = errors.New("block not found")
 	ErrParentNotFound       = errors.New("parent block not found")
 	ErrInvalidParentHash    = errors.New("parent block hash is invalid")
 	ErrParentHashMismatch   = errors.New("invalid parent block hash")

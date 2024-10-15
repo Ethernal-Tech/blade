@@ -26,16 +26,16 @@ const (
 )
 
 const (
-	SenderKeyFlag          = "sender-key"
-	ReceiversFlag          = "receivers"
-	AmountsFlag            = "amounts"
-	TokenIDsFlag           = "token-ids"
-	RootTokenFlag          = "root-token"
-	RootPredicateFlag      = "root-predicate"
-	ChildPredicateFlag     = "child-predicate"
-	ChildTokenFlag         = "child-token"
-	JSONRPCFlag            = "json-rpc"
-	ChildChainMintableFlag = "child-chain-mintable"
+	SenderKeyFlag             = "sender-key"
+	ReceiversFlag             = "receivers"
+	AmountsFlag               = "amounts"
+	TokenIDsFlag              = "token-ids"
+	RootTokenFlag             = "root-token"
+	RootPredicateFlag         = "root-predicate"
+	ChildPredicateFlag        = "child-predicate"
+	ChildTokenFlag            = "child-token"
+	JSONRPCFlag               = "json-rpc"
+	InternalChainMintableFlag = "internal-chain-mintable"
 
 	MinterKeyFlag     = "minter-key"
 	MinterKeyFlagDesc = "minter key is the account which is able to mint tokens to sender account " +
@@ -48,13 +48,13 @@ var (
 )
 
 type BridgeParams struct {
-	SenderKey          string
-	Receivers          []string
-	TokenAddr          string
-	PredicateAddr      string
-	JSONRPCAddr        string
-	ChildChainMintable bool
-	TxTimeout          time.Duration
+	SenderKey             string
+	Receivers             []string
+	TokenAddr             string
+	PredicateAddr         string
+	JSONRPCAddr           string
+	InternalChainMintable bool
+	TxTimeout             time.Duration
 }
 
 // RegisterCommonFlags registers common bridge flags to a given command
@@ -81,10 +81,10 @@ func (p *BridgeParams) RegisterCommonFlags(cmd *cobra.Command) {
 	)
 
 	cmd.Flags().BoolVar(
-		&p.ChildChainMintable,
-		ChildChainMintableFlag,
+		&p.InternalChainMintable,
+		InternalChainMintableFlag,
 		false,
-		"flag indicating whether tokens originate from child chain",
+		"flag indicating whether tokens originate from internal chain",
 	)
 
 	cmd.Flags().DurationVar(
@@ -176,14 +176,14 @@ func (bp *ERC1155BridgeParams) Validate() error {
 	return nil
 }
 
-// ExtractExitEventIDs tries to extract all exit event ids from provided receipt
-func ExtractExitEventIDs(receipt *ethgo.Receipt) ([]*big.Int, error) {
-	exitEventIDs := make([]*big.Int, 0, len(receipt.Logs))
+// ExtractBridgeMessageIDs tries to extract all bridgeMsg events ids from provided receipt
+func ExtractBridgeMessageIDs(receipt *ethgo.Receipt) ([]*big.Int, error) {
+	bridgeMsgEventIDs := make([]*big.Int, 0, len(receipt.Logs))
 
 	for _, log := range receipt.Logs {
-		var exitEvent contractsapi.L2StateSyncedEvent
+		var bridgeMsgEvent contractsapi.BridgeMsgEvent
 
-		doesMatch, err := exitEvent.ParseLog(log)
+		doesMatch, err := bridgeMsgEvent.ParseLog(log)
 		if err != nil {
 			return nil, err
 		}
@@ -192,60 +192,46 @@ func ExtractExitEventIDs(receipt *ethgo.Receipt) ([]*big.Int, error) {
 			continue
 		}
 
-		exitEventIDs = append(exitEventIDs, exitEvent.ID)
+		bridgeMsgEventIDs = append(bridgeMsgEventIDs, bridgeMsgEvent.ID)
 	}
 
-	if len(exitEventIDs) != 0 {
-		return exitEventIDs, nil
+	if len(bridgeMsgEventIDs) != 0 {
+		return bridgeMsgEventIDs, nil
 	}
 
-	return nil, errors.New("failed to find exit event log")
+	return nil, errors.New("failed to find bridgeMsg event log")
 }
 
 // ExtractChildTokenAddr extracts predicted deterministic child token address
-func ExtractChildTokenAddr(receipt *ethgo.Receipt, childChainMintable bool) (*types.Address, error) {
+func ExtractChildTokenAddr(receipt *ethgo.Receipt) (*types.Address, error) {
 	var (
-		l1TokenMapped contractsapi.TokenMappedEvent
-		l2TokenMapped contractsapi.L2MintableTokenMappedEvent
+		tokenMapped contractsapi.TokenMappedEvent
 	)
 
 	for _, log := range receipt.Logs {
-		if childChainMintable {
-			doesMatch, err := l2TokenMapped.ParseLog(log)
-			if err != nil {
-				return nil, err
-			}
-
-			if !doesMatch {
-				continue
-			}
-
-			return &l2TokenMapped.ChildToken, nil
-		} else {
-			doesMatch, err := l1TokenMapped.ParseLog(log)
-			if err != nil {
-				return nil, err
-			}
-
-			if !doesMatch {
-				continue
-			}
-
-			return &l1TokenMapped.ChildToken, nil
+		doesMatch, err := tokenMapped.ParseLog(log)
+		if err != nil {
+			return nil, err
 		}
+
+		if !doesMatch {
+			continue
+		}
+
+		return &tokenMapped.ChildToken, nil
 	}
 
 	return nil, nil
 }
 
 type BridgeTxResult struct {
-	Sender         string         `json:"sender"`
-	Receivers      []string       `json:"receivers"`
-	ExitEventIDs   []*big.Int     `json:"exitEventIDs"`
-	Amounts        []string       `json:"amounts"`
-	TokenIDs       []string       `json:"tokenIds"`
-	BlockNumbers   []uint64       `json:"blockNumbers"`
-	ChildTokenAddr *types.Address `json:"childTokenAddr"`
+	Sender            string         `json:"sender"`
+	Receivers         []string       `json:"receivers"`
+	BridgeMsgEventIDs []*big.Int     `json:"bridgeMsgEventIDs"`
+	Amounts           []string       `json:"amounts"`
+	TokenIDs          []string       `json:"tokenIds"`
+	BlockNumbers      []uint64       `json:"blockNumbers"`
+	ChildTokenAddr    *types.Address `json:"childTokenAddr"`
 
 	Title string `json:"title"`
 }
@@ -265,13 +251,13 @@ func (r *BridgeTxResult) GetOutput() string {
 		vals = append(vals, fmt.Sprintf("Token Ids|%s", strings.Join(r.TokenIDs, ", ")))
 	}
 
-	if len(r.ExitEventIDs) > 0 {
+	if len(r.BridgeMsgEventIDs) > 0 {
 		var buf bytes.Buffer
 
-		for i, id := range r.ExitEventIDs {
+		for i, id := range r.BridgeMsgEventIDs {
 			buf.WriteString(id.String())
 
-			if i != len(r.ExitEventIDs)-1 {
+			if i != len(r.BridgeMsgEventIDs)-1 {
 				buf.WriteString(", ")
 			}
 		}

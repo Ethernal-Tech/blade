@@ -29,14 +29,6 @@ func main() {
 		Name string
 	}{
 		{
-			"blade/L2StateSender.sol",
-			"L2StateSender",
-		},
-		{
-			"blade/StateReceiver.sol",
-			"StateReceiver",
-		},
-		{
 			"blade/NativeERC20.sol",
 			"NativeERC20",
 		},
@@ -57,8 +49,8 @@ func main() {
 			"ChildERC20PredicateACL",
 		},
 		{
-			"blade/RootMintableERC20Predicate.sol",
-			"RootMintableERC20Predicate",
+			"bridge/RootERC20Predicate.sol",
+			"RootERC20Predicate",
 		},
 		{
 			"blade/RootMintableERC20PredicateAccessList.sol",
@@ -77,8 +69,8 @@ func main() {
 			"ChildERC721PredicateACL",
 		},
 		{
-			"blade/RootMintableERC721Predicate.sol",
-			"RootMintableERC721Predicate",
+			"bridge/RootERC721Predicate.sol",
+			"RootERC721Predicate",
 		},
 		{
 			"blade/RootMintableERC721PredicateAccessList.sol",
@@ -97,10 +89,6 @@ func main() {
 			"ChildERC1155PredicateACL",
 		},
 		{
-			"blade/RootMintableERC1155Predicate.sol",
-			"RootMintableERC1155Predicate",
-		},
-		{
 			"blade/RootMintableERC1155PredicateAccessList.sol",
 			"RootMintableERC1155PredicateACL",
 		},
@@ -117,44 +105,12 @@ func main() {
 			"BN256G2",
 		},
 		{
-			"common/Merkle.sol",
-			"Merkle",
-		},
-		{
-			"bridge/CheckpointManager.sol",
-			"CheckpointManager",
-		},
-		{
-			"bridge/ExitHelper.sol",
-			"ExitHelper",
-		},
-		{
-			"bridge/StateSender.sol",
-			"StateSender",
-		},
-		{
 			"mocks/MockERC20.sol",
 			"MockERC20",
 		},
 		{
-			"bridge/RootERC20Predicate.sol",
-			"RootERC20Predicate",
-		},
-		{
-			"bridge/ChildMintableERC20Predicate.sol",
-			"ChildMintableERC20Predicate",
-		},
-		{
 			"mocks/MockERC721.sol",
 			"MockERC721",
-		},
-		{
-			"bridge/RootERC721Predicate.sol",
-			"RootERC721Predicate",
-		},
-		{
-			"bridge/ChildMintableERC721Predicate.sol",
-			"ChildMintableERC721Predicate",
 		},
 		{
 			"mocks/MockERC1155.sol",
@@ -163,10 +119,6 @@ func main() {
 		{
 			"bridge/RootERC1155Predicate.sol",
 			"RootERC1155Predicate",
-		},
-		{
-			"bridge/ChildMintableERC1155Predicate.sol",
-			"ChildMintableERC1155Predicate",
 		},
 		{
 			"blade/staking/StakeManager.sol",
@@ -207,6 +159,14 @@ func main() {
 		{
 			"blade/governance/ChildTimelock.sol",
 			"ChildTimelock",
+		},
+		{
+			"blade/BridgeStorage.sol",
+			"BridgeStorage",
+		},
+		{
+			"blade/Gateway.sol",
+			"Gateway",
 		},
 	}
 

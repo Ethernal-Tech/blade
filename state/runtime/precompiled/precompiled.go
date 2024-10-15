@@ -71,14 +71,11 @@ func (p *Precompiled) setupContracts() {
 	// Istanbul fork
 	p.register("9", &blake2f{p})
 
-	// Native transfer precompile
-	p.register(contracts.NativeTransferPrecompile.String(), &nativeTransfer{})
-
 	// Console precompile
 	// p.register(contracts.ConsolePrecompile.String(), &console{})
 
-	// BLS aggregated signatures verification precompile
-	p.register(contracts.BLSAggSigsVerificationPrecompile.String(), &blsAggSignsVerification{})
+	// Native transfer precompile
+	p.register(contracts.NativeTransferPrecompile.String(), &nativeTransfer{})
 }
 
 func (p *Precompiled) register(precompileAddrRaw string, b contract) {

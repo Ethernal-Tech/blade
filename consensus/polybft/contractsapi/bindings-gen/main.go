@@ -42,66 +42,6 @@ func main() {
 		events              []string
 	}{
 		{
-			"StateReceiver",
-			gensc.StateReceiver,
-			false,
-			[]string{
-				"commit",
-				"execute",
-				"batchExecute",
-			},
-			[]string{
-				"StateSyncResult",
-				"NewCommitment",
-			},
-		},
-		{
-			"StateSender",
-			gensc.StateSender,
-			false,
-			[]string{
-				"syncState",
-			},
-			[]string{
-				"StateSynced",
-			},
-		},
-		{
-			"L2StateSender",
-			gensc.L2StateSender,
-			false,
-			[]string{},
-			[]string{
-				"L2StateSynced",
-			},
-		},
-		{
-			"CheckpointManager",
-			gensc.CheckpointManager,
-			true,
-			[]string{
-				"submit",
-				"initialize",
-				"getCheckpointBlock",
-			},
-			[]string{
-				"CheckpointSubmitted",
-			},
-		},
-		{
-			"ExitHelper",
-			gensc.ExitHelper,
-			false,
-			[]string{
-				"initialize",
-				"exit",
-				"batchExit",
-			},
-			[]string{
-				"ExitProcessed",
-			},
-		},
-		{
 			"ChildERC20Predicate",
 			gensc.ChildERC20Predicate,
 			false,
@@ -116,19 +56,23 @@ func main() {
 			gensc.ChildERC20PredicateACL,
 			false,
 			[]string{
-				"initialize(address,address,address,address,address,bool,bool,address)",
+				"initialize(address,address,address,address,uint256,bool,bool,address)",
 				"withdrawTo",
 			},
 			[]string{},
 		},
 		{
-			"RootMintableERC20Predicate",
-			gensc.RootMintableERC20Predicate,
+			"RootERC20Predicate",
+			gensc.RootERC20Predicate,
 			false,
 			[]string{
 				"initialize",
+				"deposit",
+				"depositTo",
 			},
-			[]string{},
+			[]string{
+				"TokenMapped",
+			},
 		},
 		{
 			"RootMintableERC20PredicateACL",
@@ -159,29 +103,6 @@ func main() {
 			[]string{},
 		},
 		{
-			"RootERC20Predicate",
-			gensc.RootERC20Predicate,
-			false,
-			[]string{
-				"initialize",
-				"depositTo",
-			},
-			[]string{
-				"TokenMapped",
-			},
-		},
-		{
-			"ChildMintableERC20Predicate",
-			gensc.ChildMintableERC20Predicate,
-			false,
-			[]string{
-				"initialize",
-			},
-			[]string{
-				"MintableTokenMapped",
-			},
-		},
-		{
 			"RootERC20",
 			gensc.RootERC20,
 			false,
@@ -199,15 +120,6 @@ func main() {
 			[]string{
 				"initialize",
 				"depositBatch",
-			},
-			[]string{},
-		},
-		{
-			"ChildMintableERC1155Predicate",
-			gensc.ChildMintableERC1155Predicate,
-			false,
-			[]string{
-				"initialize",
 			},
 			[]string{},
 		},
@@ -243,24 +155,13 @@ func main() {
 			[]string{},
 		},
 		{
-			"RootMintableERC1155Predicate",
-			gensc.RootMintableERC1155Predicate,
-			false,
-			[]string{
-				"initialize",
-			},
-			[]string{},
-		},
-		{
 			"RootMintableERC1155PredicateACL",
 			gensc.RootMintableERC1155PredicateACL,
 			false,
 			[]string{
 				"initialize",
 			},
-			[]string{
-				"L2MintableTokenMapped",
-			},
+			[]string{},
 		},
 		{
 			"ChildERC1155",
@@ -279,15 +180,6 @@ func main() {
 			[]string{
 				"initialize",
 				"depositBatch",
-			},
-			[]string{},
-		},
-		{
-			"ChildMintableERC721Predicate",
-			gensc.ChildMintableERC721Predicate,
-			false,
-			[]string{
-				"initialize",
 			},
 			[]string{},
 		},
@@ -318,15 +210,6 @@ func main() {
 			[]string{
 				"initialize",
 				"withdrawBatch",
-			},
-			[]string{},
-		},
-		{
-			"RootMintableERC721Predicate",
-			gensc.RootMintableERC721Predicate,
-			false,
-			[]string{
-				"initialize",
 			},
 			[]string{},
 		},
@@ -482,6 +365,34 @@ func main() {
 				"initialize",
 			},
 			[]string{},
+		},
+		{
+			"BridgeStorage",
+			gensc.BridgeStorage,
+			false,
+			[]string{
+				"initialize",
+				"commitBatch",
+				"commitValidatorSet",
+			},
+			[]string{
+				"NewBatch",
+				"NewValidatorSet",
+				"NewValidatorSetStored",
+			},
+		},
+		{
+			"Gateway",
+			gensc.Gateway,
+			false,
+			[]string{
+				"initialize",
+				"receiveBatch",
+			},
+			[]string{
+				"BridgeMessageResult",
+				"BridgeMsg",
+			},
 		},
 	}
 
@@ -664,11 +575,13 @@ func generateType(generatedData *generatedData, name string, obj *abi.Type, res 
 
 // generateNestedType generates code for nested types found in smart contracts structs
 func generateNestedType(generatedData *generatedData, name string, obj *abi.Type, res *[]string) (string, error) {
+	internalType := getInternalType(name, obj)
+
 	for _, s := range generatedData.structs {
-		if s == name {
+		if s == internalType {
 			// do not generate the same type again if it's already generated
 			// this happens when two functions use the same struct type as one of its parameters
-			return "*" + name, nil
+			return "*" + internalType, nil
 		}
 	}
 

@@ -17,11 +17,20 @@ import (
 	protobuf "google.golang.org/protobuf/proto"
 
 	"github.com/0xPolygon/polygon-edge/chain"
-	"github.com/0xPolygon/polygon-edge/consensus"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/blockchain"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/bridge"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/config"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/governance"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/helpers"
+	polymetrics "github.com/0xPolygon/polygon-edge/consensus/polybft/metrics"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/proposer"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/signer"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/stake"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/state"
+	systemstate "github.com/0xPolygon/polygon-edge/consensus/polybft/system_state"
+	polytypes "github.com/0xPolygon/polygon-edge/consensus/polybft/types"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/validator"
-	"github.com/0xPolygon/polygon-edge/consensus/polybft/wallet"
 	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/forkmanager"
 	"github.com/0xPolygon/polygon-edge/helper/common"
@@ -29,15 +38,13 @@ import (
 )
 
 const (
-	maxCommitmentSize = 10
-	stateFileName     = "consensusState.db"
+	stateFileName      = "consensusState.db"
+	rewardLookbackSize = uint64(1)
 )
 
 var (
 	// errNotAValidator represents "node is not a validator" error message
 	errNotAValidator = errors.New("node is not a validator")
-	// errQuorumNotReached represents "quorum not reached for commitment message" error message
-	errQuorumNotReached = errors.New("quorum not reached for commitment message")
 )
 
 // txPoolInterface is an abstraction of transaction pool
@@ -66,7 +73,7 @@ type epochMetadata struct {
 
 	// CurrentClientConfig is the current client configuration for current epoch
 	// that is updated by governance proposals
-	CurrentClientConfig *PolyBFTConfig
+	CurrentClientConfig *config.PolyBFT
 }
 
 type guardedDataDTO struct {
@@ -77,32 +84,22 @@ type guardedDataDTO struct {
 	epoch *epochMetadata
 
 	// proposerSnapshot at the time of collecting data
-	proposerSnapshot *ProposerSnapshot
-}
-
-// runtimeConfig is a struct that holds configuration data for given consensus runtime
-type runtimeConfig struct {
-	genesisParams   *chain.Params
-	GenesisConfig   *PolyBFTConfig
-	Forks           *chain.Forks
-	DataDir         string
-	Key             *wallet.Key
-	State           *State
-	blockchain      blockchainBackend
-	polybftBackend  polybftBackend
-	txPool          txPoolInterface
-	bridgeTopic     topic
-	consensusConfig *consensus.Config
-	eventTracker    *consensus.EventTracker
+	proposerSnapshot *proposer.ProposerSnapshot
 }
 
 // consensusRuntime is a struct that provides consensus runtime features like epoch, state and event management
 type consensusRuntime struct {
 	// config represents wrapper around required parameters which are received from the outside
-	config *runtimeConfig
+	config *config.Runtime
+
+	blockchain blockchain.Blockchain
+
+	backend polytypes.Polybft
+
+	txPool blockchain.TxPool
 
 	// state is reference to the struct which encapsulates bridge events persistence logic
-	state *State
+	state *state.State
 
 	// fsm instance which is created for each `runSequence`
 	fsm *fsm
@@ -120,59 +117,68 @@ type consensusRuntime struct {
 	activeValidatorFlag atomic.Bool
 
 	// proposerCalculator is the object which manipulates with ProposerSnapshot
-	proposerCalculator *ProposerCalculator
+	proposerCalculator *proposer.ProposerCalculator
 
 	// manager for handling validator stake change and updating validator set
-	stakeManager StakeManager
+	stakeManager stake.StakeManager
 
-	eventProvider *EventProvider
+	eventProvider *state.EventProvider
 
-	// bridgeManager handles storing, processing and executing bridge events
-	bridgeManager BridgeManager
+	// bridgeManagers handles storing, processing and executing bridge events
+	bridge bridge.Bridge
 
 	// governanceManager is used for handling governance events gotten from proposals execution
 	// also handles updating client configuration based on governance proposals
-	governanceManager GovernanceManager
+	governanceManager governance.GovernanceManager
 
 	// logger instance
 	logger hcf.Logger
 }
 
 // newConsensusRuntime creates and starts a new consensus runtime instance with event tracking
-func newConsensusRuntime(log hcf.Logger, config *runtimeConfig) (*consensusRuntime, error) {
-	dbTx, err := config.State.beginDBTransaction(true)
+func newConsensusRuntime(log hcf.Logger, config *config.Runtime,
+	st *state.State,
+	backend polytypes.Polybft,
+	blockchain blockchain.Blockchain,
+	txPool blockchain.TxPool,
+	bridgeTopic bridge.Topic,
+) (*consensusRuntime, error) {
+	dbTx, err := st.BeginDBTransaction(true)
 	if err != nil {
 		return nil, fmt.Errorf("could not begin dbTx to init consensus runtime: %w", err)
 	}
 
 	defer dbTx.Rollback() //nolint:errcheck
 
-	proposerCalculator, err := NewProposerCalculator(config, log.Named("proposer_calculator"), dbTx)
+	proposerCalculator, err := proposer.NewProposerCalculator(
+		config, log.Named("proposer_calculator"),
+		st, backend, blockchain, dbTx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create consensus runtime, error while creating proposer calculator %w", err)
 	}
 
 	runtime := &consensusRuntime{
-		state:              config.State,
+		state:              st,
 		config:             config,
-		lastBuiltBlock:     config.blockchain.CurrentHeader(),
+		lastBuiltBlock:     blockchain.CurrentHeader(),
 		proposerCalculator: proposerCalculator,
 		logger:             log.Named("consensus_runtime"),
-		eventProvider:      NewEventProvider(config.blockchain),
+		eventProvider:      state.NewEventProvider(blockchain),
+		backend:            backend,
+		blockchain:         blockchain,
+		txPool:             txPool,
 	}
 
-	var bridgeManager BridgeManager
-
-	if runtime.IsBridgeEnabled() {
-		bridgeManager, err = newBridgeManager(runtime, config, runtime.eventProvider, log)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		bridgeManager = &dummyBridgeManager{}
+	if runtime.bridge, err = bridge.NewBridge(
+		runtime,
+		runtime.state,
+		runtime.config,
+		bridgeTopic,
+		runtime.eventProvider,
+		runtime.blockchain,
+		log.Named("bridge"), dbTx); err != nil {
+		return nil, err
 	}
-
-	runtime.bridgeManager = bridgeManager
 
 	if err := runtime.initStakeManager(log, dbTx); err != nil {
 		return nil, err
@@ -197,19 +203,19 @@ func newConsensusRuntime(log hcf.Logger, config *runtimeConfig) (*consensusRunti
 
 // close is used to tear down allocated resources
 func (c *consensusRuntime) close() {
-	c.bridgeManager.Close()
+	c.bridge.Close()
 }
 
 // initStakeManager initializes stake manager
 func (c *consensusRuntime) initStakeManager(logger hcf.Logger, dbTx *bolt.Tx) error {
 	var err error
 
-	c.stakeManager, err = newStakeManager(
+	c.stakeManager, err = stake.NewStakeManager(
 		logger.Named("stake-manager"),
 		c.state,
 		contracts.StakeManagerContract,
-		c.config.blockchain,
-		c.config.polybftBackend,
+		c.blockchain,
+		c.backend,
 		dbTx,
 	)
 
@@ -220,11 +226,11 @@ func (c *consensusRuntime) initStakeManager(logger hcf.Logger, dbTx *bolt.Tx) er
 
 // initGovernanceManager initializes governance manager
 func (c *consensusRuntime) initGovernanceManager(logger hcf.Logger, dbTx *bolt.Tx) error {
-	governanceManager, err := newGovernanceManager(
-		c.config.genesisParams,
+	governanceManager, err := governance.NewGovernanceManager(
+		c.config.ChainParams,
 		logger.Named("governance-manager"),
 		c.state,
-		c.config.blockchain,
+		c.blockchain,
 		dbTx,
 	)
 
@@ -279,12 +285,12 @@ func (c *consensusRuntime) OnBlockInserted(fullBlock *types.FullBlock) {
 		return
 	}
 
-	if err := updateBlockMetrics(fullBlock.Block, c.lastBuiltBlock); err != nil {
+	if err := polymetrics.UpdateBlockMetrics(fullBlock.Block, c.lastBuiltBlock); err != nil {
 		c.logger.Error("failed to update block metrics", "error", err)
 	}
 
 	// after the block has been written we reset the txpool so that the old transactions are removed
-	c.config.txPool.ResetWithBlock(fullBlock.Block)
+	c.txPool.ResetWithBlock(fullBlock.Block)
 
 	var (
 		epoch = c.epoch
@@ -295,7 +301,7 @@ func (c *consensusRuntime) OnBlockInserted(fullBlock *types.FullBlock) {
 	)
 
 	// begin DB transaction
-	dbTx, err := c.state.beginDBTransaction(true)
+	dbTx, err := c.state.BeginDBTransaction(true)
 	if err != nil {
 		c.logger.Error("failed to begin db transaction on block finalization",
 			"block", fullBlock.Block.Number(), "err", err)
@@ -305,7 +311,7 @@ func (c *consensusRuntime) OnBlockInserted(fullBlock *types.FullBlock) {
 
 	defer dbTx.Rollback() //nolint:errcheck
 
-	lastProcessedEventsBlock, err := c.state.getLastProcessedEventsBlock(dbTx)
+	lastProcessedEventsBlock, err := c.state.GetLastProcessedEventsBlock(dbTx)
 	if err != nil {
 		c.logger.Error("failed to get last processed events block on block finalization",
 			"block", fullBlock.Block.Number(), "err", err)
@@ -319,7 +325,7 @@ func (c *consensusRuntime) OnBlockInserted(fullBlock *types.FullBlock) {
 		return
 	}
 
-	postBlock := &PostBlockRequest{
+	postBlock := &polytypes.PostBlockRequest{
 		FullBlock:           fullBlock,
 		Epoch:               epoch.Number,
 		IsEpochEndingBlock:  isEndOfEpoch,
@@ -342,9 +348,8 @@ func (c *consensusRuntime) OnBlockInserted(fullBlock *types.FullBlock) {
 		return
 	}
 
-	// handle bridge events
-	if err := c.bridgeManager.PostBlock(postBlock); err != nil {
-		c.logger.Error("failed to post block in bridge manager", "err", err)
+	if err := c.bridge.PostBlock(postBlock); err != nil {
+		c.logger.Error("failed to post block in bridge", "err", err)
 
 		return
 	}
@@ -362,7 +367,7 @@ func (c *consensusRuntime) OnBlockInserted(fullBlock *types.FullBlock) {
 		}
 	}
 
-	if err := c.state.insertLastProcessedEventsBlock(fullBlock.Block.Number(), dbTx); err != nil {
+	if err := c.state.InsertLastProcessedEventsBlock(fullBlock.Block.Number(), dbTx); err != nil {
 		c.logger.Error("failed to update the last processed events block in db", "error", err)
 
 		return
@@ -399,10 +404,10 @@ func (c *consensusRuntime) FSM() error {
 		return errNotAValidator
 	}
 
-	blockBuilder, err := c.config.blockchain.NewBlockBuilder(
+	blockBuilder, err := c.blockchain.NewBlockBuilder(
 		parent,
 		c.config.Key.Address(),
-		c.config.txPool,
+		c.txPool,
 		epoch.CurrentClientConfig.BlockTime.Duration,
 		c.logger,
 	)
@@ -419,18 +424,12 @@ func (c *consensusRuntime) FSM() error {
 
 	valSet := validator.NewValidatorSet(epoch.Validators, c.logger)
 
-	exitRootHash, err := c.bridgeManager.BuildExitEventRoot(epoch.Number)
-	if err != nil {
-		return fmt.Errorf("could not build exit root hash for fsm: %w", err)
-	}
-
 	ff := &fsm{
 		config:              epoch.CurrentClientConfig,
 		forks:               c.config.Forks,
 		parent:              parent,
-		backend:             c.config.blockchain,
-		polybftBackend:      c.config.polybftBackend,
-		exitEventRootHash:   exitRootHash,
+		blockchain:          c.blockchain,
+		polybftBackend:      c.backend,
 		epochNumber:         epoch.Number,
 		blockBuilder:        blockBuilder,
 		validators:          valSet,
@@ -442,12 +441,9 @@ func (c *consensusRuntime) FSM() error {
 	}
 
 	if isEndOfSprint {
-		commitment, err := c.bridgeManager.Commitment(pendingBlockNumber)
-		if err != nil {
+		if ff.proposerBridgeBatchToRegister, err = c.bridge.BridgeBatch(pendingBlockNumber); err != nil {
 			return err
 		}
-
-		ff.proposerCommitmentToRegister = commitment
 	}
 
 	if isEndOfEpoch {
@@ -503,27 +499,16 @@ func (c *consensusRuntime) restartEpoch(header *types.Header, dbTx *bolt.Tx) (*e
 		}
 	}
 
-	validatorSet, err := c.config.polybftBackend.GetValidatorsWithTx(header.Number, nil, dbTx)
+	validatorSet, err := c.backend.GetValidatorsWithTx(header.Number, nil, dbTx)
 	if err != nil {
 		return nil, fmt.Errorf("restart epoch - cannot get validators: %w", err)
 	}
 
-	updateEpochMetrics(epochMetadata{
-		Number:     epochNumber,
-		Validators: validatorSet,
-	})
+	polymetrics.UpdateEpochMetrics(epochNumber, len(validatorSet))
 
 	firstBlockInEpoch, err := c.getFirstBlockOfEpoch(epochNumber, header)
 	if err != nil {
 		return nil, err
-	}
-
-	if err := c.state.EpochStore.cleanEpochsFromDB(dbTx); err != nil {
-		c.logger.Error("Could not clean previous epochs from db.", "error", err)
-	}
-
-	if err := c.state.EpochStore.insertEpoch(epochNumber, dbTx); err != nil {
-		return nil, fmt.Errorf("an error occurred while inserting new epoch in db. Reason: %w", err)
 	}
 
 	c.logger.Info(
@@ -534,7 +519,7 @@ func (c *consensusRuntime) restartEpoch(header *types.Header, dbTx *bolt.Tx) (*e
 		"firstBlockInEpoch", firstBlockInEpoch,
 	)
 
-	reqObj := &PostEpochRequest{
+	reqObj := &polytypes.PostEpochRequest{
 		SystemState:       systemState,
 		NewEpochID:        epochNumber,
 		FirstBlockOfEpoch: firstBlockInEpoch,
@@ -543,7 +528,7 @@ func (c *consensusRuntime) restartEpoch(header *types.Header, dbTx *bolt.Tx) (*e
 		Forks:             c.config.Forks,
 	}
 
-	if err := c.bridgeManager.PostEpoch(reqObj); err != nil {
+	if err := c.bridge.PostEpoch(reqObj); err != nil {
 		return nil, err
 	}
 
@@ -556,12 +541,12 @@ func (c *consensusRuntime) restartEpoch(header *types.Header, dbTx *bolt.Tx) (*e
 		return nil, err
 	}
 
-	currentPolyConfig, err := GetPolyBFTConfig(currentParams)
+	currentPolyConfig, err := config.GetPolyBFTConfig(currentParams)
 	if err != nil {
 		return nil, err
 	}
 
-	c.config.polybftBackend.SetBlockTime(currentPolyConfig.BlockTime.Duration)
+	c.backend.SetBlockTime(currentPolyConfig.BlockTime.Duration)
 
 	return &epochMetadata{
 		Number:              epochNumber,
@@ -611,7 +596,7 @@ func (c *consensusRuntime) calculateDistributeRewardsInput(
 		epochID--
 	}
 
-	getSealersForBlock := func(blockExtra *Extra, validators validator.AccountSet) error {
+	getSealersForBlock := func(blockExtra *polytypes.Extra, validators validator.AccountSet) error {
 		signers, err := validators.GetFilteredValidators(blockExtra.Parent.Bitmap)
 		if err != nil {
 			return err
@@ -626,19 +611,19 @@ func (c *consensusRuntime) calculateDistributeRewardsInput(
 		return nil
 	}
 
-	blockExtra, err := GetIbftExtra(blockHeader.ExtraData)
+	blockExtra, err := polytypes.GetIbftExtra(blockHeader.ExtraData)
 	if err != nil {
 		return nil, err
 	}
 
-	previousBlockHeader, previousBlockExtra, err := getBlockData(blockHeader.Number-1, c.config.blockchain)
+	previousBlockHeader, previousBlockExtra, err := helpers.GetBlockData(blockHeader.Number-1, c.blockchain)
 	if err != nil {
 		return nil, err
 	}
 
 	// calculate uptime starting from last block - 1 in epoch until first block in given epoch
-	for previousBlockExtra.Checkpoint.EpochNumber == blockExtra.Checkpoint.EpochNumber {
-		validators, err := c.config.polybftBackend.GetValidators(blockHeader.Number-1, nil)
+	for previousBlockExtra.BlockMetaData.EpochNumber == blockExtra.BlockMetaData.EpochNumber {
+		validators, err := c.backend.GetValidators(blockHeader.Number-1, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -647,12 +632,12 @@ func (c *consensusRuntime) calculateDistributeRewardsInput(
 			return nil, err
 		}
 
-		blockHeader, blockExtra, err = getBlockData(blockHeader.Number-1, c.config.blockchain)
+		blockHeader, blockExtra, err = helpers.GetBlockData(blockHeader.Number-1, c.blockchain)
 		if err != nil {
 			return nil, err
 		}
 
-		previousBlockHeader, previousBlockExtra, err = getBlockData(previousBlockHeader.Number-1, c.config.blockchain)
+		previousBlockHeader, previousBlockExtra, err = helpers.GetBlockData(previousBlockHeader.Number-1, c.blockchain)
 		if err != nil {
 			return nil, err
 		}
@@ -662,7 +647,7 @@ func (c *consensusRuntime) calculateDistributeRewardsInput(
 	// since we can not calculate uptime for the last block in epoch (because of parent signatures)
 	if blockHeader.Number > rewardLookbackSize {
 		for i := uint64(0); i < rewardLookbackSize; i++ {
-			validators, err := c.config.polybftBackend.GetValidators(blockHeader.Number-2, nil)
+			validators, err := c.backend.GetValidators(blockHeader.Number-2, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -671,7 +656,7 @@ func (c *consensusRuntime) calculateDistributeRewardsInput(
 				return nil, err
 			}
 
-			blockHeader, blockExtra, err = getBlockData(blockHeader.Number-1, c.config.blockchain)
+			blockHeader, blockExtra, err = helpers.GetBlockData(blockHeader.Number-1, c.blockchain)
 			if err != nil {
 				return nil, err
 			}
@@ -707,16 +692,6 @@ func (c *consensusRuntime) calculateDistributeRewardsInput(
 	return distributeRewards, nil
 }
 
-// GenerateExitProof generates proof of exit and is a bridge endpoint store function
-func (c *consensusRuntime) GenerateExitProof(exitID uint64) (types.Proof, error) {
-	return c.bridgeManager.GenerateProof(exitID, Exit)
-}
-
-// GetStateSyncProof returns the proof for the state sync
-func (c *consensusRuntime) GetStateSyncProof(stateSyncID uint64) (types.Proof, error) {
-	return c.bridgeManager.GenerateProof(stateSyncID, StateSync)
-}
-
 // setIsActiveValidator updates the activeValidatorFlag field
 func (c *consensusRuntime) setIsActiveValidator(isActiveValidator bool) {
 	c.activeValidatorFlag.Store(isActiveValidator)
@@ -739,13 +714,13 @@ func (c *consensusRuntime) isFixedSizeOfSprintMet(blockNumber uint64, epoch *epo
 }
 
 // getSystemState builds SystemState instance for the most current block header
-func (c *consensusRuntime) getSystemState(header *types.Header) (SystemState, error) {
-	provider, err := c.config.blockchain.GetStateProviderForBlock(header)
+func (c *consensusRuntime) getSystemState(header *types.Header) (systemstate.SystemState, error) {
+	provider, err := c.blockchain.GetStateProviderForBlock(header)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.config.blockchain.GetSystemState(provider), nil
+	return c.blockchain.GetSystemState(provider), nil
 }
 
 func (c *consensusRuntime) IsValidProposal(rawProposal []byte) bool {
@@ -807,14 +782,14 @@ func (c *consensusRuntime) IsValidProposalHash(proposal *proto.Proposal, hash []
 		return false
 	}
 
-	extra, err := GetIbftExtra(block.Header.ExtraData)
+	extra, err := polytypes.GetIbftExtra(block.Header.ExtraData)
 	if err != nil {
 		c.logger.Error("failed to retrieve extra", "block number", block.Number(), "error", err)
 
 		return false
 	}
 
-	proposalHash, err := extra.Checkpoint.Hash(c.config.blockchain.GetChainID(), block.Number(), block.Hash())
+	proposalHash, err := extra.BlockMetaData.Hash(block.Hash())
 	if err != nil {
 		c.logger.Error("failed to calculate proposal hash", "block number", block.Number(), "error", err)
 
@@ -913,14 +888,14 @@ func (c *consensusRuntime) BuildPrePrepareMessage(
 		return nil
 	}
 
-	extra, err := GetIbftExtra(block.Header.ExtraData)
+	extra, err := polytypes.GetIbftExtra(block.Header.ExtraData)
 	if err != nil {
 		c.logger.Error("failed to retrieve extra for block %d: %w", block.Number(), err)
 
 		return nil
 	}
 
-	proposalHash, err := extra.Checkpoint.Hash(c.config.blockchain.GetChainID(), block.Number(), block.Hash())
+	proposalHash, err := extra.BlockMetaData.Hash(block.Hash())
 	if err != nil {
 		c.logger.Error("failed to calculate proposal hash", "block number", block.Number(), "error", err)
 
@@ -982,7 +957,7 @@ func (c *consensusRuntime) BuildPrepareMessage(proposalHash []byte, view *proto.
 
 // BuildCommitMessage builds a COMMIT message based on the passed in proposal
 func (c *consensusRuntime) BuildCommitMessage(proposalHash []byte, view *proto.View) *proto.IbftMessage {
-	committedSeal, err := c.config.Key.SignWithDomain(proposalHash, signer.DomainCheckpointManager)
+	committedSeal, err := c.config.Key.SignWithDomain(proposalHash, signer.DomainBridge)
 	if err != nil {
 		c.logger.Error("Cannot create committed seal message.", "error", err)
 
@@ -1016,9 +991,9 @@ func (c *consensusRuntime) RoundStarts(view *proto.View) error {
 	c.logger.Info("RoundStarts", "height", view.Height, "round", view.Round)
 
 	if view.Round > 0 {
-		c.config.txPool.ReinsertProposed()
+		c.txPool.ReinsertProposed()
 	} else {
-		c.config.txPool.ClearProposed()
+		c.txPool.ClearProposed()
 	}
 
 	return nil
@@ -1027,7 +1002,7 @@ func (c *consensusRuntime) RoundStarts(view *proto.View) error {
 // SequenceCancelled represents sequence cancelled callback
 func (c *consensusRuntime) SequenceCancelled(view *proto.View) error {
 	c.logger.Info("SequenceCancelled", "height", view.Height, "round", view.Round)
-	c.config.txPool.ReinsertProposed()
+	c.txPool.ReinsertProposed()
 
 	return nil
 }
@@ -1070,24 +1045,24 @@ func (c *consensusRuntime) getFirstBlockOfEpoch(epochNumber uint64, latestHeader
 
 	blockHeader := latestHeader
 
-	blockExtra, err := GetIbftExtra(latestHeader.ExtraData)
+	blockExtra, err := polytypes.GetIbftExtra(latestHeader.ExtraData)
 	if err != nil {
 		return 0, err
 	}
 
-	if epochNumber != blockExtra.Checkpoint.EpochNumber {
+	if epochNumber != blockExtra.BlockMetaData.EpochNumber {
 		// its a regular epoch ending. No out of sync happened
 		return latestHeader.Number + 1, nil
 	}
 
 	// node was out of sync, so we need to figure out what was the first block of the given epoch
-	epoch := blockExtra.Checkpoint.EpochNumber
+	epoch := blockExtra.BlockMetaData.EpochNumber
 
 	var firstBlockInEpoch uint64
 
-	for blockExtra.Checkpoint.EpochNumber == epoch {
+	for blockExtra.BlockMetaData.EpochNumber == epoch {
 		firstBlockInEpoch = blockHeader.Number
-		blockHeader, blockExtra, err = getBlockData(blockHeader.Number-1, c.config.blockchain)
+		blockHeader, blockExtra, err = helpers.GetBlockData(blockHeader.Number-1, c.blockchain)
 
 		if err != nil {
 			return 0, err
@@ -1167,4 +1142,10 @@ func (c *consensusRuntime) logRoundChangeMessage(
 		"numOfPrepareMsgs", preparedMsgsLen,
 		"certificateSize", common.ToMB(rawCertificate),
 		"certificateProposalSize", common.ToMB(rawCertificateProposalMsg))
+}
+
+// isRewardDistributionBlock indicates if reward distribution transaction
+// should happen in given block
+func isRewardDistributionBlock(isFirstBlockOfEpoch bool, pendingBlockNumber uint64) bool {
+	return isFirstBlockOfEpoch && pendingBlockNumber > 1
 }

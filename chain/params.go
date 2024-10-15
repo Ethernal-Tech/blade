@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/forkmanager"
 	"github.com/0xPolygon/polygon-edge/types"
 )
@@ -79,6 +80,52 @@ func (p *Params) GetEngine() string {
 	}
 
 	return ""
+}
+
+// GetBridgeAllowListAdmin returns admin account for the bridge allow list (first of them in the list)
+func (p *Params) GetBridgeAllowListAdmin() types.Address {
+	if p.BridgeAllowList == nil || len(p.BridgeAllowList.AdminAddresses) == 0 {
+		return types.ZeroAddress
+	}
+
+	return p.BridgeAllowList.AdminAddresses[0]
+}
+
+// GetBridgeBlockListAdmin returns admin account for the bridge block list (first of them in the list)
+func (p *Params) GetBridgeBlockListAdmin() types.Address {
+	if p.BridgeBlockList == nil || len(p.BridgeBlockList.AdminAddresses) == 0 {
+		return types.ZeroAddress
+	}
+
+	return p.BridgeBlockList.AdminAddresses[0]
+}
+
+// GetBridgeOwner returns owner account for bridge.
+//
+// It is resolved by the given priorities:
+// 1. in case bridge allow list admin is configured, return it as an owner
+// 2. in case bridge block list admin is configured, return it as an owner
+// 3. otherwise return predefined SystemCaller address
+func (p *Params) GetBridgeOwner() types.Address {
+	if owner := p.GetBridgeAllowListAdmin(); owner != types.ZeroAddress {
+		return owner
+	}
+
+	if owner := p.GetBridgeBlockListAdmin(); owner != types.ZeroAddress {
+		return owner
+	}
+
+	return contracts.SystemCaller
+}
+
+// IsBridgeAllowListEnabled returns true in case bridge allow list is configured, otherwise false.
+func (p *Params) IsBridgeAllowListEnabled() bool {
+	return p.GetBridgeAllowListAdmin() != types.ZeroAddress
+}
+
+// IsBridgeBlockListEnabled returns true in case bridge block list is configured, otherwise false.
+func (p *Params) IsBridgeBlockListEnabled() bool {
+	return p.GetBridgeBlockListAdmin() != types.ZeroAddress
 }
 
 // predefined forks

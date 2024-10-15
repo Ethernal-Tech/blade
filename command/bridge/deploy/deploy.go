@@ -15,35 +15,12 @@ import (
 	"github.com/0xPolygon/polygon-edge/command"
 	"github.com/0xPolygon/polygon-edge/command/bridge/helper"
 	cmdHelper "github.com/0xPolygon/polygon-edge/command/helper"
-	"github.com/0xPolygon/polygon-edge/consensus/polybft"
+	polycfg "github.com/0xPolygon/polygon-edge/consensus/polybft/config"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/validator"
-	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
-)
-
-const (
-	contractsDeploymentTitle = "[BRIDGE - CONTRACTS DEPLOYMENT]"
-	ProxySufix               = "Proxy"
-
-	stateSenderName                   = "StateSender"
-	checkpointManagerName             = "CheckpointManager"
-	blsName                           = "BLS"
-	bn256G2Name                       = "BN256G2"
-	exitHelperName                    = "ExitHelper"
-	rootERC20PredicateName            = "RootERC20Predicate"
-	childERC20MintablePredicateName   = "ChildERC20MintablePredicate"
-	rootERC20Name                     = "RootERC20"
-	erc20TemplateName                 = "ERC20Template"
-	rootERC721PredicateName           = "RootERC721Predicate"
-	childERC721MintablePredicateName  = "ChildERC721MintablePredicate"
-	erc721TemplateName                = "ERC721Template"
-	rootERC1155PredicateName          = "RootERC1155Predicate"
-	childERC1155MintablePredicateName = "ChildERC1155MintablePredicate"
-	erc1155TemplateName               = "ERC1155Template"
-	bladeManagerName                  = "BladeManager"
 )
 
 var (
@@ -51,237 +28,11 @@ var (
 	params deployParams
 
 	// consensusCfg contains consensus protocol configuration parameters
-	consensusCfg polybft.PolyBFTConfig
-
-	// metadataPopulatorMap maps rootchain contract names to callback
-	// which populates appropriate field in the RootchainMetadata
-	metadataPopulatorMap = map[string]func(*polybft.RootchainConfig, types.Address){
-		stateSenderName: func(rootchainConfig *polybft.RootchainConfig, addr types.Address) {
-			rootchainConfig.StateSenderAddress = addr
-		},
-		getProxyNameForImpl(bladeManagerName): func(rootchainConfig *polybft.RootchainConfig, addr types.Address) {
-			rootchainConfig.BladeManagerAddress = addr
-		},
-		getProxyNameForImpl(checkpointManagerName): func(rootchainConfig *polybft.RootchainConfig, addr types.Address) {
-			rootchainConfig.CheckpointManagerAddress = addr
-		},
-		getProxyNameForImpl(blsName): func(rootchainConfig *polybft.RootchainConfig, addr types.Address) {
-			rootchainConfig.BLSAddress = addr
-		},
-		getProxyNameForImpl(bn256G2Name): func(rootchainConfig *polybft.RootchainConfig, addr types.Address) {
-			rootchainConfig.BN256G2Address = addr
-		},
-		getProxyNameForImpl(exitHelperName): func(rootchainConfig *polybft.RootchainConfig, addr types.Address) {
-			rootchainConfig.ExitHelperAddress = addr
-		},
-		getProxyNameForImpl(rootERC20PredicateName): func(rootchainConfig *polybft.RootchainConfig, addr types.Address) {
-			rootchainConfig.RootERC20PredicateAddress = addr
-		},
-		getProxyNameForImpl(childERC20MintablePredicateName): func(
-			rootchainConfig *polybft.RootchainConfig, addr types.Address) {
-			rootchainConfig.ChildMintableERC20PredicateAddress = addr
-		},
-		rootERC20Name: func(rootchainConfig *polybft.RootchainConfig, addr types.Address) {
-			rootchainConfig.RootNativeERC20Address = addr
-		},
-		erc20TemplateName: func(rootchainConfig *polybft.RootchainConfig, addr types.Address) {
-			rootchainConfig.ChildERC20Address = addr
-		},
-		getProxyNameForImpl(rootERC721PredicateName): func(rootchainConfig *polybft.RootchainConfig, addr types.Address) {
-			rootchainConfig.RootERC721PredicateAddress = addr
-		},
-		getProxyNameForImpl(childERC721MintablePredicateName): func(
-			rootchainConfig *polybft.RootchainConfig, addr types.Address) {
-			rootchainConfig.ChildMintableERC721PredicateAddress = addr
-		},
-		erc721TemplateName: func(rootchainConfig *polybft.RootchainConfig, addr types.Address) {
-			rootchainConfig.ChildERC721Address = addr
-		},
-		getProxyNameForImpl(rootERC1155PredicateName): func(rootchainConfig *polybft.RootchainConfig, addr types.Address) {
-			rootchainConfig.RootERC1155PredicateAddress = addr
-		},
-		getProxyNameForImpl(childERC1155MintablePredicateName): func(
-			rootchainConfig *polybft.RootchainConfig, addr types.Address) {
-			rootchainConfig.ChildMintableERC1155PredicateAddress = addr
-		},
-		erc1155TemplateName: func(rootchainConfig *polybft.RootchainConfig, addr types.Address) {
-			rootchainConfig.ChildERC1155Address = addr
-		},
-	}
-
-	// initializersMap maps rootchain contract names to initializer function callbacks
-	initializersMap = map[string]func(command.OutputFormatter, txrelayer.TxRelayer,
-		[]*validator.GenesisValidator,
-		*polybft.RootchainConfig, crypto.Key, int64) error{
-		getProxyNameForImpl(checkpointManagerName): func(fmt command.OutputFormatter,
-			relayer txrelayer.TxRelayer,
-			genesisValidators []*validator.GenesisValidator,
-			config *polybft.RootchainConfig,
-			key crypto.Key,
-			chainID int64) error {
-			if !consensusCfg.NativeTokenConfig.IsMintable {
-				// we can not initialize checkpoint manager at this moment if native token is not mintable
-				// we will do that on finalize command when validators do premine and stake on BladeManager
-				// this is done like this because checkpoint manager needs to have correct
-				// voting powers in order to correctly validate checkpoints
-				return nil
-			}
-
-			validatorSet, err := getValidatorSetForCheckpointManager(fmt, genesisValidators)
-			if err != nil {
-				return err
-			}
-
-			inputParams := &contractsapi.InitializeCheckpointManagerFn{
-				NewBls:          config.BLSAddress,
-				NewBn256G2:      config.BN256G2Address,
-				ChainID_:        big.NewInt(chainID),
-				NewValidatorSet: validatorSet,
-			}
-
-			return initContract(fmt, relayer, inputParams, config.CheckpointManagerAddress,
-				checkpointManagerName, key)
-		},
-		getProxyNameForImpl(exitHelperName): func(fmt command.OutputFormatter,
-			relayer txrelayer.TxRelayer,
-			genesisValidators []*validator.GenesisValidator,
-			config *polybft.RootchainConfig,
-			key crypto.Key,
-			chainID int64) error {
-			inputParams := &contractsapi.InitializeExitHelperFn{
-				NewCheckpointManager: config.CheckpointManagerAddress,
-			}
-
-			return initContract(fmt, relayer, inputParams, config.ExitHelperAddress, exitHelperName, key)
-		},
-		getProxyNameForImpl(rootERC20PredicateName): func(fmt command.OutputFormatter,
-			relayer txrelayer.TxRelayer,
-			genesisValidators []*validator.GenesisValidator,
-			config *polybft.RootchainConfig,
-			key crypto.Key,
-			chainID int64) error {
-			inputParams := &contractsapi.InitializeRootERC20PredicateFn{
-				NewStateSender:         config.StateSenderAddress,
-				NewExitHelper:          config.ExitHelperAddress,
-				NewChildERC20Predicate: contracts.ChildERC20PredicateContract,
-				NewChildTokenTemplate:  contracts.ChildERC20Contract,
-				// root native token address should be non-zero only if native token is non-mintable on a childchain
-				NewNativeTokenRoot: config.RootNativeERC20Address,
-			}
-
-			return initContract(fmt, relayer, inputParams,
-				config.RootERC20PredicateAddress, rootERC20PredicateName, key)
-		},
-		getProxyNameForImpl(childERC20MintablePredicateName): func(fmt command.OutputFormatter,
-			relayer txrelayer.TxRelayer,
-			genesisValidators []*validator.GenesisValidator,
-			config *polybft.RootchainConfig,
-			key crypto.Key,
-			chainID int64) error {
-			initParams := &contractsapi.InitializeChildMintableERC20PredicateFn{
-				NewStateSender:        config.StateSenderAddress,
-				NewExitHelper:         config.ExitHelperAddress,
-				NewRootERC20Predicate: contracts.RootMintableERC20PredicateContract,
-				NewChildTokenTemplate: config.ChildERC20Address,
-			}
-
-			return initContract(fmt, relayer, initParams,
-				config.ChildMintableERC20PredicateAddress, childERC20MintablePredicateName, key)
-		},
-		getProxyNameForImpl(rootERC721PredicateName): func(fmt command.OutputFormatter,
-			relayer txrelayer.TxRelayer,
-			genesisValidators []*validator.GenesisValidator,
-			config *polybft.RootchainConfig,
-			key crypto.Key,
-			chainID int64) error {
-			initParams := &contractsapi.InitializeRootERC721PredicateFn{
-				NewStateSender:          config.StateSenderAddress,
-				NewExitHelper:           config.ExitHelperAddress,
-				NewChildERC721Predicate: contracts.ChildERC721PredicateContract,
-				NewChildTokenTemplate:   contracts.ChildERC721Contract,
-			}
-
-			return initContract(fmt, relayer, initParams,
-				config.RootERC721PredicateAddress, rootERC721PredicateName, key)
-		},
-		getProxyNameForImpl(childERC721MintablePredicateName): func(fmt command.OutputFormatter,
-			relayer txrelayer.TxRelayer,
-			genesisValidators []*validator.GenesisValidator,
-			config *polybft.RootchainConfig,
-			key crypto.Key,
-			chainID int64) error {
-			initParams := &contractsapi.InitializeChildMintableERC721PredicateFn{
-				NewStateSender:         config.StateSenderAddress,
-				NewExitHelper:          config.ExitHelperAddress,
-				NewRootERC721Predicate: contracts.RootMintableERC721PredicateContract,
-				NewChildTokenTemplate:  config.ChildERC721Address,
-			}
-
-			return initContract(fmt, relayer, initParams,
-				config.ChildMintableERC721PredicateAddress, childERC721MintablePredicateName, key)
-		},
-		getProxyNameForImpl(rootERC1155PredicateName): func(fmt command.OutputFormatter,
-			relayer txrelayer.TxRelayer,
-			genesisValidators []*validator.GenesisValidator,
-			config *polybft.RootchainConfig,
-			key crypto.Key,
-			chainID int64) error {
-			initParams := &contractsapi.InitializeRootERC1155PredicateFn{
-				NewStateSender:           config.StateSenderAddress,
-				NewExitHelper:            config.ExitHelperAddress,
-				NewChildERC1155Predicate: contracts.ChildERC1155PredicateContract,
-				NewChildTokenTemplate:    contracts.ChildERC1155Contract,
-			}
-
-			return initContract(fmt, relayer, initParams,
-				config.RootERC1155PredicateAddress, rootERC1155PredicateName, key)
-		},
-		getProxyNameForImpl(childERC1155MintablePredicateName): func(fmt command.OutputFormatter,
-			relayer txrelayer.TxRelayer,
-			genesisValidators []*validator.GenesisValidator,
-			config *polybft.RootchainConfig,
-			key crypto.Key,
-			chainID int64) error {
-			initParams := &contractsapi.InitializeChildMintableERC1155PredicateFn{
-				NewStateSender:          config.StateSenderAddress,
-				NewExitHelper:           config.ExitHelperAddress,
-				NewRootERC1155Predicate: contracts.RootMintableERC1155PredicateContract,
-				NewChildTokenTemplate:   config.ChildERC1155Address,
-			}
-
-			return initContract(fmt, relayer, initParams,
-				config.ChildMintableERC1155PredicateAddress, childERC1155MintablePredicateName, key)
-		},
-		getProxyNameForImpl(bladeManagerName): func(fmt command.OutputFormatter,
-			relayer txrelayer.TxRelayer,
-			genesisValidators []*validator.GenesisValidator,
-			config *polybft.RootchainConfig,
-			key crypto.Key,
-			chainID int64) error {
-			gvs := make([]*contractsapi.GenesisAccount, len(genesisValidators))
-			for i := 0; i < len(genesisValidators); i++ {
-				gvs[i] = &contractsapi.GenesisAccount{
-					Addr:        genesisValidators[i].Address,
-					IsValidator: true,
-					// this is set on purpose to 0, each account must premine enough tokens to itself if token is non-mintable
-					StakedTokens:   big.NewInt(0),
-					PreminedTokens: big.NewInt(0),
-				}
-			}
-
-			initParams := &contractsapi.InitializeBladeManagerFn{
-				NewRootERC20Predicate: config.RootERC20PredicateAddress,
-				GenesisAccounts:       gvs,
-			}
-
-			return initContract(fmt, relayer, initParams,
-				config.BladeManagerAddress, bladeManagerName, key)
-		},
-	}
+	consensusCfg polycfg.PolyBFT
 )
 
 type deploymentResultInfo struct {
-	RootchainCfg   *polybft.RootchainConfig
+	BridgeCfg      *polycfg.Bridge
 	CommandResults []command.CommandResult
 }
 
@@ -289,7 +40,7 @@ type deploymentResultInfo struct {
 func GetCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "deploy",
-		Short:   "Deploys and initializes required smart contracts on the rootchain",
+		Short:   "Deploys and initializes set of bridge smart contracts",
 		PreRunE: preRunCommand,
 		Run:     runCommand,
 	}
@@ -305,28 +56,35 @@ func GetCommand() *cobra.Command {
 		&params.deployerKey,
 		deployerKeyFlag,
 		"",
-		"hex-encoded private key of the account which deploys rootchain contracts",
+		"hex-encoded private key of the account which deploys bridge contracts",
 	)
 
 	cmd.Flags().StringVar(
-		&params.jsonRPCAddress,
-		jsonRPCFlag,
+		&params.externalRPCAddress,
+		externalRPCFlag,
 		txrelayer.DefaultRPCAddress,
-		"the JSON RPC rootchain IP address",
+		"the JSON RPC external chain IP address",
+	)
+
+	cmd.Flags().StringVar(
+		&params.internalRPCAddress,
+		internalRPCFlag,
+		txrelayer.DefaultRPCAddress,
+		"the JSON RPC blade chain IP address",
 	)
 
 	cmd.Flags().StringVar(
 		&params.rootERC20TokenAddr,
 		erc20AddrFlag,
 		"",
-		"existing root native erc20 token address, that originates from a rootchain",
+		"existing erc20 token address, that originates from a external chain and that gets mapped to the Blade native one",
 	)
 
 	cmd.Flags().BoolVar(
 		&params.isTestMode,
 		helper.TestModeFlag,
 		false,
-		"test indicates whether rootchain contracts deployer is hardcoded test account"+
+		"test indicates whether bridge contracts deployer is hardcoded test account"+
 			" (otherwise provided secrets are used to resolve deployer account)",
 	)
 
@@ -344,6 +102,15 @@ func GetCommand() *cobra.Command {
 		cmdHelper.TxTimeoutDesc,
 	)
 
+	cmd.Flags().BoolVar(
+		&params.isBootstrap,
+		isBootstrapFlag,
+		true,
+		"indicates if bridge deploy command is run during bootstraping of the Blade chain. "+
+			"If it is run on a live Blade chain, the command will deploy and initialize internal predicates, "+
+			"otherwise it will pre-allocate the internal predicates addresses in the genesis configuration.",
+	)
+
 	cmd.MarkFlagsMutuallyExclusive(helper.TestModeFlag, deployerKeyFlag)
 
 	return cmd
@@ -358,7 +125,8 @@ func runCommand(cmd *cobra.Command, _ []string) {
 	defer outputter.WriteOutput()
 
 	outputter.WriteCommandResult(&helper.MessageResult{
-		Message: fmt.Sprintf("%s started... Rootchain JSON RPC address %s.", contractsDeploymentTitle, params.jsonRPCAddress),
+		Message: fmt.Sprintf("%s started... External chain JSON RPC address %s.",
+			contractsDeploymentTitle, params.externalRPCAddress),
 	})
 
 	chainConfig, err := chain.ImportFromFile(params.genesisPath)
@@ -368,18 +136,27 @@ func runCommand(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	client, err := jsonrpc.NewEthClient(params.jsonRPCAddress)
+	externalChainClient, err := jsonrpc.NewEthClient(params.externalRPCAddress)
 	if err != nil {
 		outputter.SetError(fmt.Errorf("failed to initialize JSON RPC client for provided IP address: %s: %w",
-			params.jsonRPCAddress, err))
+			params.externalRPCAddress, err))
 
 		return
 	}
 
-	if consensusCfg.Bridge != nil {
-		code, err := client.GetCode(consensusCfg.Bridge.StateSenderAddr, jsonrpc.LatestBlockNumberOrHash)
+	externalChainIDBig, err := externalChainClient.ChainID()
+	if err != nil {
+		outputter.SetError(fmt.Errorf("failed to get chainID for provided IP address: %s: %w",
+			params.externalRPCAddress, err))
+	}
+
+	externalChainID := externalChainIDBig.Uint64()
+	bridgeCfg := consensusCfg.Bridge[externalChainID]
+
+	if bridgeCfg != nil {
+		code, err := externalChainClient.GetCode(bridgeCfg.ExternalGatewayAddr, jsonrpc.LatestBlockNumberOrHash)
 		if err != nil {
-			outputter.SetError(fmt.Errorf("failed to check if rootchain contracts are deployed: %w", err))
+			outputter.SetError(fmt.Errorf("failed to check if external chain bridge contracts are deployed: %w", err))
 
 			return
 		} else if code != "0x" {
@@ -391,34 +168,33 @@ func runCommand(cmd *cobra.Command, _ []string) {
 		}
 	}
 
-	// set event tracker start blocks for rootchain contract(s) of interest
-	// the block number should be queried before deploying contracts so that no events during deployment
-	// and initialization are missed
-	blockNum, err := client.BlockNumber()
+	deploymentResultInfo, err := deployContracts(outputter, externalChainClient, externalChainIDBig,
+		chainConfig, consensusCfg.InitialValidatorSet, cmd.Context())
 	if err != nil {
-		outputter.SetError(fmt.Errorf("failed to query rootchain latest block number: %w", err))
-
-		return
-	}
-
-	deploymentResultInfo, err := deployContracts(outputter, client,
-		chainConfig.Params.ChainID, consensusCfg.InitialValidatorSet, cmd.Context())
-	if err != nil {
-		outputter.SetError(fmt.Errorf("failed to deploy rootchain contracts: %w", err))
+		outputter.SetError(fmt.Errorf("failed to deploy bridge contracts: %w", err))
 		outputter.SetCommandResult(command.Results(deploymentResultInfo.CommandResults))
 
 		return
 	}
 
-	// populate bridge configuration
-	consensusCfg.Bridge = deploymentResultInfo.RootchainCfg.ToBridgeConfig()
+	// set event tracker start blocks for external chain contract(s) of interest
+	// the block number should be queried before deploying contracts so that no events during deployment
+	// and initialization are missed
+	latestBlockNum, err := externalChainClient.BlockNumber()
+	if err != nil {
+		outputter.SetError(fmt.Errorf("failed to query the external chain's latest block number: %w", err))
 
-	consensusCfg.Bridge.EventTrackerStartBlocks = map[types.Address]uint64{
-		deploymentResultInfo.RootchainCfg.StateSenderAddress: blockNum,
+		return
+	}
+
+	// populate bridge configuration
+	consensusCfg.Bridge[externalChainID] = deploymentResultInfo.BridgeCfg
+	consensusCfg.Bridge[externalChainID].EventTrackerStartBlocks = map[types.Address]uint64{
+		deploymentResultInfo.BridgeCfg.ExternalGatewayAddr: latestBlockNum,
 	}
 
 	// write updated consensus configuration
-	chainConfig.Params.Engine[polybft.ConsensusName] = consensusCfg
+	chainConfig.Params.Engine[polycfg.ConsensusName] = consensusCfg
 
 	if err := cmdHelper.WriteGenesisConfigToDisk(chainConfig, params.genesisPath); err != nil {
 		outputter.SetError(fmt.Errorf("failed to save chain configuration bridge data: %w", err))
@@ -433,210 +209,72 @@ func runCommand(cmd *cobra.Command, _ []string) {
 	outputter.SetCommandResult(command.Results(deploymentResultInfo.CommandResults))
 }
 
-// deployContracts deploys and initializes rootchain smart contracts
-func deployContracts(outputter command.OutputFormatter, client *jsonrpc.EthClient, chainID int64,
-	initialValidators []*validator.GenesisValidator, cmdCtx context.Context) (deploymentResultInfo, error) {
-	txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(client), txrelayer.WithWriter(outputter),
+// deployContracts deploys and initializes bridge smart contracts
+func deployContracts(
+	outputter command.OutputFormatter,
+	externalChainClient *jsonrpc.EthClient,
+	externalChainID *big.Int,
+	chainCfg *chain.Chain,
+	initialValidators []*validator.GenesisValidator,
+	cmdCtx context.Context) (*deploymentResultInfo, error) {
+	externalTxRelayer, err := txrelayer.NewTxRelayer(
+		txrelayer.WithClient(externalChainClient),
+		txrelayer.WithWriter(outputter),
 		txrelayer.WithReceiptsTimeout(params.txTimeout))
-
 	if err != nil {
-		return deploymentResultInfo{RootchainCfg: nil, CommandResults: nil},
-			fmt.Errorf("failed to initialize tx relayer: %w", err)
+		return nil, fmt.Errorf("failed to initialize tx relayer for external chain: %w", err)
 	}
 
 	deployerKey, err := helper.DecodePrivateKey(params.deployerKey)
 	if err != nil {
-		return deploymentResultInfo{RootchainCfg: nil, CommandResults: nil},
-			fmt.Errorf("failed to initialize deployer key: %w", err)
+		return nil, fmt.Errorf("failed to initialize deployer key: %w", err)
 	}
 
 	if params.isTestMode {
 		deployerAddr := deployerKey.Address()
 
 		txn := helper.CreateTransaction(types.ZeroAddress, &deployerAddr, nil, ethgo.Ether(1), true)
-		if _, err = txRelayer.SendTransactionLocal(txn); err != nil {
-			return deploymentResultInfo{RootchainCfg: nil, CommandResults: nil}, err
+		if _, err = externalTxRelayer.SendTransactionLocal(txn); err != nil {
+			return nil, err
 		}
 	}
 
-	type contractInfo struct {
-		name            string
-		artifact        *contracts.Artifact
-		hasProxy        bool
-		byteCodeBuilder func() ([]byte, error)
+	var (
+		internalChainID   = chainCfg.Params.ChainID
+		bridgeConfig      = &polycfg.Bridge{JSONRPCEndpoint: params.externalRPCAddress}
+		externalContracts []*contract
+		internalContracts []*contract
+	)
+
+	// setup external contracts
+	if externalContracts, err = initExternalContracts(bridgeConfig, externalChainClient, externalChainID); err != nil {
+		return nil, err
 	}
 
-	rootchainConfig := &polybft.RootchainConfig{JSONRPCAddr: params.jsonRPCAddress}
+	// setup internal contracts
+	internalContracts = initInternalContracts(chainCfg)
 
-	tokenContracts := []*contractInfo{}
-
-	// deploy root ERC20 token only if non-mintable native token flavor is used on a child chain
-	if !consensusCfg.NativeTokenConfig.IsMintable {
-		if params.rootERC20TokenAddr != "" {
-			// use existing root chain ERC20 token
-			if err := populateExistingTokenAddr(client,
-				params.rootERC20TokenAddr, rootERC20Name, rootchainConfig); err != nil {
-				return deploymentResultInfo{RootchainCfg: nil, CommandResults: nil}, err
-			}
-		} else {
-			// deploy MockERC20 as a root chain root native token
-			tokenContracts = append(tokenContracts,
-				&contractInfo{name: rootERC20Name, artifact: contractsapi.RootERC20})
+	// pre-allocate internal predicates addresses in genesis if blade is bootstrapping
+	if params.isBootstrap {
+		if err := preAllocateInternalPredicates(outputter, internalContracts, chainCfg, bridgeConfig); err != nil {
+			return nil, err
 		}
 	}
-
-	allContracts := []*contractInfo{
-		{
-			name:     stateSenderName,
-			artifact: contractsapi.StateSender,
-		},
-		{
-			name:     checkpointManagerName,
-			artifact: contractsapi.CheckpointManager,
-			hasProxy: true,
-			byteCodeBuilder: func() ([]byte, error) {
-				constructorFn := &contractsapi.CheckpointManagerConstructorFn{
-					Initiator: deployerKey.Address(),
-				}
-
-				input, err := constructorFn.EncodeAbi()
-				if err != nil {
-					return nil, err
-				}
-
-				return append(contractsapi.CheckpointManager.Bytecode, input...), nil
-			},
-		},
-		{
-			name:     blsName,
-			artifact: contractsapi.BLS,
-			hasProxy: true,
-		},
-		{
-			name:     bn256G2Name,
-			artifact: contractsapi.BLS256,
-			hasProxy: true,
-		},
-		{
-			name:     exitHelperName,
-			artifact: contractsapi.ExitHelper,
-			hasProxy: true,
-		},
-		{
-			name:     rootERC20PredicateName,
-			artifact: contractsapi.RootERC20Predicate,
-			hasProxy: true,
-		},
-		{
-			name:     childERC20MintablePredicateName,
-			artifact: contractsapi.ChildMintableERC20Predicate,
-			hasProxy: true,
-		},
-		{
-			name:     erc20TemplateName,
-			artifact: contractsapi.ChildERC20,
-		},
-		{
-			name:     rootERC721PredicateName,
-			artifact: contractsapi.RootERC721Predicate,
-			hasProxy: true,
-		},
-		{
-			name:     childERC721MintablePredicateName,
-			artifact: contractsapi.ChildMintableERC721Predicate,
-			hasProxy: true,
-		},
-		{
-			name:     erc721TemplateName,
-			artifact: contractsapi.ChildERC721,
-		},
-		{
-			name:     rootERC1155PredicateName,
-			artifact: contractsapi.RootERC1155Predicate,
-			hasProxy: true,
-		},
-		{
-			name:     childERC1155MintablePredicateName,
-			artifact: contractsapi.ChildMintableERC1155Predicate,
-			hasProxy: true,
-		},
-		{
-			name:     erc1155TemplateName,
-			artifact: contractsapi.ChildERC1155,
-		},
-	}
-
-	if !consensusCfg.NativeTokenConfig.IsMintable {
-		// if token is non-mintable we will deploy BladeManager
-		// if not, we don't need it
-		allContracts = append(allContracts, &contractInfo{
-			name:     bladeManagerName,
-			artifact: contractsapi.BladeManager,
-			hasProxy: true,
-		})
-	}
-
-	allContracts = append(tokenContracts, allContracts...)
 
 	g, ctx := errgroup.WithContext(cmdCtx)
-	results := make(map[string]*deployContractResult, len(allContracts))
+	results := make(map[string]*deployContractResult)
 	resultsLock := sync.Mutex{}
 	proxyAdmin := types.StringToAddress(params.proxyContractsAdmin)
 
-	for _, contract := range allContracts {
-		contract := contract
-
+	deployContractFn := func(contract *contract, txr txrelayer.TxRelayer) {
 		g.Go(func() error {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
-				bytecode := contract.artifact.Bytecode
-				if contract.byteCodeBuilder != nil {
-					bytecode, err = contract.byteCodeBuilder()
-					if err != nil {
-						return err
-					}
-				}
-
-				txn := helper.CreateTransaction(types.ZeroAddress, nil, bytecode, nil, true)
-
-				receipt, err := txRelayer.SendTransaction(txn, deployerKey)
+				deployResults, err := contract.deploy(bridgeConfig, txr, deployerKey, proxyAdmin)
 				if err != nil {
-					return fmt.Errorf("failed sending %s contract deploy transaction: %w", contract.name, err)
-				}
-
-				if receipt == nil || receipt.Status != uint64(types.ReceiptSuccess) {
-					return fmt.Errorf("deployment of %s contract failed", contract.name)
-				}
-
-				deployResults := make([]*deployContractResult, 0, 2)
-				implementationAddress := types.Address(receipt.ContractAddress)
-
-				deployResults = append(deployResults, newDeployContractsResult(contract.name,
-					implementationAddress,
-					receipt.TransactionHash,
-					receipt.GasUsed))
-
-				if contract.hasProxy {
-					proxyContractName := getProxyNameForImpl(contract.name)
-
-					receipt, err := helper.DeployProxyContract(
-						txRelayer, deployerKey, proxyContractName, proxyAdmin, implementationAddress)
-					if err != nil {
-						return err
-					}
-
-					if receipt == nil || receipt.Status != uint64(types.ReceiptSuccess) {
-						return fmt.Errorf("deployment of %s contract failed", proxyContractName)
-					}
-
-					deployResults = append(deployResults,
-						newDeployContractsResult(proxyContractName,
-							types.Address(receipt.ContractAddress),
-							receipt.TransactionHash,
-							receipt.GasUsed,
-						))
+					return err
 				}
 
 				resultsLock.Lock()
@@ -651,78 +289,78 @@ func deployContracts(outputter command.OutputFormatter, client *jsonrpc.EthClien
 		})
 	}
 
-	if err := g.Wait(); err != nil {
-		return collectResultsOnError(results), err
-	}
-
-	commandResults := make([]command.CommandResult, 0, len(results))
-
-	for _, result := range results {
-		commandResults = append(commandResults, result)
-
-		populatorFn, exists := metadataPopulatorMap[result.Name]
-		if !exists {
-			continue
-		}
-
-		populatorFn(rootchainConfig, result.Address)
-	}
-
-	g, ctx = errgroup.WithContext(cmdCtx)
-
-	for contractName := range results {
-		contractName := contractName
-
-		initializer, exists := initializersMap[contractName]
-		if !exists {
-			continue
+	initializeContractFn := func(contract *contract, txr txrelayer.TxRelayer, chainID int64) {
+		if contract.initializeFn == nil {
+			// some contracts do not have initialize function
+			return
 		}
 
 		g.Go(func() error {
 			select {
-			case <-cmdCtx.Done():
-				return cmdCtx.Err()
+			case <-ctx.Done():
+				return ctx.Err()
 			default:
-				return initializer(outputter, txRelayer, initialValidators, rootchainConfig, deployerKey, chainID)
+				return contract.initializeFn(outputter, txr,
+					initialValidators, bridgeConfig, deployerKey, chainID)
 			}
 		})
 	}
 
+	// deploy external contracts
+	for _, contract := range externalContracts {
+		deployContractFn(contract, externalTxRelayer)
+	}
+
+	var internalTxRelayer txrelayer.TxRelayer
+	// deploy internal contracts if blade is already running
+	if !params.isBootstrap {
+		internalTxRelayer, err = txrelayer.NewTxRelayer(txrelayer.WithIPAddress(params.internalRPCAddress),
+			txrelayer.WithWriter(outputter), txrelayer.WithReceiptsTimeout(params.txTimeout))
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize tx relayer for internal chain: %w", err)
+		}
+
+		for _, contract := range internalContracts {
+			deployContractFn(contract, internalTxRelayer)
+		}
+	}
+
+	// wait for all contracts to be deployed
 	if err := g.Wait(); err != nil {
-		return deploymentResultInfo{RootchainCfg: nil, CommandResults: nil}, err
+		return collectResultsOnError(results), err
 	}
 
-	return deploymentResultInfo{
-		RootchainCfg:   rootchainConfig,
-		CommandResults: commandResults}, nil
-}
+	// initialize contracts only after all of them are deployed
+	g, ctx = errgroup.WithContext(cmdCtx)
 
-// populateExistingTokenAddr checks whether given token is deployed on the provided address.
-// If it is, then its address is set to the rootchain config, otherwise an error is returned
-func populateExistingTokenAddr(eth *jsonrpc.EthClient, tokenAddr, tokenName string,
-	rootchainCfg *polybft.RootchainConfig) error {
-	addr := types.StringToAddress(tokenAddr)
-
-	code, err := eth.GetCode(addr, jsonrpc.LatestBlockNumberOrHash)
-	if err != nil {
-		return fmt.Errorf("failed to check is %s token deployed: %w", tokenName, err)
-	} else if code == "0x" {
-		return fmt.Errorf("%s token is not deployed on provided address %s", tokenName, tokenAddr)
+	// initialize external contracts
+	for _, contract := range externalContracts {
+		initializeContractFn(contract, externalTxRelayer, internalChainID)
 	}
 
-	populatorFn, ok := metadataPopulatorMap[tokenName]
-	if !ok {
-		return fmt.Errorf("root chain metadata populator not registered for contract '%s'", tokenName)
+	// initialize internal contracts if blade is live
+	if !params.isBootstrap {
+		for _, contract := range internalContracts {
+			initializeContractFn(contract, internalTxRelayer, externalChainID.Int64())
+		}
 	}
 
-	populatorFn(rootchainCfg, addr)
+	// wait for all contracts to be initialized
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
 
-	return nil
+	commandResults := make([]command.CommandResult, 0, len(results))
+	for _, result := range results {
+		commandResults = append(commandResults, result)
+	}
+
+	return &deploymentResultInfo{BridgeCfg: bridgeConfig, CommandResults: commandResults}, nil
 }
 
 // initContract initializes arbitrary contract with given parameters deployed on a given address
 func initContract(cmdOutput command.OutputFormatter, txRelayer txrelayer.TxRelayer,
-	initInputFn contractsapi.StateTransactionInput, contractAddr types.Address,
+	initInputFn contractsapi.ABIEncoder, contractAddr types.Address,
 	contractName string, deployerKey crypto.Key) error {
 	input, err := initInputFn.EncodeAbi()
 	if err != nil {
@@ -743,7 +381,7 @@ func initContract(cmdOutput command.OutputFormatter, txRelayer txrelayer.TxRelay
 	return nil
 }
 
-func collectResultsOnError(results map[string]*deployContractResult) deploymentResultInfo {
+func collectResultsOnError(results map[string]*deployContractResult) *deploymentResultInfo {
 	commandResults := make([]command.CommandResult, 0, len(results)+1)
 	messageResult := helper.MessageResult{Message: "[BRIDGE - DEPLOY] Successfully deployed the following contracts\n"}
 
@@ -757,23 +395,16 @@ func collectResultsOnError(results map[string]*deployContractResult) deploymentR
 
 	commandResults = append([]command.CommandResult{messageResult}, commandResults...)
 
-	return deploymentResultInfo{
-		RootchainCfg: nil,
-
-		CommandResults: commandResults}
+	return &deploymentResultInfo{BridgeCfg: nil, CommandResults: commandResults}
 }
 
-func getProxyNameForImpl(input string) string {
-	return input + ProxySufix
-}
-
-// getValidatorSetForCheckpointManager converts given validators to generic map
-// which is used for ABI encoding validator set being sent to the CheckpointManager contract
-func getValidatorSetForCheckpointManager(o command.OutputFormatter,
+// getValidatorSet converts given validators to generic map
+// which is used for ABI encoding validator set being sent to the Gateway contract
+func getValidatorSet(o command.OutputFormatter,
 	validators []*validator.GenesisValidator) ([]*contractsapi.Validator, error) {
 	accSet := make(validator.AccountSet, len(validators))
 
-	if _, err := o.Write([]byte("[VALIDATORS - CHECKPOINT MANAGER] \n")); err != nil {
+	if _, err := o.Write([]byte("[VALIDATORS - GATEWAY] \n")); err != nil {
 		return nil, err
 	}
 
@@ -800,9 +431,9 @@ func getValidatorSetForCheckpointManager(o command.OutputFormatter,
 	}
 
 	if _, err := o.Write([]byte(
-		fmt.Sprintf("[VALIDATORS - CHECKPOINT MANAGER] Validators hash: %s\n", hash))); err != nil {
+		fmt.Sprintf("[VALIDATORS - GATEWAY] Validators hash: %s\n", hash))); err != nil {
 		return nil, err
 	}
 
-	return accSet.ToAPIBinding(), nil
+	return accSet.ToABIBinding(), nil
 }

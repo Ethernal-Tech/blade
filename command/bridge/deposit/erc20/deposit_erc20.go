@@ -123,8 +123,8 @@ func runCommand(cmd *cobra.Command, _ []string) {
 		}
 
 		// mint tokens to depositor, so he is able to send them
-		mintTxn, err := helper.CreateMintTxn(depositorAddr, types.StringToAddress(dp.TokenAddr),
-			aggregateAmount, !dp.ChildChainMintable)
+		mintTxn, err := helper.CreateMintTxn(depositorAddr,
+			types.StringToAddress(dp.TokenAddr), aggregateAmount, !dp.InternalChainMintable)
 		if err != nil {
 			outputter.SetError(fmt.Errorf("mint transaction creation failed: %w", err))
 
@@ -149,7 +149,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 	approveTxn, err := helper.CreateApproveERC20Txn(aggregateAmount,
 		types.StringToAddress(dp.PredicateAddr),
 		types.StringToAddress(dp.TokenAddr),
-		!dp.ChildChainMintable,
+		!dp.InternalChainMintable,
 	)
 	if err != nil {
 		outputter.SetError(fmt.Errorf("failed to create root erc 20 approve transaction: %w", err))
@@ -171,14 +171,14 @@ func runCommand(cmd *cobra.Command, _ []string) {
 	}
 
 	type bridgeTxData struct {
-		exitEventIDs   []*big.Int
-		blockNumber    uint64
-		childTokenAddr *types.Address
+		bridgeMsgEventIDs []*big.Int
+		blockNumber       uint64
+		childTokenAddr    *types.Address
 	}
 
 	g, ctx := errgroup.WithContext(cmd.Context())
 	bridgeTxCh := make(chan bridgeTxData, len(dp.Receivers))
-	exitEventIDs := make([]*big.Int, 0, len(dp.Receivers))
+	bridgeMsgEventIDs := make([]*big.Int, 0, len(dp.Receivers))
 	blockNumbers := make([]uint64, 0, len(dp.Receivers))
 
 	for i := range dp.Receivers {
@@ -207,25 +207,25 @@ func runCommand(cmd *cobra.Command, _ []string) {
 					return fmt.Errorf("receiver: %s, amount: %s", receiver, amount)
 				}
 
-				var exitEventIDs []*big.Int
+				var bridgeMsgEventIDs []*big.Int
 
-				if dp.ChildChainMintable {
-					if exitEventIDs, err = common.ExtractExitEventIDs(receipt); err != nil {
+				if dp.InternalChainMintable {
+					if bridgeMsgEventIDs, err = common.ExtractBridgeMessageIDs(receipt); err != nil {
 						return fmt.Errorf("failed to extract exit event: %w", err)
 					}
 				}
 
 				// populate child token address if a token is mapped alongside with deposit
-				childToken, err := common.ExtractChildTokenAddr(receipt, dp.ChildChainMintable)
+				childToken, err := common.ExtractChildTokenAddr(receipt)
 				if err != nil {
 					return fmt.Errorf("failed to extract child token address: %w", err)
 				}
 
 				// send aggregated data to channel if everything went ok
 				bridgeTxCh <- bridgeTxData{
-					blockNumber:    receipt.BlockNumber,
-					exitEventIDs:   exitEventIDs,
-					childTokenAddr: childToken,
+					blockNumber:       receipt.BlockNumber,
+					bridgeMsgEventIDs: bridgeMsgEventIDs,
+					childTokenAddr:    childToken,
 				}
 
 				return nil
@@ -244,8 +244,8 @@ func runCommand(cmd *cobra.Command, _ []string) {
 	var childToken *types.Address
 
 	for x := range bridgeTxCh {
-		if x.exitEventIDs != nil {
-			exitEventIDs = append(exitEventIDs, x.exitEventIDs...)
+		if x.bridgeMsgEventIDs != nil {
+			bridgeMsgEventIDs = append(bridgeMsgEventIDs, x.bridgeMsgEventIDs...)
 		}
 
 		blockNumbers = append(blockNumbers, x.blockNumber)
@@ -257,13 +257,13 @@ func runCommand(cmd *cobra.Command, _ []string) {
 
 	outputter.SetCommandResult(
 		&common.BridgeTxResult{
-			Sender:         depositorAddr.String(),
-			Receivers:      dp.Receivers,
-			Amounts:        dp.Amounts,
-			ExitEventIDs:   exitEventIDs,
-			ChildTokenAddr: childToken,
-			BlockNumbers:   blockNumbers,
-			Title:          "DEPOSIT ERC 20",
+			Sender:            depositorAddr.String(),
+			Receivers:         dp.Receivers,
+			Amounts:           dp.Amounts,
+			BridgeMsgEventIDs: bridgeMsgEventIDs,
+			ChildTokenAddr:    childToken,
+			BlockNumbers:      blockNumbers,
+			Title:             "DEPOSIT ERC 20",
 		})
 }
 
@@ -283,5 +283,5 @@ func createDepositTxn(sender, receiver types.Address, amount *big.Int) (*types.T
 	addr := types.StringToAddress(dp.PredicateAddr)
 
 	return helper.CreateTransaction(sender, &addr,
-		input, nil, !dp.ChildChainMintable), nil
+		input, nil, !dp.InternalChainMintable), nil
 }
