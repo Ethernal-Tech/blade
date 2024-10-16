@@ -565,7 +565,7 @@ func (*mockBridgeManager) GetLogFilters() map[types.Address][]types.Hash {
 }
 
 // PostBlock implements BridgeManager.
-func (*mockBridgeManager) PostBlock() error {
+func (*mockBridgeManager) PostBlock(req *polytypes.PostBlockRequest) error {
 	return nil
 }
 
