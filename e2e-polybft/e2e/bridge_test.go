@@ -187,6 +187,16 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 			require.NoError(t, err)
 		}
 
+		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
+			for i := range receivers {
+				if !isEventsProcessed(t, polybftCfg.Bridge[1337].ExternalGatewayAddr, externalChainTxRelayer, uint64(i+1)) {
+					return false
+				}
+			}
+
+			return true
+		}))
+
 		for _, receiver := range receivers {
 			// assert that receiver's balance on RootERC20 smart contract is as expected
 			balance := erc20BalanceOf(t, types.StringToAddress(receiver), rootERC20Token, externalChainTxRelayer)
@@ -199,18 +209,18 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 			depositsSubset = 1
 		)
 
-		txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(childEthEndpoint))
+		internalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(childEthEndpoint))
 		require.NoError(t, err)
 
 		lastCommittedIDMethod := contractsapi.BridgeStorage.Abi.GetMethod("lastCommitted")
-		lastCommittedIDInput, err := lastCommittedIDMethod.Encode([]interface{}{})
+		lastCommittedIDInput, err := lastCommittedIDMethod.Encode([]interface{}{uint64(1337)})
 		require.NoError(t, err)
 
 		// check that we submitted the minimal commitment to smart contract
-		commitmentIDRaw, err := txRelayer.Call(types.ZeroAddress, contracts.BridgeStorageContract, lastCommittedIDInput)
+		commitmentIDRaw, err := internalChainTxRelayer.Call(types.ZeroAddress, contracts.BridgeStorageContract, lastCommittedIDInput)
 		require.NoError(t, err)
 
-		initialCommittedID, err := helperCommon.ParseUint64orHex(&commitmentIDRaw)
+		_, err = helperCommon.ParseUint64orHex(&commitmentIDRaw)
 		require.NoError(t, err)
 
 		initialBlockNum, err := childEthEndpoint.BlockNumber()
@@ -239,14 +249,16 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 		midBlockNumber := initialBlockNum + 2*sprintSize
 		require.NoError(t, cluster.WaitForBlock(midBlockNumber, 2*time.Minute))
 
-		// check that we submitted the minimal commitment to smart contract
-		commitmentIDRaw, err = txRelayer.Call(types.ZeroAddress,
-			bridgeCfg.InternalGatewayAddr, lastCommittedIDInput)
-		require.NoError(t, err)
+		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
+			for i := range receivers[:depositsSubset] {
+				t.Log("Number of transfers")
+				if !isEventsProcessed(t, polybftCfg.Bridge[1337].InternalGatewayAddr, internalChainTxRelayer, uint64(transfersCount+1+1+i)) {
+					return false
+				}
+			}
 
-		lastCommittedID, err := helperCommon.ParseUint64orHex(&commitmentIDRaw)
-		require.NoError(t, err)
-		require.Equal(t, initialCommittedID+depositsSubset, lastCommittedID)
+			return true
+		}))
 
 		// send some more transactions to the bridge to build another commitment in epoch
 		require.NoError(t, cluster.Bridges[bridgeOne].Deposit(
@@ -266,14 +278,15 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 		// wait for a few more sprints
 		require.NoError(t, cluster.WaitForBlock(midBlockNumber+5*sprintSize, 3*time.Minute))
 
-		// check that we submitted the minimal commitment to smart contract
-		commitmentIDRaw, err = txRelayer.Call(types.ZeroAddress, bridgeCfg.InternalGatewayAddr, lastCommittedIDInput)
-		require.NoError(t, err)
+		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
+			for i := range receivers[depositsSubset:] {
+				if !isEventsProcessed(t, polybftCfg.Bridge[1337].InternalGatewayAddr, internalChainTxRelayer, uint64(1+transfersCount+1+i+1)) {
+					return false
+				}
+			}
 
-		// check that the second (larger commitment) was also submitted in epoch
-		lastCommittedID, err = helperCommon.ParseUint64orHex(&commitmentIDRaw)
-		require.NoError(t, err)
-		require.Equal(t, initialCommittedID+uint64(transfersCount), lastCommittedID)
+			return true
+		}))
 
 		// the transactions are mined and state syncs should be executed by the relayer
 		// and there should be a success events
@@ -403,17 +416,17 @@ func TestE2E_Bridge_ERC721Transfer(t *testing.T) {
 	require.NoError(t, err)
 
 	// retrieve child token address (from both chains, and assert they are the same)
-	l1ChildTokenAddr := getChildToken(t, contractsapi.RootERC721Predicate.Abi, bridgeCfg.ExternalERC721PredicateAddr,
+	externalChildTokenAddr := getChildToken(t, contractsapi.RootERC721Predicate.Abi, bridgeCfg.ExternalERC721PredicateAddr,
 		rootERC721Addr, externalChainTxRelayer)
-	l2ChildTokenAddr := getChildToken(t, contractsapi.ChildERC721Predicate.Abi, bridgeCfg.InternalERC721PredicateAddr,
+	internalChildTokenAddr := getChildToken(t, contractsapi.ChildERC721Predicate.Abi, bridgeCfg.InternalERC721PredicateAddr,
 		rootERC721Addr, txRelayer)
 
-	t.Log("L1 child token", l1ChildTokenAddr)
-	t.Log("L2 child token", l2ChildTokenAddr)
-	require.Equal(t, l1ChildTokenAddr, l2ChildTokenAddr)
+	t.Log("External child token", externalChildTokenAddr)
+	t.Log("Internal child token", internalChildTokenAddr)
+	require.Equal(t, externalChildTokenAddr, internalChildTokenAddr)
 
 	for i, receiver := range receiversAddrs {
-		owner := erc721OwnerOf(t, big.NewInt(int64(i)), l2ChildTokenAddr, txRelayer)
+		owner := erc721OwnerOf(t, big.NewInt(int64(i)), internalChildTokenAddr, txRelayer)
 		require.Equal(t, receiver, owner)
 	}
 
@@ -430,7 +443,7 @@ func TestE2E_Bridge_ERC721Transfer(t *testing.T) {
 			tokenIDs[i],
 			validatorSrv.JSONRPCAddr(),
 			bridgeCfg.InternalERC721PredicateAddr,
-			l2ChildTokenAddr,
+			internalChildTokenAddr,
 			false)
 		require.NoError(t, err)
 	}
@@ -443,8 +456,19 @@ func TestE2E_Bridge_ERC721Transfer(t *testing.T) {
 
 	t.Logf("Latest block number: %d, epoch number: %d\n", currentBlock.Number(), currentExtra.BlockMetaData.EpochNumber)
 
+	require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
+		for i := 1; i <= transfersCount; i++ {
+			if !isEventsProcessed(t, polybftCfg.Bridge[1337].ExternalGatewayAddr, externalChainTxRelayer, uint64(i)) {
+				return false
+			}
+		}
+
+		return true
+	}))
+
 	// assert that owners of given token ids are the accounts on the root chain ERC 721 token
 	for i, receiver := range receiversAddrs {
+		t.Log("ERC721 OWNER", i)
 		owner := erc721OwnerOf(t, big.NewInt(int64(i)), rootERC721Addr, externalChainTxRelayer)
 		require.Equal(t, receiver, owner)
 	}
@@ -622,6 +646,16 @@ func TestE2E_Bridge_ERC1155Transfer(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
+		for i := 1; i <= transfersCount; i++ {
+			if !isEventsProcessed(t, polybftCfg.Bridge[1337].ExternalGatewayAddr, externalChainTxRelayer, uint64(i)) {
+				return false
+			}
+		}
+
+		return true
+	}))
+
 	// assert that receiver's balances on RootERC1155 smart contract are expected
 	for i, receiver := range receivers {
 		balanceOfFn := &contractsapi.BalanceOfRootERC1155Fn{
@@ -754,6 +788,17 @@ func TestE2E_Bridge_InternalChainTokensTransfer(t *testing.T) {
 			require.NoError(t, err)
 		}
 
+		// first exit event is mapping child token on a rootchain
+		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
+			for i := uint64(1); i <= transfersCount+1; i++ {
+				if !isEventsProcessed(t, polybftCfg.Bridge[1337].ExternalGatewayAddr, externalChainTxRelayer, i) {
+					return false
+				}
+			}
+
+			return true
+		}))
+
 		// retrieve child mintable token address from both chains and make sure they are the same
 		l1ChildToken := getChildToken(t, contractsapi.ChildERC20Predicate.Abi, bridgeCfg.ExternalMintableERC20PredicateAddr,
 			rootToken, externalChainTxRelayer)
@@ -868,6 +913,17 @@ func TestE2E_Bridge_InternalChainTokensTransfer(t *testing.T) {
 				true)
 			require.NoError(t, err)
 		}
+
+		// first exit event is mapping child token on a rootchain
+		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
+			for i := uint64(1); i <= transfersCount+1; i++ {
+				if !isEventsProcessed(t, polybftCfg.Bridge[1337].ExternalGatewayAddr, externalChainTxRelayer, i) {
+					return false
+				}
+			}
+
+			return true
+		}))
 
 		// retrieve child token addresses on both chains and make sure they are the same
 		l1ChildToken := getChildToken(t, contractsapi.ChildERC721Predicate.Abi, bridgeCfg.ExternalMintableERC721PredicateAddr,
