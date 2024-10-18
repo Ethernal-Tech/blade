@@ -16,6 +16,7 @@ import (
 	polychain "github.com/0xPolygon/polygon-edge/consensus/polybft/blockchain"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/config"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/oracle"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/state"
 	polytypes "github.com/0xPolygon/polygon-edge/consensus/polybft/types"
 	"github.com/0xPolygon/polygon-edge/contracts"
@@ -34,8 +35,7 @@ var (
 // and updating client configuration based on executed governance proposals
 type GovernanceManager interface {
 	state.EventSubscriber
-	PostBlock(req *polytypes.PostBlockRequest) error
-	PostEpoch(req *polytypes.PostEpochRequest) error
+	oracle.ReadOnlyOracle
 	GetClientConfig(dbTx *bolt.Tx) (*chain.Params, error)
 }
 
@@ -47,8 +47,9 @@ type DummyGovernanceManager struct {
 	GetClientConfigFn func() (*chain.Params, error)
 }
 
-func (d *DummyGovernanceManager) PostBlock(req *polytypes.PostBlockRequest) error { return nil }
-func (d *DummyGovernanceManager) PostEpoch(req *polytypes.PostEpochRequest) error { return nil }
+func (d *DummyGovernanceManager) Close()                                       {}
+func (d *DummyGovernanceManager) PostBlock(req *oracle.PostBlockRequest) error { return nil }
+func (d *DummyGovernanceManager) PostEpoch(req *oracle.PostEpochRequest) error { return nil }
 func (d *DummyGovernanceManager) GetClientConfig(dbTx *bolt.Tx) (*chain.Params, error) {
 	if d.GetClientConfigFn != nil {
 		return d.GetClientConfigFn()
@@ -136,8 +137,11 @@ func (g *governanceManager) GetClientConfig(dbTx *bolt.Tx) (*chain.Params, error
 	return g.state.getClientConfig(dbTx)
 }
 
+// Close closes the governance manager
+func (g *governanceManager) Close() {}
+
 // PostEpoch notifies the governance manager that an epoch has changed
-func (g *governanceManager) PostEpoch(req *polytypes.PostEpochRequest) error {
+func (g *governanceManager) PostEpoch(req *oracle.PostEpochRequest) error {
 	if !req.Forks.IsActive(chain.Governance, req.FirstBlockOfEpoch) {
 		// if governance fork is not enabled, do nothing
 		return nil
@@ -336,7 +340,7 @@ func (g *governanceManager) PostEpoch(req *polytypes.PostEpochRequest) error {
 
 // PostBlock notifies governance manager that a block was finalized
 // so that he can extract governance events and save them to bolt db
-func (g *governanceManager) PostBlock(req *polytypes.PostBlockRequest) error {
+func (g *governanceManager) PostBlock(req *oracle.PostBlockRequest) error {
 	if !req.Forks.IsActive(chain.Governance, req.FullBlock.Block.Number()) {
 		// if governance fork is not enabled, do nothing
 		return nil

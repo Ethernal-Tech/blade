@@ -9,6 +9,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/bitmap"
 	polychain "github.com/0xPolygon/polygon-edge/consensus/polybft/blockchain"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/oracle"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/state"
 	polytypes "github.com/0xPolygon/polygon-edge/consensus/polybft/types"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/validator"
@@ -33,7 +34,7 @@ var (
 // and updating validator set based on changed stake
 type StakeManager interface {
 	state.EventSubscriber
-	PostBlock(req *polytypes.PostBlockRequest) error
+	oracle.ReadOnlyOracle
 	UpdateValidatorSet(epoch uint64, maxValidatorSetSize uint64,
 		currentValidatorSet validator.AccountSet) (*validator.ValidatorSetDelta, error)
 }
@@ -44,7 +45,15 @@ var _ StakeManager = (*DummyStakeManager)(nil)
 // used only for unit testing
 type DummyStakeManager struct{}
 
-func (d *DummyStakeManager) PostBlock(req *polytypes.PostBlockRequest) error { return nil }
+func (d *DummyStakeManager) PostBlock(req *oracle.PostBlockRequest) error { return nil }
+func (d *DummyStakeManager) PostEpoch(req *oracle.PostEpochRequest) error { return nil }
+func (d *DummyStakeManager) GetTransactions(blockInfo oracle.NewBlockInfo) ([]*types.Transaction, error) {
+	return nil, nil
+}
+func (d *DummyStakeManager) VerifyTransactions(blockInfo oracle.NewBlockInfo, txs []*types.Transaction) error {
+	return nil
+}
+func (d *DummyStakeManager) Close() {}
 
 func (d *DummyStakeManager) UpdateValidatorSet(epoch uint64, maxValidatorSetSize uint64,
 	currentValidatorSet validator.AccountSet) (*validator.ValidatorSetDelta, error) {
@@ -116,10 +125,18 @@ func newStakeManager(logger hclog.Logger,
 	return sm, nil
 }
 
+// Close closes the oracle
+func (s *stakeManager) Close() {}
+
+// PostEpoch posts new epoch to the oracle
+func (s *stakeManager) PostEpoch(req *oracle.PostEpochRequest) error {
+	return nil
+}
+
 // PostBlock is called on every insert of finalized block (either from consensus or syncer)
 // It will update the fullValidatorSet in db to the current block number
 // Note that EventSubscriber - AddLog will get all the transfer events that happened in block
-func (s *stakeManager) PostBlock(req *polytypes.PostBlockRequest) error {
+func (s *stakeManager) PostBlock(req *oracle.PostBlockRequest) error {
 	fullValidatorSet, err := s.getOrInitValidatorSet(req.DBTx)
 	if err != nil {
 		return err

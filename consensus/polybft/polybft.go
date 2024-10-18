@@ -115,7 +115,7 @@ type Polybft struct {
 	logger hclog.Logger
 
 	// tx pool as interface
-	txPool txPoolInterface
+	txPool blockchain.TxPool
 }
 
 func GenesisPostHookFactory(cfg *chain.Chain, engineName string) func(txn *state.Transition) error {
@@ -762,7 +762,7 @@ func (p *Polybft) PreCommitState(block *types.Block, _ *state.Transition) error 
 
 			bridgeBatchTxExists = true
 
-			if err := verifyBridgeBatchTx(
+			if err := bridge.VerifyBridgeBatchTx(
 				block.Number(),
 				tx.Hash(),
 				signedBridgeBatch,
