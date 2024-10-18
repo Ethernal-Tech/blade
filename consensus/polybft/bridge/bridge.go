@@ -89,15 +89,17 @@ func NewBridge(runtime Runtime,
 			topic:             bridgeTopic,
 			key:               runtimeConfig.Key,
 			maxNumberOfEvents: maxNumberOfBatchEvents,
-		}, runtime, externalChainID, internalChainID)
+		}, runtime, externalChainID, internalChainID, blockchain)
 		bridge.bridgeManagers[externalChainID] = bridgeManager
 
 		if err := bridgeManager.Start(runtimeConfig); err != nil {
 			return nil, fmt.Errorf("error starting bridge manager for chainID: %d, err: %w", externalChainID, err)
 		}
+
+		eventProvider.Subscribe(bridgeManager)
 	}
 
-	relayer, err := newBridgeEventRelayer(blockchain, runtimeConfig, logger)
+	relayer, err := newBridgeEventRelayer(blockchain, runtimeConfig, logger, store)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +126,7 @@ func (b *bridge) Close() {
 // and calls PostBlock in each bridge manager
 func (b bridge) PostBlock(req *polytypes.PostBlockRequest) error {
 	for chainID, bridgeManager := range b.bridgeManagers {
-		if err := bridgeManager.PostBlock(); err != nil {
+		if err := bridgeManager.PostBlock(req); err != nil {
 			return fmt.Errorf("erorr bridge post block, chainID: %d, err: %w", chainID, err)
 		}
 	}
@@ -155,7 +157,7 @@ func (b *bridge) PostEpoch(req *polytypes.PostEpochRequest) error {
 
 // BridgeBatch returns the pending signed bridge batches as a list of signed bridge batches
 func (b *bridge) BridgeBatch(pendingBlockNumber uint64) ([]*BridgeBatchSigned, error) {
-	bridgeBatches := make([]*BridgeBatchSigned, 0, len(b.bridgeManagers))
+	bridgeBatches := make([]*BridgeBatchSigned, 0)
 
 	for chainID, bridgeManager := range b.bridgeManagers {
 		bridgeBatch, err := bridgeManager.BridgeBatch(pendingBlockNumber)
@@ -163,7 +165,9 @@ func (b *bridge) BridgeBatch(pendingBlockNumber uint64) ([]*BridgeBatchSigned, e
 			return nil, fmt.Errorf("error while getting signed batches for chainID: %d, err: %w", chainID, err)
 		}
 
-		bridgeBatches = append(bridgeBatches, bridgeBatch)
+		if bridgeBatch != nil {
+			bridgeBatches = append(bridgeBatches, bridgeBatch)
+		}
 	}
 
 	return bridgeBatches, nil
