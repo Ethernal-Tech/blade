@@ -1,7 +1,6 @@
 package bridge
 
 import (
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -19,9 +18,9 @@ import (
 
 	"github.com/0xPolygon/polygon-edge/bls"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/bitmap"
+	polychain "github.com/0xPolygon/polygon-edge/consensus/polybft/blockchain"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/config"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
-	"github.com/0xPolygon/polygon-edge/consensus/polybft/helpers"
 	polybftProto "github.com/0xPolygon/polygon-edge/consensus/polybft/proto"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/signer"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/state"
@@ -112,6 +111,7 @@ type bridgeEventManager struct {
 	nextEventIDInternal  uint64
 	externalChainID      uint64
 	internalChainID      uint64
+	blockchain           polychain.Blockchain
 
 	runtime Runtime
 	tracker *tracker.EventTracker
@@ -123,7 +123,7 @@ func newBridgeManager(
 	state *BridgeManagerStore,
 	config *bridgeEventManagerConfig,
 	runtime Runtime,
-	externalChainID, internalChainID uint64) *bridgeEventManager {
+	externalChainID, internalChainID uint64, blockchain polychain.Blockchain) *bridgeEventManager {
 	return &bridgeEventManager{
 		logger:          logger,
 		state:           state,
@@ -131,6 +131,7 @@ func newBridgeManager(
 		runtime:         runtime,
 		externalChainID: externalChainID,
 		internalChainID: internalChainID,
+		blockchain:      blockchain,
 	}
 }
 
@@ -342,29 +343,33 @@ func (b *bridgeEventManager) BridgeBatch(blockNumber uint64) (*BridgeBatchSigned
 	// we start from the end, since last pending batch is the largest one
 	for i := len(b.pendingBridgeBatches) - 1; i >= 0; i-- {
 		pendingBatch := b.pendingBridgeBatches[i]
-		aggregatedSignature, err := b.getAggSignatureForBridgeBatchMessage(blockNumber, pendingBatch)
+		if (pendingBatch.StartID.Uint64() == b.nextEventIDInternal && pendingBatch.SourceChainID.Uint64() == b.internalChainID) ||
+			(pendingBatch.StartID.Uint64() == b.nextEventIDExternal && pendingBatch.SourceChainID.Uint64() == b.externalChainID) {
 
-		if err != nil {
-			if errors.Is(err, errQuorumNotReached) {
-				// a valid case, batch has no quorum, we should not return an error
-				if pendingBatch.BridgeBatch.EndID.Uint64()-pendingBatch.BridgeBatch.StartID.Uint64() > 0 {
-					b.logger.Debug("can not submit a batch, quorum not reached",
-						"from", pendingBatch.BridgeBatch.StartID.Uint64(),
-						"to", pendingBatch.BridgeBatch.EndID.Uint64())
+			aggregatedSignature, err := b.getAggSignatureForBridgeBatchMessage(blockNumber, pendingBatch)
+
+			if err != nil {
+				if errors.Is(err, errQuorumNotReached) {
+					// a valid case, batch has no quorum, we should not return an error
+					if pendingBatch.BridgeBatch.EndID.Uint64()-pendingBatch.BridgeBatch.StartID.Uint64() > 0 {
+						b.logger.Debug("can not submit a batch, quorum not reached",
+							"from", pendingBatch.BridgeBatch.StartID.Uint64(),
+							"to", pendingBatch.BridgeBatch.EndID.Uint64())
+					}
+
+					continue
 				}
 
-				continue
+				return nil, err
 			}
 
-			return nil, err
-		}
+			largestBridgeBatch = &BridgeBatchSigned{
+				BridgeBatch:  pendingBatch.BridgeBatch,
+				AggSignature: aggregatedSignature,
+			}
 
-		largestBridgeBatch = &BridgeBatchSigned{
-			BridgeBatch:  pendingBatch.BridgeBatch,
-			AggSignature: aggregatedSignature,
+			break
 		}
-
-		break
 	}
 
 	return largestBridgeBatch, nil
@@ -453,7 +458,6 @@ func (b *bridgeEventManager) PostEpoch(req *polytypes.PostEpochRequest) error {
 	b.validatorSet = req.ValidatorSet
 	b.epoch = req.NewEpochID
 
-	// build a new batch at the end of the epoch
 	b.nextEventIDExternal, err = req.SystemState.GetNextCommittedIndex(b.externalChainID, systemstate.External)
 	if err != nil {
 		b.lock.Unlock()
@@ -461,7 +465,7 @@ func (b *bridgeEventManager) PostEpoch(req *polytypes.PostEpochRequest) error {
 		return err
 	}
 
-	b.nextEventIDInternal, err = req.SystemState.GetNextCommittedIndex(b.internalChainID, systemstate.Internal)
+	b.nextEventIDInternal, err = req.SystemState.GetNextCommittedIndex(b.externalChainID, systemstate.Internal)
 	if err != nil {
 		b.lock.Unlock()
 
@@ -479,17 +483,17 @@ func (b *bridgeEventManager) PostEpoch(req *polytypes.PostEpochRequest) error {
 
 // PostBlock creates batch from internal events.
 func (b *bridgeEventManager) PostBlock(req *polytypes.PostBlockRequest) error {
-	signedBatch, err := b.getBridgeBatchSignedTx(req.FullBlock.Block.Transactions)
-	if err != nil {
-		return err
-	}
-
-	if signedBatch != nil {
-		if signedBatch.SourceChainID.Uint64() == b.internalChainID {
-			b.nextEventIDInternal = signedBatch.EndID.Uint64() + 1
-		} else if signedBatch.SourceChainID.Uint64() == b.externalChainID {
-			b.nextEventIDExternal = signedBatch.EndID.Uint64() + 1
+	if req.FullBlock.Block.Header.Number > 1 {
+		provider, err := b.blockchain.GetStateProviderForBlock(req.FullBlock.Block.Header)
+		if err != nil {
+			return err
 		}
+
+		systemState := b.blockchain.GetSystemState(provider)
+
+		b.nextEventIDInternal, err = systemState.GetNextCommittedIndex(b.externalChainID, systemstate.Internal)
+
+		b.nextEventIDExternal, err = systemState.GetNextCommittedIndex(b.externalChainID, systemstate.External)
 	}
 
 	if err := b.buildInternalBridgeBatch(req.DBTx); err != nil {
@@ -633,32 +637,6 @@ func (b *bridgeEventManager) multicast(msg interface{}) {
 	}
 }
 
-// getBridgeBatchSignedTx returns a CommitmentMessageSigned object from a commit state transaction
-func (bbs *bridgeEventManager) getBridgeBatchSignedTx(txs []*types.Transaction) (*contractsapi.SignedBridgeMessageBatch, error) {
-	var commitFn contractsapi.CommitBatchBridgeStorageFn
-	for _, tx := range txs {
-		// skip non state CommitBatchBridgeStorageFn transactions
-		if tx.Type() != types.StateTxType ||
-			len(tx.Input()) < helpers.AbiMethodIDLength ||
-			!bytes.Equal(tx.Input()[:helpers.AbiMethodIDLength], commitFn.Sig()) {
-			continue
-		}
-
-		obj := &contractsapi.CommitBatchBridgeStorageFn{}
-
-		if err := obj.DecodeAbi(tx.Input()); err != nil {
-			return nil, fmt.Errorf("get bridge batch signed tx error: %w", err)
-		}
-
-		if (bbs.internalChainID == obj.Batch.SourceChainID.Uint64() && bbs.externalChainID == obj.Batch.DestinationChainID.Uint64()) ||
-			(bbs.externalChainID == obj.Batch.SourceChainID.Uint64() && bbs.internalChainID == obj.Batch.DestinationChainID.Uint64()) {
-			return obj.Batch, nil
-		}
-	}
-
-	return nil, nil
-}
-
 // EventSubscriber implementation
 
 // GetLogFilters returns a map of log filters for getting desired events,
@@ -714,6 +692,10 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, log *ethgo.Log, db
 
 			return err
 		}
+
+		b.logger.Error("ERR", "WE GET EVENT IN PROCESS LOG", event)
+
+		b.buildInternalBridgeBatch(dbTx)
 
 		return nil
 	default:
