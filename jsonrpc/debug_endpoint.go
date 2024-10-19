@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"sync"
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/helper/hex"
@@ -109,6 +110,14 @@ type Debug struct {
 	throttling   *Throttling
 	handler      *DebugHandler
 	ReadFileFunc func(filename string) ([]byte, error)
+}
+
+// BlockTraceResult represents the results of tracing a single block
+type BlockTraceResult struct {
+	Block  uint64      // Block number corresponding to this trace
+	Hash   types.Hash  // Block hash corresponding to this trace
+	Traces interface{} // Trace results produced by the task
+	Error  error
 }
 
 func NewDebug(store debugStore, requestsPerSecond uint64) *Debug {
@@ -663,6 +672,71 @@ func (d *Debug) GetRawReceipts(filter BlockNumberOrHash) (interface{}, error) {
 			}
 
 			return result, nil
+		},
+	)
+}
+
+func (d *Debug) TraceChain(start, end BlockNumber, config *TraceConfig) (interface{}, error) {
+	return d.throttling.AttemptRequest(
+		context.Background(),
+		func() (interface{}, error) {
+			startNum, err := GetNumericBlockNumber(start, d.store)
+			if err != nil {
+				return nil, err
+			}
+
+			endNum, err := GetNumericBlockNumber(end, d.store)
+			if err != nil {
+				return nil, err
+			}
+
+			if startNum >= endNum {
+				return nil, fmt.Errorf("end block (#%d) needs to come after start block (#%d)", endNum, startNum)
+			}
+
+			blocks := int(endNum-startNum) + 1
+			results := make([]BlockTraceResult, blocks)
+			resultCh := make(chan BlockTraceResult, blocks)
+
+			var wg sync.WaitGroup
+
+			for i := 0; i < blocks; i++ {
+				wg.Add(1)
+
+				go func(i int) {
+					defer wg.Done()
+
+					blockNum := startNum + uint64(i)
+					traceResult := BlockTraceResult{Block: blockNum}
+
+					block, ok := d.store.GetBlockByNumber(blockNum, true)
+					if !ok {
+						traceResult.Error = fmt.Errorf("block %d not found", blockNum)
+					} else {
+						traceResult.Hash = block.Hash()
+
+						res, err := d.traceBlock(block, config)
+						if err != nil {
+							traceResult.Error = fmt.Errorf("failed to trace block %d: %w", blockNum, err)
+						} else {
+							traceResult.Traces = res
+						}
+					}
+
+					resultCh <- traceResult
+				}(i)
+			}
+
+			go func() {
+				wg.Wait()
+				close(resultCh)
+			}()
+
+			for traceResult := range resultCh {
+				results[traceResult.Block-startNum] = traceResult
+			}
+
+			return results, nil
 		},
 	)
 }
