@@ -14,16 +14,21 @@ type deployContractResult struct {
 	Address types.Address `json:"address"`
 	Hash    types.Hash    `json:"hash"`
 	GasUsed uint64        `json:"gasUsed"`
+	isProxy bool          `json:"-"`
 }
 
-func newDeployContractsResult(name string,
+func newDeployContractsResult(
+	name string,
+	isProxy bool,
 	address types.Address,
-	hash ethgo.Hash, gasUsed uint64) *deployContractResult {
+	hash ethgo.Hash,
+	gasUsed uint64) *deployContractResult {
 	return &deployContractResult{
 		Name:    name,
 		Address: address,
 		Hash:    types.BytesToHash(hash.Bytes()),
 		GasUsed: gasUsed,
+		isProxy: isProxy,
 	}
 }
 

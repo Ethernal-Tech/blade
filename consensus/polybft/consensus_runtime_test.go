@@ -2,17 +2,25 @@ package polybft
 
 import (
 	"fmt"
-	"math/big"
-	"math/rand"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/0xPolygon/go-ibft/messages/proto"
+	ibftproto "github.com/0xPolygon/go-ibft/messages/proto"
 	"github.com/0xPolygon/polygon-edge/chain"
 	"github.com/0xPolygon/polygon-edge/consensus"
-	"github.com/0xPolygon/polygon-edge/consensus/polybft/bitmap"
+	polychain "github.com/0xPolygon/polygon-edge/consensus/polybft/blockchain"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/bridge"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/config"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/governance"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/oracle"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/proposer"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/signer"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/stake"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/state"
+	systemstate "github.com/0xPolygon/polygon-edge/consensus/polybft/system_state"
+	polytesting "github.com/0xPolygon/polygon-edge/consensus/polybft/testing"
+	polytypes "github.com/0xPolygon/polygon-edge/consensus/polybft/types"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/validator"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/wallet"
 	"github.com/0xPolygon/polygon-edge/contracts"
@@ -20,9 +28,11 @@ import (
 	"github.com/0xPolygon/polygon-edge/helper/common"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/hashicorp/go-hclog"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 func init() {
@@ -48,7 +58,7 @@ func TestConsensusRuntime_isFixedSizeOfEpochMet_NotReachedEnd(t *testing.T) {
 		{10, 1, 1},
 	}
 
-	config := &runtimeConfig{GenesisConfig: &PolyBFTConfig{}}
+	config := &config.Runtime{GenesisConfig: &config.PolyBFT{}}
 	runtime := &consensusRuntime{
 		config:         config,
 		lastBuiltBlock: &types.Header{},
@@ -86,7 +96,7 @@ func TestConsensusRuntime_isFixedSizeOfEpochMet_ReachedEnd(t *testing.T) {
 		{10, 1, 10},
 	}
 
-	config := &runtimeConfig{GenesisConfig: &PolyBFTConfig{}}
+	config := &config.Runtime{GenesisConfig: &config.PolyBFT{}}
 	runtime := &consensusRuntime{
 		config: config,
 		epoch:  &epochMetadata{CurrentClientConfig: config.GenesisConfig},
@@ -123,7 +133,7 @@ func TestConsensusRuntime_isFixedSizeOfSprintMet_NotReachedEnd(t *testing.T) {
 		{10, 1, 1},
 	}
 
-	config := &runtimeConfig{GenesisConfig: &PolyBFTConfig{}}
+	config := &config.Runtime{GenesisConfig: &config.PolyBFT{}}
 	runtime := &consensusRuntime{
 		config: config,
 		epoch:  &epochMetadata{CurrentClientConfig: config.GenesisConfig},
@@ -161,7 +171,7 @@ func TestConsensusRuntime_isFixedSizeOfSprintMet_ReachedEnd(t *testing.T) {
 		{3, 3, 5},
 	}
 
-	config := &runtimeConfig{GenesisConfig: &PolyBFTConfig{}}
+	config := &config.Runtime{GenesisConfig: &config.PolyBFT{}}
 	runtime := &consensusRuntime{
 		config: config,
 		epoch:  &epochMetadata{CurrentClientConfig: config.GenesisConfig},
@@ -184,69 +194,65 @@ func TestConsensusRuntime_OnBlockInserted_EndOfEpoch(t *testing.T) {
 	t.Parallel()
 
 	const (
-		epochSize       = uint64(10)
-		validatorsCount = 7
+		epochSize          = uint64(10)
+		validatorsCount    = 7
+		currentEpochNumber = uint64(1)
 	)
 
-	currentEpochNumber := getEpochNumber(t, epochSize, epochSize)
 	validatorSet := validator.NewTestValidators(t, validatorsCount).GetPublicIdentities()
-	header, headerMap := createTestBlocks(t, epochSize, epochSize, validatorSet)
+	header, _ := polytypes.CreateTestBlocks(t, epochSize, epochSize, validatorSet)
 	builtBlock := consensus.BuildBlock(consensus.BuildBlockParams{
 		Header: header,
 	})
 
 	newEpochNumber := currentEpochNumber + 1
-	systemStateMock := new(systemStateMock)
+	systemStateMock := new(systemstate.SystemStateMock)
 	systemStateMock.On("GetEpoch").Return(newEpochNumber).Once()
 
-	blockchainMock := new(blockchainMock)
-	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(stateProviderMock)).Once()
+	blockchainMock := new(polychain.BlockchainMock)
+	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(systemstate.StateProviderMock)).Once()
 	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything).Return(systemStateMock)
-	blockchainMock.On("GetHeaderByNumber", mock.Anything).Return(headerMap.getHeader)
 
-	polybftBackendMock := new(polybftBackendMock)
-	polybftBackendMock.On("GetValidatorsWithTx", mock.Anything, mock.Anything, mock.Anything).Return(validatorSet).Times(3)
+	polybftBackendMock := polytypes.NewPolybftMock(t)
+	polybftBackendMock.On("GetValidatorsWithTx", mock.Anything, mock.Anything, mock.Anything).Return(validatorSet, nil).Once()
 	polybftBackendMock.On("SetBlockTime", mock.Anything).Once()
 
-	txPool := new(txPoolMock)
-	txPool.On("ResetWithBlock", mock.Anything).Once()
+	txPoolMock := new(polychain.TxPoolMock)
+	txPoolMock.On("ResetWithBlock", mock.Anything).Once()
 
-	snapshot := NewProposerSnapshot(epochSize-1, validatorSet)
-	polybftCfg := &PolyBFTConfig{EpochSize: epochSize}
-	config := &runtimeConfig{
-		GenesisConfig: &PolyBFTConfig{
+	polybftCfg := &config.PolyBFT{EpochSize: epochSize}
+	config := &config.Runtime{
+		GenesisConfig: &config.PolyBFT{
 			EpochSize: epochSize,
 		},
-		genesisParams:  &chain.Params{Engine: map[string]interface{}{ConsensusName: polybftCfg}},
-		blockchain:     blockchainMock,
-		polybftBackend: polybftBackendMock,
-		txPool:         txPool,
-		State:          newTestState(t),
+		ChainParams: &chain.Params{Engine: map[string]interface{}{config.ConsensusName: polybftCfg}},
 	}
-	require.NoError(t, config.State.insertLastProcessedEventsBlock(builtBlock.Number()-1, nil))
+	st := state.NewTestState(t)
+
+	require.NoError(t, st.InsertLastProcessedEventsBlock(builtBlock.Number()-1, nil))
 
 	runtime := &consensusRuntime{
-		proposerCalculator: NewProposerCalculatorFromSnapshot(snapshot, config, hclog.NewNullLogger()),
-		logger:             hclog.NewNullLogger(),
-		state:              config.State,
-		config:             config,
+		logger:     hclog.NewNullLogger(),
+		state:      st,
+		config:     config,
+		blockchain: blockchainMock,
+		backend:    polybftBackendMock,
+		txPool:     txPoolMock,
 		epoch: &epochMetadata{
 			Number:              currentEpochNumber,
 			FirstBlockInEpoch:   header.Number - epochSize + 1,
 			CurrentClientConfig: config.GenesisConfig,
 		},
 		lastBuiltBlock: &types.Header{Number: header.Number - 1},
-		bridgeManager:  &dummyBridgeManager{},
-		stakeManager:   &dummyStakeManager{},
-		eventProvider:  NewEventProvider(blockchainMock),
-		governanceManager: &dummyGovernanceManager{
-			getClientConfigFn: func() (*chain.Params, error) {
-				return config.genesisParams, nil
+		stakeManager:   &stake.DummyStakeManager{},
+		eventProvider:  state.NewEventProvider(blockchainMock),
+		governanceManager: &governance.DummyGovernanceManager{
+			GetClientConfigFn: func() (*chain.Params, error) {
+				return config.ChainParams, nil
 			}},
 	}
-	runtime.OnBlockInserted(&types.FullBlock{Block: builtBlock})
 
-	require.True(t, runtime.state.EpochStore.isEpochInserted(currentEpochNumber+1))
+	runtime.OnBlockInserted(&types.FullBlock{Block: builtBlock})
 	require.Equal(t, newEpochNumber, runtime.epoch.Number)
 
 	blockchainMock.AssertExpectations(t)
@@ -268,35 +274,26 @@ func TestConsensusRuntime_OnBlockInserted_MiddleOfEpoch(t *testing.T) {
 		Header: header,
 	})
 
-	blockchainMock := new(blockchainMock)
+	blockchainMock := new(polychain.BlockchainMock)
 	blockchainMock.On("GetHeaderByNumber", mock.Anything).Return(builtBlock.Header, true).Once()
 
-	polybftBackendMock := new(polybftBackendMock)
-	polybftBackendMock.On("GetValidatorsWithTx", mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+	txPoolMock := new(polychain.TxPoolMock)
+	txPoolMock.On("ResetWithHeaders", mock.Anything).Once()
 
-	txPool := new(txPoolMock)
-	txPool.On("ResetWithHeaders", mock.Anything).Once()
-
-	snapshot := NewProposerSnapshot(blockNumber, []*validator.ValidatorMetadata{})
-	config := &runtimeConfig{
-		GenesisConfig: &PolyBFTConfig{EpochSize: epochSize},
-		blockchain:    blockchainMock,
-		txPool:        txPool,
+	config := &config.Runtime{
+		GenesisConfig: &config.PolyBFT{EpochSize: epochSize},
 	}
 
 	runtime := &consensusRuntime{
 		lastBuiltBlock: header,
-		config: &runtimeConfig{
-			GenesisConfig: &PolyBFTConfig{EpochSize: epochSize},
-			blockchain:    blockchainMock,
-			txPool:        txPool,
-		},
+		blockchain:     blockchainMock,
+		txPool:         txPoolMock,
+		config:         config,
 		epoch: &epochMetadata{
 			Number:            epoch,
 			FirstBlockInEpoch: firstBlockInEpoch,
 		},
-		logger:             hclog.NewNullLogger(),
-		proposerCalculator: NewProposerCalculatorFromSnapshot(snapshot, config, hclog.NewNullLogger()),
+		logger: hclog.NewNullLogger(),
 	}
 	runtime.OnBlockInserted(&types.FullBlock{Block: builtBlock})
 
@@ -308,15 +305,20 @@ func TestConsensusRuntime_FSM_NotInValidatorSet(t *testing.T) {
 
 	validators := validator.NewTestValidatorsWithAliases(t, []string{"A", "B", "C", "D"})
 
-	snapshot := NewProposerSnapshot(1, nil)
-	config := &runtimeConfig{
-		GenesisConfig: &PolyBFTConfig{
+	snapshot := proposer.NewProposerSnapshot(1, nil)
+	config := &config.Runtime{
+		GenesisConfig: &config.PolyBFT{
 			EpochSize: 1,
 		},
-		Key: createTestKey(t),
+		Key: polytesting.CreateTestKey(t),
 	}
+
+	proposerCalculator, err := proposer.NewProposerCalculatorFromSnapshot(snapshot, config, state.NewTestState(t),
+		polytypes.NewPolybftMock(t), new(polychain.BlockchainMock), hclog.NewNullLogger())
+	require.NoError(t, err)
+
 	runtime := &consensusRuntime{
-		proposerCalculator: NewProposerCalculatorFromSnapshot(snapshot, config, hclog.NewNullLogger()),
+		proposerCalculator: proposerCalculator,
 		config:             config,
 		epoch: &epochMetadata{
 			Number:     1,
@@ -326,15 +328,14 @@ func TestConsensusRuntime_FSM_NotInValidatorSet(t *testing.T) {
 	}
 	runtime.setIsActiveValidator(true)
 
-	err := runtime.FSM()
-	assert.ErrorIs(t, err, errNotAValidator)
+	assert.ErrorIs(t, runtime.FSM(), errNotAValidator)
 }
 
 func TestConsensusRuntime_FSM_NotEndOfEpoch_NotEndOfSprint(t *testing.T) {
 	t.Parallel()
 
-	extra := &Extra{
-		Checkpoint: &CheckpointData{},
+	extra := &polytypes.Extra{
+		BlockMetaData: &polytypes.BlockMetaData{},
 	}
 	lastBlock := &types.Header{
 		Number:    1,
@@ -342,21 +343,25 @@ func TestConsensusRuntime_FSM_NotEndOfEpoch_NotEndOfSprint(t *testing.T) {
 	}
 
 	validators := validator.NewTestValidators(t, 3)
-	blockchainMock := new(blockchainMock)
-	blockchainMock.On("NewBlockBuilder", mock.Anything).Return(&BlockBuilder{}, nil).Once()
+	blockchainMock := new(polychain.BlockchainMock)
+	blockchainMock.On("NewBlockBuilder", mock.Anything).Return(new(polychain.BlockBuilderMock), nil).Once()
 
-	snapshot := NewProposerSnapshot(1, nil)
-	config := &runtimeConfig{
-		GenesisConfig: &PolyBFTConfig{
+	snapshot := proposer.NewProposerSnapshot(1, nil)
+	config := &config.Runtime{
+		GenesisConfig: &config.PolyBFT{
 			EpochSize:  10,
 			SprintSize: 5,
 		},
-		Key:        wallet.NewKey(validators.GetPrivateIdentities()[0]),
-		blockchain: blockchainMock,
-		Forks:      chain.AllForksEnabled,
+		Key:   wallet.NewKey(validators.GetPrivateIdentities()[0]),
+		Forks: chain.AllForksEnabled,
 	}
+
+	proposerCalculator, err := proposer.NewProposerCalculatorFromSnapshot(snapshot, config, state.NewTestState(t),
+		polytypes.NewPolybftMock(t), blockchainMock, hclog.NewNullLogger())
+	require.NoError(t, err)
+
 	runtime := &consensusRuntime{
-		proposerCalculator: NewProposerCalculatorFromSnapshot(snapshot, config, hclog.NewNullLogger()),
+		proposerCalculator: proposerCalculator,
 		logger:             hclog.NewNullLogger(),
 		config:             config,
 		epoch: &epochMetadata{
@@ -365,86 +370,24 @@ func TestConsensusRuntime_FSM_NotEndOfEpoch_NotEndOfSprint(t *testing.T) {
 			FirstBlockInEpoch:   1,
 			CurrentClientConfig: config.GenesisConfig,
 		},
+		blockchain:     blockchainMock,
 		lastBuiltBlock: lastBlock,
-		state:          newTestState(t),
-		bridgeManager:  &dummyBridgeManager{},
+		state:          state.NewTestState(t),
 	}
 	runtime.setIsActiveValidator(true)
 
-	err := runtime.FSM()
-	require.NoError(t, err)
+	require.NoError(t, runtime.FSM())
 
 	assert.True(t, runtime.IsActiveValidator())
-	assert.False(t, runtime.fsm.isEndOfEpoch)
-	assert.False(t, runtime.fsm.isEndOfSprint)
-	assert.Equal(t, lastBlock.Number, runtime.fsm.parent.Number)
+	assert.False(t, runtime.fsm.blockInfo.IsEndOfEpoch)
+	assert.False(t, runtime.fsm.blockInfo.IsEndOfSprint)
+	assert.Equal(t, lastBlock.Number, runtime.fsm.blockInfo.ParentBlock.Number)
 
-	localAddr := runtime.config.Key.Address()
-	assert.True(t, runtime.fsm.ValidatorSet().Includes(localAddr))
+	address := runtime.config.Key.Address()
+	assert.True(t, runtime.fsm.blockInfo.CurrentEpochValidatorSet.Includes(address))
 
 	assert.NotNil(t, runtime.fsm.blockBuilder)
-	assert.NotNil(t, runtime.fsm.backend)
-
-	blockchainMock.AssertExpectations(t)
-}
-
-func TestConsensusRuntime_FSM_EndOfEpoch_BuildCommitEpoch(t *testing.T) {
-	t.Parallel()
-
-	const (
-		epoch             = 0
-		epochSize         = uint64(10)
-		sprintSize        = uint64(3)
-		firstBlockInEpoch = uint64(1)
-		fromIndex         = uint64(0)
-		toIndex           = uint64(9)
-	)
-
-	validatorAccounts := validator.NewTestValidatorsWithAliases(t, []string{"A", "B", "C", "D", "E", "F"})
-	validators := validatorAccounts.GetPublicIdentities()
-
-	blockchainMock := new(blockchainMock)
-	blockchainMock.On("NewBlockBuilder", mock.Anything).Return(&BlockBuilder{}, nil).Once()
-
-	state := newTestState(t)
-	require.NoError(t, state.EpochStore.insertEpoch(epoch, nil))
-
-	config := &runtimeConfig{
-		GenesisConfig: &PolyBFTConfig{
-			EpochSize:  epochSize,
-			SprintSize: sprintSize,
-		},
-		Key:        validatorAccounts.GetValidator("A").Key(),
-		blockchain: blockchainMock,
-		Forks:      chain.AllForksEnabled,
-	}
-
-	metadata := &epochMetadata{
-		Validators:          validators,
-		Number:              epoch,
-		FirstBlockInEpoch:   firstBlockInEpoch,
-		CurrentClientConfig: config.GenesisConfig,
-	}
-
-	snapshot := NewProposerSnapshot(1, nil)
-	runtime := &consensusRuntime{
-		proposerCalculator: NewProposerCalculatorFromSnapshot(snapshot, config, hclog.NewNullLogger()),
-		logger:             hclog.NewNullLogger(),
-		state:              state,
-		epoch:              metadata,
-		config:             config,
-		lastBuiltBlock:     &types.Header{Number: 9},
-		stakeManager:       &dummyStakeManager{},
-		bridgeManager:      &dummyBridgeManager{},
-	}
-
-	err := runtime.FSM()
-	fsm := runtime.fsm
-
-	assert.NoError(t, err)
-	assert.True(t, fsm.isEndOfEpoch)
-	assert.NotNil(t, fsm.commitEpochInput)
-	assert.NotEmpty(t, fsm.commitEpochInput)
+	assert.NotNil(t, runtime.fsm.blockchain)
 
 	blockchainMock.AssertExpectations(t)
 }
@@ -455,12 +398,12 @@ func Test_NewConsensusRuntime(t *testing.T) {
 	_, err := os.Create("/tmp/consensusState.db")
 	require.NoError(t, err)
 
-	polyBftConfig := &PolyBFTConfig{
-		Bridge: &BridgeConfig{
+	polyBftConfig := &config.PolyBFT{
+		/* 		Bridge: map[uint64]*BridgeConfig{0: {
 			StateSenderAddr:       types.Address{0x13},
 			CheckpointManagerAddr: types.Address{0x10},
 			JSONRPCEndpoint:       "testEndpoint",
-		},
+		}}, */
 		EpochSize:  10,
 		SprintSize: 10,
 		BlockTime:  common.Duration{Duration: 2 * time.Second},
@@ -468,52 +411,41 @@ func Test_NewConsensusRuntime(t *testing.T) {
 
 	validators := validator.NewTestValidators(t, 3).GetPublicIdentities()
 
-	systemStateMock := new(systemStateMock)
+	systemStateMock := new(systemstate.SystemStateMock)
 	systemStateMock.On("GetEpoch").Return(uint64(1)).Once()
 	systemStateMock.On("GetNextCommittedIndex").Return(uint64(1)).Once()
 
-	blockchainMock := &blockchainMock{}
-	blockchainMock.On("CurrentHeader").Return(&types.Header{Number: 1, ExtraData: createTestExtraForAccounts(t, 1, validators, nil)})
-	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(stateProviderMock)).Once()
+	blockchainMock := new(polychain.BlockchainMock)
+	blockchainMock.On("CurrentHeader").Return(&types.Header{Number: 1, ExtraData: polytypes.CreateTestExtraForAccounts(t, 1, validators, nil)})
+	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(systemstate.StateProviderMock)).Once()
 	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything).Return(systemStateMock).Once()
-	blockchainMock.On("GetHeaderByNumber", uint64(0)).Return(&types.Header{Number: 0, ExtraData: createTestExtraForAccounts(t, 0, validators, nil)})
-	blockchainMock.On("GetHeaderByNumber", uint64(1)).Return(&types.Header{Number: 1, ExtraData: createTestExtraForAccounts(t, 1, validators, nil)})
+	blockchainMock.On("GetHeaderByNumber", uint64(0)).Return(&types.Header{Number: 0, ExtraData: polytypes.CreateTestExtraForAccounts(t, 0, validators, nil)})
+	blockchainMock.On("GetHeaderByNumber", uint64(1)).Return(&types.Header{Number: 1, ExtraData: polytypes.CreateTestExtraForAccounts(t, 1, validators, nil)})
 
-	polybftBackendMock := new(polybftBackendMock)
-	polybftBackendMock.On("GetValidatorsWithTx", mock.Anything, mock.Anything, mock.Anything).Return(validators).Times(3)
+	polybftBackendMock := polytypes.NewPolybftMock(t)
+	polybftBackendMock.On("GetValidatorsWithTx", mock.Anything, mock.Anything, mock.Anything).Return(validators, nil).Times(4)
 	polybftBackendMock.On("SetBlockTime", mock.Anything).Once()
 
 	tmpDir := t.TempDir()
-	config := &runtimeConfig{
-		polybftBackend:  polybftBackendMock,
-		State:           newTestState(t),
-		genesisParams:   &chain.Params{Engine: map[string]interface{}{ConsensusName: polyBftConfig}},
-		GenesisConfig:   polyBftConfig,
-		DataDir:         tmpDir,
-		Key:             createTestKey(t),
-		blockchain:      blockchainMock,
-		bridgeTopic:     &mockTopic{},
-		consensusConfig: &consensus.Config{},
-		eventTracker:    &consensus.EventTracker{},
-		Forks:           chain.AllForksEnabled,
+	st := state.NewTestState(t)
+
+	config := &config.Runtime{
+		ChainParams:   &chain.Params{Engine: map[string]interface{}{config.ConsensusName: polyBftConfig}},
+		GenesisConfig: polyBftConfig,
+		StateDataDir:  tmpDir,
+		Key:           polytesting.CreateTestKey(t),
+		EventTracker:  &consensus.EventTracker{},
+		Forks:         chain.AllForksEnabled,
 	}
 
-	require.NoError(t, config.State.StakeStore.insertFullValidatorSet(validatorSetState{
-		BlockNumber: 1,
-	}, nil))
-
-	runtime, err := newConsensusRuntime(hclog.NewNullLogger(), config)
+	runtime, err := newConsensusRuntime(hclog.NewNullLogger(), config, st, polybftBackendMock, blockchainMock, nil, &mockTopic{})
 	require.NoError(t, err)
 
 	assert.False(t, runtime.IsActiveValidator())
-	assert.Equal(t, runtime.config.DataDir, tmpDir)
+	assert.Equal(t, runtime.config.StateDataDir, tmpDir)
 	assert.Equal(t, uint64(10), runtime.config.GenesisConfig.SprintSize)
 	assert.Equal(t, uint64(10), runtime.config.GenesisConfig.EpochSize)
 	assert.Equal(t, "0x0000000000000000000000000000000000000101", contracts.EpochManagerContract.String())
-	assert.Equal(t, "0x1300000000000000000000000000000000000000", runtime.config.GenesisConfig.Bridge.StateSenderAddr.String())
-	assert.Equal(t, "0x1000000000000000000000000000000000000000", runtime.config.GenesisConfig.Bridge.CheckpointManagerAddr.String())
-	assert.True(t, runtime.IsBridgeEnabled())
-	systemStateMock.AssertExpectations(t)
 	blockchainMock.AssertExpectations(t)
 	polybftBackendMock.AssertExpectations(t)
 }
@@ -526,19 +458,22 @@ func TestConsensusRuntime_restartEpoch_SameEpochNumberAsTheLastOne(t *testing.T)
 	newCurrentHeader := &types.Header{Number: originalBlockNumber + 1}
 	validatorSet := validator.NewTestValidators(t, 3).GetPublicIdentities()
 
-	systemStateMock := new(systemStateMock)
+	systemStateMock := new(systemstate.SystemStateMock)
 	systemStateMock.On("GetEpoch").Return(uint64(1), nil).Once()
 
-	blockchainMock := new(blockchainMock)
-	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(stateProviderMock)).Once()
+	blockchainMock := new(polychain.BlockchainMock)
+	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(systemstate.StateProviderMock)).Once()
 	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything).Return(systemStateMock).Once()
 
-	snapshot := NewProposerSnapshot(1, nil)
-	config := &runtimeConfig{
-		blockchain: blockchainMock,
-	}
+	snapshot := proposer.NewProposerSnapshot(1, nil)
+	config := &config.Runtime{}
+
+	proposerCalculator, err := proposer.NewProposerCalculatorFromSnapshot(snapshot, config, state.NewTestState(t),
+		polytypes.NewPolybftMock(t), blockchainMock, hclog.NewNullLogger())
+	require.NoError(t, err)
+
 	runtime := &consensusRuntime{
-		proposerCalculator: NewProposerCalculatorFromSnapshot(snapshot, config, hclog.NewNullLogger()),
+		proposerCalculator: proposerCalculator,
 		config:             config,
 		epoch: &epochMetadata{
 			Number:            1,
@@ -548,6 +483,7 @@ func TestConsensusRuntime_restartEpoch_SameEpochNumberAsTheLastOne(t *testing.T)
 		lastBuiltBlock: &types.Header{
 			Number: originalBlockNumber,
 		},
+		blockchain: blockchainMock,
 	}
 	runtime.setIsActiveValidator(true)
 
@@ -563,60 +499,6 @@ func TestConsensusRuntime_restartEpoch_SameEpochNumberAsTheLastOne(t *testing.T)
 	blockchainMock.AssertExpectations(t)
 }
 
-func TestConsensusRuntime_calculateCommitEpochInput_SecondEpoch(t *testing.T) {
-	t.Parallel()
-
-	const (
-		currentEpoch           = 3
-		epochSize              = 10
-		currentEpochStartBlock = 21
-		currentEpochEndBlock   = 30
-		sprintSize             = 5
-	)
-
-	validators := validator.NewTestValidatorsWithAliases(t, []string{"A", "B", "C", "D", "E"})
-	polybftConfig := &PolyBFTConfig{
-		EpochSize:  epochSize,
-		SprintSize: sprintSize,
-	}
-
-	lastBuiltBlock, headerMap := createTestBlocks(t, 20, epochSize, validators.GetPublicIdentities())
-
-	blockchainMock := new(blockchainMock)
-	blockchainMock.On("GetHeaderByNumber", mock.Anything).Return(headerMap.getHeader)
-
-	polybftBackendMock := new(polybftBackendMock)
-	polybftBackendMock.On("GetValidators", mock.Anything, mock.Anything).Return(validators.GetPublicIdentities()).Times(10)
-
-	config := &runtimeConfig{
-		GenesisConfig:  polybftConfig,
-		blockchain:     blockchainMock,
-		polybftBackend: polybftBackendMock,
-		Key:            validators.GetValidator("A").Key(),
-		Forks:          chain.AllForksEnabled,
-	}
-
-	consensusRuntime := &consensusRuntime{
-		config: config,
-		epoch: &epochMetadata{
-			Number:            currentEpoch,
-			Validators:        validators.GetPublicIdentities(),
-			FirstBlockInEpoch: currentEpochStartBlock,
-		},
-		lastBuiltBlock: lastBuiltBlock,
-	}
-
-	distributeRewardsInput, err := consensusRuntime.calculateDistributeRewardsInput(
-		true,
-		lastBuiltBlock.Number+1,
-		lastBuiltBlock, consensusRuntime.epoch.Number)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(currentEpoch-1), distributeRewardsInput.EpochID.Uint64())
-
-	blockchainMock.AssertExpectations(t)
-	polybftBackendMock.AssertExpectations(t)
-}
-
 func TestConsensusRuntime_IsValidValidator_BasicCases(t *testing.T) {
 	t.Parallel()
 
@@ -630,7 +512,11 @@ func TestConsensusRuntime_IsValidValidator_BasicCases(t *testing.T) {
 		runtime := &consensusRuntime{
 			epoch:  epoch,
 			logger: hclog.NewNullLogger(),
-			fsm:    &fsm{validators: validator.NewValidatorSet(epoch.Validators, hclog.NewNullLogger())},
+			fsm: &fsm{
+				blockInfo: oracle.NewBlockInfo{
+					CurrentEpochValidatorSet: validator.NewValidatorSet(epoch.Validators, hclog.NewNullLogger()),
+				},
+			},
 		}
 
 		return runtime, validatorAccounts
@@ -670,7 +556,7 @@ func TestConsensusRuntime_IsValidValidator_BasicCases(t *testing.T) {
 			runtime, validatorAccounts := setupFn(t)
 			signer := validatorAccounts.GetValidator(c.signerAlias)
 			sender := validatorAccounts.GetValidator(c.senderAlias)
-			msg, err := signer.Key().SignIBFTMessage(&proto.IbftMessage{From: sender.Address().Bytes()})
+			msg, err := signer.Key().SignIBFTMessage(&ibftproto.IbftMessage{From: sender.Address().Bytes()})
 
 			require.NoError(t, err)
 			require.Equal(t, c.isValidSender, runtime.IsValidValidator(msg))
@@ -688,12 +574,16 @@ func TestConsensusRuntime_IsValidValidator_TamperSignature(t *testing.T) {
 	runtime := &consensusRuntime{
 		epoch:  epoch,
 		logger: hclog.NewNullLogger(),
-		fsm:    &fsm{validators: validator.NewValidatorSet(epoch.Validators, hclog.NewNullLogger())},
+		fsm: &fsm{
+			blockInfo: oracle.NewBlockInfo{
+				CurrentEpochValidatorSet: validator.NewValidatorSet(epoch.Validators, hclog.NewNullLogger()),
+			},
+		},
 	}
 
 	// provide invalid signature
 	sender := validatorAccounts.GetValidator("A")
-	msg := &proto.IbftMessage{
+	msg := &ibftproto.IbftMessage{
 		From:      sender.Address().Bytes(),
 		Signature: []byte{1, 2, 3, 4, 5},
 	}
@@ -710,19 +600,23 @@ func TestConsensusRuntime_TamperMessageContent(t *testing.T) {
 	runtime := &consensusRuntime{
 		epoch:  epoch,
 		logger: hclog.NewNullLogger(),
-		fsm:    &fsm{validators: validator.NewValidatorSet(epoch.Validators, hclog.NewNullLogger())},
+		fsm: &fsm{
+			blockInfo: oracle.NewBlockInfo{
+				CurrentEpochValidatorSet: validator.NewValidatorSet(epoch.Validators, hclog.NewNullLogger()),
+			},
+		},
 	}
 	sender := validatorAccounts.GetValidator("A")
 	proposalHash := []byte{2, 4, 6, 8, 10}
-	proposalSignature, err := sender.Key().SignWithDomain(proposalHash, signer.DomainCheckpointManager)
+	proposalSignature, err := sender.Key().SignWithDomain(proposalHash, signer.DomainBridge)
 	require.NoError(t, err)
 
-	msg := &proto.IbftMessage{
-		View: &proto.View{},
+	msg := &ibftproto.IbftMessage{
+		View: &ibftproto.View{},
 		From: sender.Address().Bytes(),
-		Type: proto.MessageType_COMMIT,
-		Payload: &proto.IbftMessage_CommitData{
-			CommitData: &proto.CommitMessage{
+		Type: ibftproto.MessageType_COMMIT,
+		Payload: &ibftproto.IbftMessage_CommitData{
+			CommitData: &ibftproto.CommitMessage{
 				ProposalHash:  proposalHash,
 				CommittedSeal: proposalSignature,
 			},
@@ -735,8 +629,8 @@ func TestConsensusRuntime_TamperMessageContent(t *testing.T) {
 	assert.True(t, runtime.IsValidValidator(msg))
 
 	// modify message without signing it again
-	msg.Payload = &proto.IbftMessage_CommitData{
-		CommitData: &proto.CommitMessage{
+	msg.Payload = &ibftproto.IbftMessage_CommitData{
+		CommitData: &ibftproto.CommitMessage{
 			ProposalHash:  []byte{1, 3, 5, 7, 9}, // modification
 			CommittedSeal: proposalSignature,
 		},
@@ -748,8 +642,8 @@ func TestConsensusRuntime_TamperMessageContent(t *testing.T) {
 func TestConsensusRuntime_IsValidProposalHash(t *testing.T) {
 	t.Parallel()
 
-	extra := &Extra{
-		Checkpoint: &CheckpointData{
+	extra := &polytypes.Extra{
+		BlockMetaData: &polytypes.BlockMetaData{
 			EpochNumber: 1,
 			BlockRound:  1,
 		},
@@ -762,22 +656,23 @@ func TestConsensusRuntime_IsValidProposalHash(t *testing.T) {
 	}
 	block.Header.ComputeHash()
 
-	proposalHash, err := extra.Checkpoint.Hash(0, block.Number(), block.Hash())
+	proposalHash, err := extra.BlockMetaData.Hash(block.Hash())
 	require.NoError(t, err)
 
 	runtime := &consensusRuntime{
-		logger: hclog.NewNullLogger(),
-		config: &runtimeConfig{blockchain: new(blockchainMock)},
+		logger:     hclog.NewNullLogger(),
+		config:     &config.Runtime{},
+		blockchain: new(polychain.BlockchainMock),
 	}
 
-	require.True(t, runtime.IsValidProposalHash(&proto.Proposal{RawProposal: block.MarshalRLP()}, proposalHash.Bytes()))
+	require.True(t, runtime.IsValidProposalHash(&ibftproto.Proposal{RawProposal: block.MarshalRLP()}, proposalHash.Bytes()))
 }
 
 func TestConsensusRuntime_IsValidProposalHash_InvalidProposalHash(t *testing.T) {
 	t.Parallel()
 
-	extra := &Extra{
-		Checkpoint: &CheckpointData{
+	extra := &polytypes.Extra{
+		BlockMetaData: &polytypes.BlockMetaData{
 			EpochNumber: 1,
 			BlockRound:  1,
 		},
@@ -790,26 +685,27 @@ func TestConsensusRuntime_IsValidProposalHash_InvalidProposalHash(t *testing.T) 
 		},
 	}
 
-	proposalHash, err := extra.Checkpoint.Hash(0, block.Number(), block.Hash())
+	proposalHash, err := extra.BlockMetaData.Hash(block.Hash())
 	require.NoError(t, err)
 
-	extra.Checkpoint.BlockRound = 2 // change it so it is not the same as in proposal hash
+	extra.BlockMetaData.BlockRound = 2 // change it so it is not the same as in proposal hash
 	block.Header.ExtraData = extra.MarshalRLPTo(nil)
 	block.Header.ComputeHash()
 
 	runtime := &consensusRuntime{
-		logger: hclog.NewNullLogger(),
-		config: &runtimeConfig{blockchain: new(blockchainMock)},
+		logger:     hclog.NewNullLogger(),
+		config:     &config.Runtime{},
+		blockchain: new(polychain.BlockchainMock),
 	}
 
-	require.False(t, runtime.IsValidProposalHash(&proto.Proposal{RawProposal: block.MarshalRLP()}, proposalHash.Bytes()))
+	require.False(t, runtime.IsValidProposalHash(&ibftproto.Proposal{RawProposal: block.MarshalRLP()}, proposalHash.Bytes()))
 }
 
 func TestConsensusRuntime_IsValidProposalHash_InvalidExtra(t *testing.T) {
 	t.Parallel()
 
-	extra := &Extra{
-		Checkpoint: &CheckpointData{
+	extra := &polytypes.Extra{
+		BlockMetaData: &polytypes.BlockMetaData{
 			EpochNumber: 1,
 			BlockRound:  1,
 		},
@@ -823,37 +719,43 @@ func TestConsensusRuntime_IsValidProposalHash_InvalidExtra(t *testing.T) {
 	}
 	block.Header.ComputeHash()
 
-	proposalHash, err := extra.Checkpoint.Hash(0, block.Number(), block.Hash())
+	proposalHash, err := extra.BlockMetaData.Hash(block.Hash())
 	require.NoError(t, err)
 
 	runtime := &consensusRuntime{
-		logger: hclog.NewNullLogger(),
-		config: &runtimeConfig{blockchain: new(blockchainMock)},
+		logger:     hclog.NewNullLogger(),
+		config:     &config.Runtime{},
+		blockchain: new(polychain.BlockchainMock),
 	}
 
-	require.False(t, runtime.IsValidProposalHash(&proto.Proposal{RawProposal: block.MarshalRLP()}, proposalHash.Bytes()))
+	require.False(t, runtime.IsValidProposalHash(&ibftproto.Proposal{RawProposal: block.MarshalRLP()}, proposalHash.Bytes()))
 }
 
 func TestConsensusRuntime_BuildProposal_InvalidParent(t *testing.T) {
-	config := &runtimeConfig{}
-	snapshot := NewProposerSnapshot(1, nil)
+	config := &config.Runtime{}
+	snapshot := proposer.NewProposerSnapshot(1, nil)
+
+	proposerCalculator, err := proposer.NewProposerCalculatorFromSnapshot(snapshot, config, state.NewTestState(t),
+		polytypes.NewPolybftMock(t), new(polychain.BlockchainMock), hclog.NewNullLogger())
+	require.NoError(t, err)
+
 	runtime := &consensusRuntime{
 		logger:             hclog.NewNullLogger(),
 		lastBuiltBlock:     &types.Header{Number: 2},
 		epoch:              &epochMetadata{Number: 1},
 		config:             config,
-		proposerCalculator: NewProposerCalculatorFromSnapshot(snapshot, config, hclog.NewNullLogger()),
+		proposerCalculator: proposerCalculator,
 	}
 
-	require.Nil(t, runtime.BuildProposal(&proto.View{Round: 5}))
+	require.Nil(t, runtime.BuildProposal(&ibftproto.View{Round: 5}))
 }
 
 func TestConsensusRuntime_ID(t *testing.T) {
 	t.Parallel()
 
-	key1, key2 := createTestKey(t), createTestKey(t)
+	key1, key2 := polytesting.CreateTestKey(t), polytesting.CreateTestKey(t)
 	runtime := &consensusRuntime{
-		config: &runtimeConfig{Key: key1},
+		config: &config.Runtime{Key: key1},
 	}
 
 	require.Equal(t, runtime.ID(), key1.Address().Bytes())
@@ -872,14 +774,16 @@ func TestConsensusRuntime_GetVotingPowers(t *testing.T) {
 	require.Error(t, err)
 
 	runtime.fsm = &fsm{
-		validators: validatorAccounts.ToValidatorSet(),
-		parent:     &types.Header{Number: height},
+		blockInfo: oracle.NewBlockInfo{
+			CurrentEpochValidatorSet: validatorAccounts.ToValidatorSet(),
+			ParentBlock:              &types.Header{Number: height},
+		},
 	}
 
 	_, err = runtime.GetVotingPowers(height)
 	require.Error(t, err)
 
-	runtime.fsm.parent.Number = height - 1
+	runtime.fsm.blockInfo.ParentBlock.Number = height - 1
 
 	val, err := runtime.GetVotingPowers(height)
 	require.NoError(t, err)
@@ -894,26 +798,26 @@ func TestConsensusRuntime_GetVotingPowers(t *testing.T) {
 func TestConsensusRuntime_BuildRoundChangeMessage(t *testing.T) {
 	t.Parallel()
 
-	key := createTestKey(t)
-	view, rawProposal, certificate := &proto.View{}, []byte{1}, &proto.PreparedCertificate{}
+	key := polytesting.CreateTestKey(t)
+	view, rawProposal, certificate := &ibftproto.View{}, []byte{1}, &ibftproto.PreparedCertificate{}
 
 	runtime := &consensusRuntime{
-		config: &runtimeConfig{
+		config: &config.Runtime{
 			Key: key,
 		},
 		logger: hclog.NewNullLogger(),
 	}
 
-	proposal := &proto.Proposal{
+	proposal := &ibftproto.Proposal{
 		RawProposal: rawProposal,
 		Round:       view.Round,
 	}
 
-	expected := proto.IbftMessage{
+	expected := ibftproto.IbftMessage{
 		View: view,
 		From: key.Address().Bytes(),
-		Type: proto.MessageType_ROUND_CHANGE,
-		Payload: &proto.IbftMessage_RoundChangeData{RoundChangeData: &proto.RoundChangeMessage{
+		Type: ibftproto.MessageType_ROUND_CHANGE,
+		Payload: &ibftproto.IbftMessage_RoundChangeData{RoundChangeData: &ibftproto.RoundChangeMessage{
 			LatestPreparedCertificate: certificate,
 			LastPreparedProposal:      proposal,
 		}},
@@ -928,24 +832,24 @@ func TestConsensusRuntime_BuildRoundChangeMessage(t *testing.T) {
 func TestConsensusRuntime_BuildCommitMessage(t *testing.T) {
 	t.Parallel()
 
-	key := createTestKey(t)
-	view, proposalHash := &proto.View{}, []byte{1, 2, 4}
+	key := polytesting.CreateTestKey(t)
+	view, proposalHash := &ibftproto.View{}, []byte{1, 2, 4}
 
 	runtime := &consensusRuntime{
-		config: &runtimeConfig{
+		config: &config.Runtime{
 			Key: key,
 		},
 	}
 
-	committedSeal, err := key.SignWithDomain(proposalHash, signer.DomainCheckpointManager)
+	committedSeal, err := key.SignWithDomain(proposalHash, signer.DomainBridge)
 	require.NoError(t, err)
 
-	expected := proto.IbftMessage{
+	expected := ibftproto.IbftMessage{
 		View: view,
 		From: key.Address().Bytes(),
-		Type: proto.MessageType_COMMIT,
-		Payload: &proto.IbftMessage_CommitData{
-			CommitData: &proto.CommitMessage{
+		Type: ibftproto.MessageType_COMMIT,
+		Payload: &ibftproto.IbftMessage_CommitData{
+			CommitData: &ibftproto.CommitMessage{
 				ProposalHash:  proposalHash,
 				CommittedSeal: committedSeal,
 			},
@@ -963,7 +867,8 @@ func TestConsensusRuntime_BuildPrePrepareMessage_EmptyProposal(t *testing.T) {
 
 	runtime := &consensusRuntime{logger: hclog.NewNullLogger()}
 
-	assert.Nil(t, runtime.BuildPrePrepareMessage(nil, &proto.RoundChangeCertificate{}, &proto.View{Height: 1, Round: 0}))
+	assert.Nil(t, runtime.BuildPrePrepareMessage(nil, &ibftproto.RoundChangeCertificate{},
+		&ibftproto.View{Height: 1, Round: 0}))
 }
 
 func TestConsensusRuntime_IsValidProposalHash_EmptyProposal(t *testing.T) {
@@ -971,28 +876,28 @@ func TestConsensusRuntime_IsValidProposalHash_EmptyProposal(t *testing.T) {
 
 	runtime := &consensusRuntime{logger: hclog.NewNullLogger()}
 
-	assert.False(t, runtime.IsValidProposalHash(&proto.Proposal{}, []byte("hash")))
+	assert.False(t, runtime.IsValidProposalHash(&ibftproto.Proposal{}, []byte("hash")))
 }
 
 func TestConsensusRuntime_BuildPrepareMessage(t *testing.T) {
 	t.Parallel()
 
-	key := createTestKey(t)
-	view, proposalHash := &proto.View{}, []byte{1, 2, 4}
+	key := polytesting.CreateTestKey(t)
+	view, proposalHash := &ibftproto.View{}, []byte{1, 2, 4}
 
 	runtime := &consensusRuntime{
-		config: &runtimeConfig{
+		config: &config.Runtime{
 			Key: key,
 		},
 		logger: hclog.NewNullLogger(),
 	}
 
-	expected := proto.IbftMessage{
+	expected := ibftproto.IbftMessage{
 		View: view,
 		From: key.Address().Bytes(),
-		Type: proto.MessageType_PREPARE,
-		Payload: &proto.IbftMessage_PrepareData{
-			PrepareData: &proto.PrepareMessage{
+		Type: ibftproto.MessageType_PREPARE,
+		Payload: &ibftproto.IbftMessage_PrepareData{
+			PrepareData: &ibftproto.PrepareMessage{
 				ProposalHash: proposalHash,
 			},
 		},
@@ -1022,17 +927,16 @@ func TestConsensusRuntime_RoundStarts(t *testing.T) {
 	for _, c := range cases {
 		c := c
 		t.Run(c.funcName, func(t *testing.T) {
-			txPool := new(txPoolMock)
+			txPool := new(polychain.TxPoolMock)
 			txPool.On(c.funcName).Once()
 
 			runtime := &consensusRuntime{
-				config: &runtimeConfig{
-					txPool: txPool,
-				},
+				config: &config.Runtime{},
 				logger: hclog.NewNullLogger(),
+				txPool: txPool,
 			}
 
-			view := &proto.View{Round: c.round}
+			view := &ibftproto.View{Round: c.round}
 			require.NoError(t, runtime.RoundStarts(view))
 			txPool.AssertExpectations(t)
 		})
@@ -1040,120 +944,32 @@ func TestConsensusRuntime_RoundStarts(t *testing.T) {
 }
 
 func TestConsensusRuntime_SequenceCancelled(t *testing.T) {
-	txPool := new(txPoolMock)
+	txPool := new(polychain.TxPoolMock)
 	txPool.On("ReinsertProposed").Once()
 
 	runtime := &consensusRuntime{
-		config: &runtimeConfig{
-			txPool: txPool,
-		},
+		config: &config.Runtime{},
 		logger: hclog.NewNullLogger(),
+		txPool: txPool,
 	}
 
-	view := &proto.View{}
+	view := &ibftproto.View{}
 	require.NoError(t, runtime.SequenceCancelled(view))
 	txPool.AssertExpectations(t)
 }
 
-func createTestBlocks(t *testing.T, numberOfBlocks, defaultEpochSize uint64,
-	validatorSet validator.AccountSet) (*types.Header, *testHeadersMap) {
-	t.Helper()
+var _ bridge.Topic = &mockTopic{}
 
-	headerMap := &testHeadersMap{}
-	bitmaps := createTestBitmaps(t, validatorSet, numberOfBlocks)
-
-	extra := &Extra{
-		Checkpoint: &CheckpointData{EpochNumber: 0},
-	}
-
-	genesisBlock := &types.Header{
-		Number:    0,
-		ExtraData: extra.MarshalRLPTo(nil),
-	}
-	parentHash := types.BytesToHash(big.NewInt(0).Bytes())
-
-	headerMap.addHeader(genesisBlock)
-
-	var hash types.Hash
-
-	var blockHeader *types.Header
-
-	for i := uint64(1); i <= numberOfBlocks; i++ {
-		big := big.NewInt(int64(i))
-		hash = types.BytesToHash(big.Bytes())
-
-		header := &types.Header{
-			Number:     i,
-			ParentHash: parentHash,
-			ExtraData:  createTestExtraForAccounts(t, getEpochNumber(t, i, defaultEpochSize), validatorSet, bitmaps[i]),
-			GasLimit:   types.StateTransactionGasLimit,
-		}
-
-		headerMap.addHeader(header)
-
-		parentHash = hash
-		blockHeader = header
-	}
-
-	return blockHeader, headerMap
+type mockTopic struct {
+	published proto.Message
 }
 
-func createTestBitmaps(t *testing.T, validators validator.AccountSet, numberOfBlocks uint64) map[uint64]bitmap.Bitmap {
-	t.Helper()
+func (m *mockTopic) Publish(obj proto.Message) error {
+	m.published = obj
 
-	bitmaps := make(map[uint64]bitmap.Bitmap, numberOfBlocks)
-
-	rand.Seed(time.Now().UTC().Unix())
-
-	for i := numberOfBlocks; i > 1; i-- {
-		bitmap := bitmap.Bitmap{}
-		j := 0
-
-		for j != 3 {
-			validator := validators[rand.Intn(validators.Len())]
-			index := uint64(validators.Index(validator.Address))
-
-			if !bitmap.IsSet(index) {
-				bitmap.Set(index)
-
-				j++
-			}
-		}
-
-		bitmaps[i] = bitmap
-	}
-
-	return bitmaps
+	return nil
 }
 
-func createTestExtraForAccounts(t *testing.T, epoch uint64, validators validator.AccountSet, b bitmap.Bitmap) []byte {
-	t.Helper()
-
-	dummySignature := [64]byte{}
-	extraData := Extra{
-		Validators: &validator.ValidatorSetDelta{
-			Added:   validators,
-			Removed: bitmap.Bitmap{},
-		},
-		Parent:     &Signature{Bitmap: b, AggregatedSignature: dummySignature[:]},
-		Committed:  &Signature{Bitmap: b, AggregatedSignature: dummySignature[:]},
-		Checkpoint: &CheckpointData{EpochNumber: epoch},
-	}
-
-	return extraData.MarshalRLPTo(nil)
-}
-
-func encodeExitEvents(t *testing.T, exitEvents []*ExitEvent) [][]byte {
-	t.Helper()
-
-	encodedEvents := make([][]byte, len(exitEvents))
-
-	for i, e := range exitEvents {
-		encodedEvent, err := e.L2StateSyncedEvent.Encode()
-		require.NoError(t, err)
-
-		encodedEvents[i] = encodedEvent
-	}
-
-	return encodedEvents
+func (m *mockTopic) Subscribe(handler func(obj interface{}, from peer.ID)) error {
+	return nil
 }

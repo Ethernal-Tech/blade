@@ -17,21 +17,19 @@ var (
 )
 
 const (
-	DomainValidatorSetString      = "DOMAIN_CHILD_VALIDATOR_SET"
-	DomainCheckpointManagerString = "DOMAIN_CHECKPOINT_MANAGER"
-	DomainCommonSigningString     = "DOMAIN_COMMON_SIGNING"
-	DomainStateReceiverString     = "DOMAIN_STATE_RECEIVER"
+	DomainValidatorSetString  = "DOMAIN_CHILD_VALIDATOR_SET"
+	DomainBridgeString        = "DOMAIN_BRIDGE"
+	DomainCommonSigningString = "DOMAIN_COMMON_SIGNING"
 )
 
 var (
-	// domain used to map hash to G1 used by (child) validator set
+	// domain used to map hash to G1 used by the StakeManager contract
 	DomainValidatorSet = crypto.Keccak256([]byte(DomainValidatorSetString))
 
-	// domain used to map hash to G1 used by child checkpoint manager
-	DomainCheckpointManager = crypto.Keccak256([]byte(DomainCheckpointManagerString))
+	// domain used to map hash to G1 used by bridge contract
+	DomainBridge = crypto.Keccak256([]byte(DomainBridgeString))
 
 	DomainCommonSigning = crypto.Keccak256([]byte(DomainCommonSigningString))
-	DomainStateReceiver = crypto.Keccak256([]byte(DomainStateReceiverString))
 )
 
 // MakeKOSKSignature creates KOSK signature which prevents rogue attack
