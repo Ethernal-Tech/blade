@@ -24,7 +24,10 @@ type debugEndpointMockStore struct {
 	readTxLookupFn        func(types.Hash) (uint64, bool)
 	getPendingTxFn        func(types.Hash) (*types.Transaction, bool)
 	hasFn                 func(types.Hash) bool
+	statFn                func(property string) (string, error)
+	compactFn             func(start []byte, limit []byte) error
 	getFn                 func(string) ([]byte, error)
+	getCodeByCodeHashFn   func(codeHash types.Hash) ([]byte, error)
 	getIteratorDumpTreeFn func(*types.Block, *state.DumpInfo) (*state.IteratorDump, error)
 	dumpTreeFn            func(*types.Block, *state.DumpInfo) (*state.Dump, error)
 	getBlockByHashFn      func(types.Hash, bool) (*types.Block, bool)
@@ -61,8 +64,20 @@ func (s *debugEndpointMockStore) Has(hash types.Hash) bool {
 	return s.hasFn(hash)
 }
 
+func (s *debugEndpointMockStore) Stat(property string) (string, error) {
+	return s.statFn(property)
+}
+
+func (s *debugEndpointMockStore) Compact(start []byte, limit []byte) error {
+	return s.compactFn(start, limit)
+}
+
 func (s *debugEndpointMockStore) Get(key string) ([]byte, error) {
 	return s.getFn(key)
+}
+
+func (s *debugEndpointMockStore) GetCodeByCodeHash(codeHash types.Hash) ([]byte, error) {
+	return s.getCodeByCodeHashFn(codeHash)
 }
 
 func (s *debugEndpointMockStore) GetIteratorDumpTree(block *types.Block, opts *state.DumpInfo) (*state.IteratorDump, error) {

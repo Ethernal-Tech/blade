@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/helper/hex"
@@ -59,9 +61,18 @@ type debugBlockchainStore interface {
 	// Has returns true if the DB does contains the given key.
 	Has(hashRoot types.Hash) bool
 
+	// Stat returns a particular internal stat of the database.
+	Stat(property string) (string, error)
+
+	// Compact flattens the underlying data store for the given key range.
+	Compact(start []byte, limit []byte) error
+
 	// Get gets the value for the given key. It returns ErrNotFound if the
 	// DB does not contains the key.
 	Get(key string) ([]byte, error)
+
+	// GetCode retrieves the bytecode associated with a specific code hash.
+	GetCodeByCodeHash(codeHash types.Hash) ([]byte, error)
 
 	// GetIteratorDumpTree returns a set of accounts based on the given criteria and depends on the starting element.
 	GetIteratorDumpTree(block *types.Block, opts *state.DumpInfo) (*state.IteratorDump, error)
@@ -109,6 +120,14 @@ type Debug struct {
 	throttling   *Throttling
 	handler      *DebugHandler
 	ReadFileFunc func(filename string) ([]byte, error)
+}
+
+// BlockTraceResult represents the results of tracing a single block
+type BlockTraceResult struct {
+	Block  uint64      // Block number corresponding to this trace
+	Hash   types.Hash  // Block hash corresponding to this trace
+	Traces interface{} // Trace results produced by the task
+	Error  error
 }
 
 func NewDebug(store debugStore, requestsPerSecond uint64) *Debug {
@@ -667,6 +686,71 @@ func (d *Debug) GetRawReceipts(filter BlockNumberOrHash) (interface{}, error) {
 	)
 }
 
+func (d *Debug) TraceChain(start, end BlockNumber, config *TraceConfig) (interface{}, error) {
+	return d.throttling.AttemptRequest(
+		context.Background(),
+		func() (interface{}, error) {
+			startNum, err := GetNumericBlockNumber(start, d.store)
+			if err != nil {
+				return nil, err
+			}
+
+			endNum, err := GetNumericBlockNumber(end, d.store)
+			if err != nil {
+				return nil, err
+			}
+
+			if startNum >= endNum {
+				return nil, fmt.Errorf("end block (#%d) needs to come after start block (#%d)", endNum, startNum)
+			}
+
+			blocks := int(endNum-startNum) + 1
+			results := make([]BlockTraceResult, blocks)
+			resultCh := make(chan BlockTraceResult, blocks)
+
+			var wg sync.WaitGroup
+
+			for i := 0; i < blocks; i++ {
+				wg.Add(1)
+
+				go func(i int) {
+					defer wg.Done()
+
+					blockNum := startNum + uint64(i)
+					traceResult := BlockTraceResult{Block: blockNum}
+
+					block, ok := d.store.GetBlockByNumber(blockNum, true)
+					if !ok {
+						traceResult.Error = fmt.Errorf("block %d not found", blockNum)
+					} else {
+						traceResult.Hash = block.Hash()
+
+						res, err := d.traceBlock(block, config)
+						if err != nil {
+							traceResult.Error = fmt.Errorf("failed to trace block %d: %w", blockNum, err)
+						} else {
+							traceResult.Traces = res
+						}
+					}
+
+					resultCh <- traceResult
+				}(i)
+			}
+
+			go func() {
+				wg.Wait()
+				close(resultCh)
+			}()
+
+			for traceResult := range resultCh {
+				results[traceResult.Block-startNum] = traceResult
+			}
+
+			return results, nil
+		},
+	)
+}
+
 // AccountRange enumerates all accounts in the given block and start point in paging request
 func (d *Debug) AccountRange(filter BlockNumberOrHash, start []byte, maxResults int, noCode,
 	noStorage, incompletes bool) (interface{}, error) {
@@ -839,6 +923,50 @@ func (d *Debug) GetAccessibleState(from, to BlockNumber) (interface{}, error) {
 
 			// No state found
 			return 0, fmt.Errorf("no accessible state found between the block numbers %d and %d", start, end)
+		},
+	)
+}
+
+// ChaindbProperty returns leveldb properties of the key-value database.
+func (d *Debug) ChaindbProperty(property string) (interface{}, error) {
+	return d.throttling.AttemptRequest(
+		context.Background(),
+		func() (interface{}, error) {
+			if property == "" {
+				property = "leveldb.stats"
+			} else if !strings.HasPrefix(property, "leveldb.") {
+				property = "leveldb." + property
+			}
+
+			return d.store.Stat(property)
+		},
+	)
+}
+
+// ChaindbCompact flattens the entire key-value database into a single level,
+// removing all unused slots and merging all keys.
+func (d *Debug) ChaindbCompact() (interface{}, error) {
+	return d.throttling.AttemptRequest(
+		context.Background(),
+		func() (interface{}, error) {
+			for b := byte(0); b < 255; b++ {
+				if err := d.store.Compact([]byte{b}, []byte{b + 1}); err != nil {
+					return false, err
+				}
+			}
+
+			return true, nil
+		},
+	)
+}
+
+// ChaindbCompact flattens the entire key-value database into a single level,
+// removing all unused slots and merging all keys.
+func (d *Debug) Preimage(codeHash types.Hash) (interface{}, error) {
+	return d.throttling.AttemptRequest(
+		context.Background(),
+		func() (interface{}, error) {
+			return d.store.GetCodeByCodeHash(codeHash)
 		},
 	)
 }

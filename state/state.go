@@ -55,6 +55,18 @@ type State interface {
 	// Returns:
 	// - bool: A boolean indicating whether the item exists.
 	Has(hash types.Hash) bool
+
+	// Stat returns a particular internal stat of the database.
+	Stat(property string) (string, error)
+
+	// Compact flattens the underlying data store for the given key range. In essence,
+	// deleted and overwritten versions are discarded, and the data is rearranged to
+	// reduce the cost of operations needed to access them.
+	//
+	// A nil start is treated as a key before all keys in the data store; a nil limit
+	// is treated as a key after all keys in the data store. If both is nil then it
+	// will compact entire data store.
+	Compact(start []byte, limit []byte) error
 }
 
 type Snapshot interface {
