@@ -159,9 +159,9 @@ func NewServer(logger hclog.Logger, config *Config) (*Server, error) {
 	// start gossip protocol
 	ps, err := pubsub.NewGossipSub(
 		context.Background(),
-		host, pubsub.WithPeerOutboundQueueSize(peerOutboundBufferSize),
-		pubsub.WithMaxMessageSize(config.GossipMessageSize),
-		pubsub.WithValidateQueueSize(validateBufferSize),
+		host, pubsub.WithPeerOutboundQueueSize(peerOutboundBufferSize*8),
+		pubsub.WithMaxMessageSize(config.GossipMessageSize*8),
+		pubsub.WithValidateQueueSize(validateBufferSize*8),
 	)
 	if err != nil {
 		return nil, err
