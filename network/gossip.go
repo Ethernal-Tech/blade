@@ -69,7 +69,7 @@ func (t *Topic) Publish(obj proto.Message) error {
 }
 
 func (t *Topic) Subscribe(handler func(obj interface{}, from peer.ID)) error {
-	sub, err := t.topic.Subscribe(pubsub.WithBufferSize(subscribeOutputBufferSize))
+	sub, err := t.topic.Subscribe(pubsub.WithBufferSize(subscribeOutputBufferSize * 256))
 	if err != nil {
 		return err
 	}
