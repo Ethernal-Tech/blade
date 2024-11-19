@@ -36,6 +36,8 @@ jobs:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
       VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
+      PERSONAL_ACCESS_USER: ${{ secrets.PERSONAL_ACCESS_USER }}
+      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
   availability_tests:
     name: Availability Tests
     uses: ./.github/workflows/availability-tests.yml
