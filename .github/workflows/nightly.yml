@@ -24,8 +24,8 @@ jobs:
     uses: ./.github/workflows/deploy-network.yml
     with:
       environment: nightly
-      block_gas_limit: "200000000"
-      block_time: "2"
+      block_gas_limit: "700000000"
+      block_time: "1"
       max_slots: "20000000"
       max_enqueued: "20000000"
       is_london_fork_active: true
