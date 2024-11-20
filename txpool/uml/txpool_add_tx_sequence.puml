@@ -1,0 +1,13 @@
+@startuml
+hide footbox
+skinparam style strictuml
+
+JSONRPC -> TxPool: AddTx
+TxPool -> TxPool: ValidateTx
+TxPool -> Transaction: ComputeHash
+TxPool -> Account: getOrCreateAccount
+TxPool <<-- Account: account
+TxPool -> TxPool: add to lookupMap
+TxPool -> Account: enqueue
+TxPool -> Network: Publish
+@enduml
