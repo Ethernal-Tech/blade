@@ -283,8 +283,8 @@ func runExternalChain(ctx context.Context, outputter command.OutputFormatter, cl
 	return nil
 }
 
-// createBuildContext creates a tar archive with the Dockerfile content, which is used as the build context for the image,
-// after that it removes temporary directory
+// createBuildContext creates a tar archive with the Dockerfile content, which is used as the build context,
+// for the image, after that it removes temporary directory
 func createBuildContext(dockerfileContent string) (io.Reader, error) {
 	tmpDir := "./temp-build-context"
 	if err := os.MkdirAll(tmpDir, 0755); err != nil {
