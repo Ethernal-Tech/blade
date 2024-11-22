@@ -55,6 +55,18 @@ type State interface {
 	// Returns:
 	// - bool: A boolean indicating whether the item exists.
 	Has(hash types.Hash) bool
+
+	// Stat returns a particular internal stat of the database.
+	Stat(property string) (string, error)
+
+	// Compact flattens the underlying data store for the given key range. In essence,
+	// deleted and overwritten versions are discarded, and the data is rearranged to
+	// reduce the cost of operations needed to access them.
+	//
+	// A nil start is treated as a key before all keys in the data store; a nil limit
+	// is treated as a key after all keys in the data store. If both is nil then it
+	// will compact entire data store.
+	Compact(start []byte, limit []byte) error
 }
 
 type Snapshot interface {
@@ -95,6 +107,19 @@ type DumpInfo struct {
 type IteratorDump struct {
 	Dump
 	Next []byte `json:"next,omitempty"` // nil if no more accounts
+}
+
+// StorageRangeResult is the result of a debug_storageRangeAt API call.
+type StorageRangeResult struct {
+	Storage storageMap `json:"storage"`
+	NextKey []byte     `json:"nextKey"` // nil if Storage includes the last key in the trie.
+}
+
+type storageMap map[types.Hash]storageEntry
+
+type storageEntry struct {
+	Key   []byte     `json:"key"`
+	Value types.Hash `json:"value"`
 }
 
 // Account is the account reference in the ethereum state
@@ -232,9 +257,58 @@ type Object struct {
 	Storage []*StorageObject
 }
 
+func (o *Object) Equals(other *Object) bool {
+	// Compare Address, CodeHash, Root, Nonce, Deleted, and DirtyCode directly.
+	if o.Address != other.Address ||
+		o.CodeHash != other.CodeHash ||
+		o.Root != other.Root ||
+		o.Nonce != other.Nonce ||
+		o.Deleted != other.Deleted ||
+		o.DirtyCode != other.DirtyCode {
+		return false
+	}
+
+	// Compare Balance.
+	if o.Balance.Cmp(other.Balance) != 0 {
+		return false
+	}
+
+	// Compare Code slices.
+	if !bytes.Equal(o.Code, other.Code) {
+		return false
+	}
+
+	// Compare Storage slices by length first.
+	if len(o.Storage) != len(other.Storage) {
+		return false
+	}
+
+	for i, storageObj := range o.Storage {
+		if !(storageObj.Equals(other.Storage[i])) {
+			return false
+		}
+	}
+
+	return true
+}
+
 // StorageObject is an entry in the storage
 type StorageObject struct {
 	Deleted bool
 	Key     []byte
 	Val     []byte
+}
+
+func (s *StorageObject) Equals(other *StorageObject) bool {
+	// Compare Deleted field directly
+	if s.Deleted != other.Deleted {
+		return false
+	}
+
+	// Compare Key and Val byte slices using bytes.Equal
+	if !bytes.Equal(s.Key, other.Key) || !bytes.Equal(s.Val, other.Val) {
+		return false
+	}
+
+	return true
 }

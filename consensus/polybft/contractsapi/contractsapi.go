@@ -1924,9 +1924,11 @@ type SignedBridgeMessageBatch struct {
 	DestinationChainID *big.Int    `abi:"destinationChainId"`
 	Signature          [2]*big.Int `abi:"signature"`
 	Bitmap             []byte      `abi:"bitmap"`
+	Threshold          *big.Int    `abi:"threshold"`
+	IsRollback         bool        `abi:"isRollback"`
 }
 
-var SignedBridgeMessageBatchABIType = abi.MustNewType("tuple(bytes32 rootHash,uint256 startId,uint256 endId,uint256 sourceChainId,uint256 destinationChainId,uint256[2] signature,bytes bitmap)")
+var SignedBridgeMessageBatchABIType = abi.MustNewType("tuple(bytes32 rootHash,uint256 startId,uint256 endId,uint256 sourceChainId,uint256 destinationChainId,uint256[2] signature,bytes bitmap,uint256 threshold,bool isRollback)")
 
 func (s *SignedBridgeMessageBatch) EncodeAbi() ([]byte, error) {
 	return SignedBridgeMessageBatchABIType.Encode(s)
@@ -2080,9 +2082,8 @@ func (b *BridgeMessage) DecodeAbi(buf []byte) error {
 }
 
 type ReceiveBatchGatewayFn struct {
-	Batch     []*BridgeMessage `abi:"batch"`
-	Signature [2]*big.Int      `abi:"signature"`
-	Bitmap    []byte           `abi:"bitmap"`
+	BatchMessages     []*BridgeMessage          `abi:"batchMessages"`
+	SignedBridgeBatch *SignedBridgeMessageBatch `abi:"signedBridgeBatch"`
 }
 
 func (r *ReceiveBatchGatewayFn) Sig() []byte {

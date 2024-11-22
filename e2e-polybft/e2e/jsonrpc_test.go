@@ -95,6 +95,18 @@ func TestE2E_JsonRPC(t *testing.T) {
 		// since we asked for the full block, and epoch ending block has a transaction
 		require.Equal(t, 1, len(blockByHash.Transactions))
 
+		// get safe block (act as the latest, because of the instant finality)
+		safeBlock, err := ethClient.GetBlockByNumber(jsonrpc.SafeBlockNumber, false)
+		require.NoError(t, err)
+		require.NotNil(t, safeBlock)
+		require.GreaterOrEqual(t, safeBlock.Number(), epochSize)
+
+		// get finalized block (act as the latest, because of the instant finality)
+		finalizedBlock, err := ethClient.GetBlockByNumber(jsonrpc.FinalizedBlockNumber, false)
+		require.NoError(t, err)
+		require.NotNil(t, finalizedBlock)
+		require.GreaterOrEqual(t, finalizedBlock.Number(), epochSize)
+
 		// get latest block
 		latestBlock, err := ethClient.GetBlockByNumber(jsonrpc.LatestBlockNumber, false)
 		require.NoError(t, err)
@@ -509,6 +521,58 @@ func TestE2E_JsonRPC(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, sig, 65)
 		require.NotEqual(t, 0, sig[64])
+	})
+
+	t.Run("debug_getAccessibleState", func(t *testing.T) {
+		blockNumber, err := ethClient.BlockNumber()
+		require.NoError(t, err)
+
+		blockByNumber, err := ethClient.GetAccessibleState(jsonrpc.BlockNumber(blockNumber), jsonrpc.BlockNumber(epochSize))
+
+		require.NoError(t, err)
+		require.Equal(t, blockNumber, blockByNumber)
+	})
+
+	t.Run("debug_storageRangeAt", func(t *testing.T) {
+		key1, err := crypto.GenerateECDSAKey()
+		require.NoError(t, err)
+
+		txn := cluster.Transfer(t, preminedAcctOne, key1.Address(), ethgo.Ether(1))
+		require.True(t, txn.Succeed())
+
+		txn = cluster.Deploy(t, key1, contractsapi.TestSimple.Bytecode)
+		require.True(t, txn.Succeed())
+
+		target := types.Address(txn.Receipt().ContractAddress)
+
+		storageRangeAt, err := ethClient.StorageRangeAt(
+			types.Hash(txn.Receipt().BlockHash),
+			txn.Receipt().TransactionIndex,
+			target,
+			[]byte{},
+			10,
+		)
+		require.NoError(t, err)
+		require.Len(t, storageRangeAt.Storage, 0)
+
+		setValueFn := contractsapi.TestSimple.Abi.GetMethod("setValue")
+
+		newVal := big.NewInt(1)
+		input, err := setValueFn.Encode([]interface{}{newVal})
+		require.NoError(t, err)
+
+		txn = cluster.SendTxn(t, key1, types.NewTx(types.NewLegacyTx(types.WithInput(input), types.WithTo(&target))))
+		require.True(t, txn.Succeed())
+
+		storageRangeAt, err = ethClient.StorageRangeAt(
+			types.Hash(txn.Receipt().BlockHash),
+			txn.Receipt().TransactionIndex,
+			target,
+			[]byte{},
+			10,
+		)
+		require.NoError(t, err)
+		require.Len(t, storageRangeAt.Storage, 1)
 	})
 }
 

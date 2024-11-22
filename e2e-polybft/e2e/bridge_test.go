@@ -170,8 +170,6 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 
 		t.Log("Deposits were successfully processed")
 
-		require.NoError(t, cluster.WaitForBlock(uint64(epochSize), 2*time.Minute))
-
 		// WITHDRAW ERC20 TOKENS
 		// send withdraw transaction
 		for i, senderKey := range receiverKeys {
@@ -280,7 +278,7 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 
 		finalBlockNum := midBlockNumber + 5*sprintSize
 		// wait for a few more sprints
-		require.NoError(t, cluster.WaitForBlock(midBlockNumber+5*sprintSize, 3*time.Minute))
+		require.NoError(t, cluster.WaitForBlock(finalBlockNum, 2*time.Minute))
 
 		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 			for i := range receivers[depositsSubset:] {

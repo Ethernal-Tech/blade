@@ -24,18 +24,34 @@ jobs:
     uses: ./.github/workflows/deploy-network.yml
     with:
       environment: nightly
-      block_gas_limit: "200000000"
-      block_time: "2"
+      block_gas_limit: "700000000"
+      block_time: "1"
       max_slots: "20000000"
       max_enqueued: "20000000"
       is_london_fork_active: true
       is_bridge_active: false
-      gossip_msg_size: "33554432"
+      gossip_msg_size: "8388608"
       notification: false
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
       VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
+      PERSONAL_ACCESS_USER: ${{ secrets.PERSONAL_ACCESS_USER }}
+      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+  availability_tests:
+    name: Availability Tests
+    uses: ./.github/workflows/availability-tests.yml
+    needs: deploy_network
+    with:
+      environment: nightly
+      rpc_url: ${{ needs.deploy_network.outputs.rpc_url }}
+      fund_amount: "5"
+      london: true
+      notification: false
+    secrets:
+      PREMINED_PRIVATE_KEY: ${{ secrets.LOADTEST_PRIVATE_KEY }}
+      ACCOUNT_PRIVATE_KEY: ${{ secrets.ACCOUNT_PRIVATE_KEY }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   sanity_check_tests:
     name: Sanity Check Tests
     uses: ./.github/workflows/sanity-check-test.yml
@@ -49,7 +65,7 @@ jobs:
   load_test_eoa:
     name: Load Test EOA
     uses: ./.github/workflows/load-test.yml
-    needs: [deploy_network, sanity_check_tests]
+    needs: [deploy_network, availability_tests, sanity_check_tests]
     with:
       environment: nightly
       type: EOA
@@ -73,7 +89,7 @@ jobs:
   load_test_erc20:
     name: Load Test ERC20
     uses: ./.github/workflows/load-test.yml
-    needs: [deploy_network, sanity_check_tests, load_test_eoa]
+    needs: [deploy_network, availability_tests, sanity_check_tests, load_test_eoa]
     with:
       environment: nightly
       type: ERC20
@@ -97,7 +113,7 @@ jobs:
   load_test_erc721:
     name: Load Test ERC721
     uses: ./.github/workflows/load-test.yml
-    needs: [deploy_network, sanity_check_tests, load_test_eoa, load_test_erc20]
+    needs: [deploy_network, availability_tests, sanity_check_tests, load_test_eoa, load_test_erc20]
     with:
       environment: nightly
       type: ERC721
@@ -121,7 +137,7 @@ jobs:
   load_test_mixed:
     name: Load Test MIXED
     uses: ./.github/workflows/load-test.yml
-    needs: [deploy_network, sanity_check_tests, load_test_eoa, load_test_erc20, load_test_erc721]
+    needs: [deploy_network, availability_tests, sanity_check_tests, load_test_eoa, load_test_erc20, load_test_erc721]
     with:
       environment: nightly
       type: MIXED
@@ -145,7 +161,7 @@ jobs:
   destroy_network:
     name: Destroy Network
     uses: ./.github/workflows/destroy-network.yml
-    needs: [deploy_network, sanity_check_tests, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed]
+    needs: [deploy_network, availability_tests, sanity_check_tests, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed]
     if: always()
     with:
       environment: nightly
@@ -158,17 +174,17 @@ jobs:
   notification_nightly:
     name: Nightly Notification
     uses: ./.github/workflows/notification-nightly.yml
-    needs: [ci, deploy_network, sanity_check_tests, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed, destroy_network]
+    needs: [ci, deploy_network, availability_tests, sanity_check_tests, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed, destroy_network]
     if: success() || failure()
     with:
       environment: nightly
-      block_gas_limit: "200000000"
-      block_time: "2"
+      block_gas_limit: "700000000"
+      block_time: "1"
       max_slots: "20000000"
       max_enqueued: "20000000"
       is_london_fork_active: true
       is_bridge_active: false
-      gossip_msg_size: "33554432"
+      gossip_msg_size: "8388608"
       logs: true
       build_blade_output: ${{ needs.ci.outputs.build_blade }}
       lint_output: ${{ needs.ci.outputs.lint }}
@@ -178,6 +194,7 @@ jobs:
       property_polybft_test_output: ${{ needs.ci.outputs.property_polybft_test }}
       fuzz_test_output: ${{ needs.ci.outputs.fuzz_test }}
       benchmark_test_output: ${{ needs.ci.outputs.benchmark_test }}
+      availability_test_status: ${{ needs.availability_tests.outputs.availability_test_status }}
       sanity_check_tests_output: ${{ needs.sanity_check_tests.outputs.sanity_check_tests_output }}
       stake_test_output: ${{ needs.sanity_check_tests.outputs.stake_test_output }}
       unstake_test_output: ${{ needs.sanity_check_tests.outputs.unstake_test_output }}
@@ -230,6 +247,7 @@ jobs:
       max_gas_utilization: ${{ needs.load_test_eoa.outputs.max_gas_utilization }}
       txpool_pending: ${{ needs.load_test_eoa.outputs.txpool_pending }}
       txpool_queued: ${{ needs.load_test_eoa.outputs.txpool_queued }}
+      results_artifact_id: ${{ needs.load_test_eoa.outputs.results_artifact_id }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   notification_load_test_erc20:
@@ -258,6 +276,7 @@ jobs:
       max_gas_utilization: ${{ needs.load_test_erc20.outputs.max_gas_utilization }}
       txpool_pending: ${{ needs.load_test_erc20.outputs.txpool_pending }}
       txpool_queued: ${{ needs.load_test_erc20.outputs.txpool_queued }}
+      results_artifact_id: ${{ needs.load_test_erc20.outputs.results_artifact_id }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   notification_load_test_erc721:
@@ -286,6 +305,7 @@ jobs:
       max_gas_utilization: ${{ needs.load_test_erc721.outputs.max_gas_utilization }}
       txpool_pending: ${{ needs.load_test_erc721.outputs.txpool_pending }}
       txpool_queued: ${{ needs.load_test_erc721.outputs.txpool_queued }}
+      results_artifact_id: ${{ needs.load_test_erc721.outputs.results_artifact_id }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   notification_load_test_mixed:
@@ -314,5 +334,6 @@ jobs:
       max_gas_utilization: ${{ needs.load_test_mixed.outputs.max_gas_utilization }}
       txpool_pending: ${{ needs.load_test_mixed.outputs.txpool_pending }}
       txpool_queued: ${{ needs.load_test_mixed.outputs.txpool_queued }}
+      results_artifact_id: ${{ needs.load_test_mixed.outputs.results_artifact_id }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

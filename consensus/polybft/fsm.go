@@ -122,24 +122,11 @@ func (f *fsm) BuildProposal(currentRound uint64) ([]byte, error) {
 		return nil, err
 	}
 
-	if f.logger.GetLevel() <= hclog.Debug {
+	logLvl := f.logger.GetLevel()
+	if logLvl <= hclog.Debug {
 		blockMetaHash, err := extra.BlockMetaData.Hash(stateBlock.Block.Hash())
 		if err != nil {
 			return nil, fmt.Errorf("failed to calculate proposal hash: %w", err)
-		}
-
-		var buf bytes.Buffer
-
-		for i, tx := range stateBlock.Block.Transactions {
-			if f.logger.IsDebug() {
-				buf.WriteString(tx.Hash().String())
-			} else if f.logger.IsTrace() {
-				buf.WriteString(tx.String())
-			}
-
-			if i != len(stateBlock.Block.Transactions)-1 {
-				buf.WriteString("\n")
-			}
 		}
 
 		f.logger.Debug("[FSM.BuildProposal]",
@@ -148,9 +135,19 @@ func (f *fsm) BuildProposal(currentRound uint64) ([]byte, error) {
 			"state root", stateBlock.Block.Header.StateRoot,
 			"proposal hash", blockMetaHash.String(),
 			"txs count", len(stateBlock.Block.Transactions),
-			"txs", buf.String(),
-			"finsihedIn", time.Since(start),
+			"finishedIn", time.Since(start),
 		)
+
+		if logLvl < hclog.Debug {
+			var buf bytes.Buffer
+
+			for _, tx := range stateBlock.Block.Transactions {
+				buf.WriteString(tx.String())
+				buf.WriteString("\n")
+			}
+
+			f.logger.Log(logLvl, "[FSM.BuildProposal]", "txs", buf.String())
+		}
 	}
 
 	f.target = stateBlock

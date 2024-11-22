@@ -24,13 +24,19 @@ type debugEndpointMockStore struct {
 	readTxLookupFn        func(types.Hash) (uint64, bool)
 	getPendingTxFn        func(types.Hash) (*types.Transaction, bool)
 	hasFn                 func(types.Hash) bool
+	statFn                func(property string) (string, error)
+	compactFn             func(start []byte, limit []byte) error
 	getFn                 func(string) ([]byte, error)
+	verbosityFn           func(int) (string, error)
+	getCodeByCodeHashFn   func(codeHash types.Hash) ([]byte, error)
 	getIteratorDumpTreeFn func(*types.Block, *state.DumpInfo) (*state.IteratorDump, error)
 	dumpTreeFn            func(*types.Block, *state.DumpInfo) (*state.Dump, error)
 	getBlockByHashFn      func(types.Hash, bool) (*types.Block, bool)
+	getModifiedAccountsFn func(*types.Block, *types.Block) ([]types.Address, error)
 	getBlockByNumberFn    func(uint64, bool) (*types.Block, bool)
 	traceBlockFn          func(*types.Block, tracer.Tracer) ([]interface{}, error)
 	intermediateRootsFn   func(*types.Block, tracer.Tracer) ([]types.Hash, error)
+	storageRangeAtFn      func(*state.StorageRangeResult, *types.Block, *types.Address, []byte, int, int) error
 	traceTxnFn            func(*types.Block, types.Hash, tracer.Tracer) (interface{}, error)
 	traceCallFn           func(*types.Transaction, *types.Header, tracer.Tracer) (interface{}, error)
 	getNonceFn            func(types.Address) uint64
@@ -61,8 +67,24 @@ func (s *debugEndpointMockStore) Has(hash types.Hash) bool {
 	return s.hasFn(hash)
 }
 
+func (s *debugEndpointMockStore) Stat(property string) (string, error) {
+	return s.statFn(property)
+}
+
+func (s *debugEndpointMockStore) Compact(start []byte, limit []byte) error {
+	return s.compactFn(start, limit)
+}
+
 func (s *debugEndpointMockStore) Get(key string) ([]byte, error) {
 	return s.getFn(key)
+}
+
+func (s *debugEndpointMockStore) Verbosity(level int) (string, error) {
+	return s.verbosityFn(level)
+}
+
+func (s *debugEndpointMockStore) GetCodeByCodeHash(codeHash types.Hash) ([]byte, error) {
+	return s.getCodeByCodeHashFn(codeHash)
 }
 
 func (s *debugEndpointMockStore) GetIteratorDumpTree(block *types.Block, opts *state.DumpInfo) (*state.IteratorDump, error) {
@@ -71,6 +93,10 @@ func (s *debugEndpointMockStore) GetIteratorDumpTree(block *types.Block, opts *s
 
 func (s *debugEndpointMockStore) DumpTree(block *types.Block, opts *state.DumpInfo) (*state.Dump, error) {
 	return s.dumpTreeFn(block, opts)
+}
+
+func (s *debugEndpointMockStore) GetModifiedAccounts(startBlock, endBlock *types.Block) ([]types.Address, error) {
+	return s.getModifiedAccountsFn(startBlock, endBlock)
 }
 
 func (s *debugEndpointMockStore) GetBlockByHash(hash types.Hash, full bool) (*types.Block, bool) {
@@ -87,6 +113,10 @@ func (s *debugEndpointMockStore) TraceBlock(block *types.Block, tracer tracer.Tr
 
 func (s *debugEndpointMockStore) IntermediateRoots(block *types.Block, tracer tracer.Tracer) ([]types.Hash, error) {
 	return s.intermediateRootsFn(block, tracer)
+}
+
+func (s *debugEndpointMockStore) StorageRangeAt(storageRangeResult *state.StorageRangeResult, block *types.Block, addr *types.Address, keyStart []byte, txIndex, maxResult int) error {
+	return s.storageRangeAtFn(storageRangeResult, block, addr, keyStart, txIndex, maxResult)
 }
 
 func (s *debugEndpointMockStore) TraceTxn(block *types.Block, targetTx types.Hash, tracer tracer.Tracer) (interface{}, error) {
@@ -1516,7 +1546,7 @@ func TestGetAccessibleState(t *testing.T) {
 				},
 			},
 
-			returnErr: "'from' and 'to' block numbers must be different",
+			returnErr: "no accessible state found in the block",
 			result:    0,
 			err:       true,
 		},
@@ -1688,6 +1718,280 @@ func TestIntermediateRoots(t *testing.T) {
 
 			endpoint := NewDebug(test.store, 100000)
 			res, err := endpoint.IntermediateRoots(test.blockHash, test.config)
+			require.Equal(t, test.result, res)
+
+			if test.err {
+				require.ErrorContains(t, err, test.returnErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestStorageRangeAt(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name               string
+		blockHash          types.Hash
+		storageRangeResult state.StorageRangeResult
+		store              *debugEndpointMockStore
+		result             interface{}
+		returnErr          string
+		err                bool
+	}{
+		{
+			name:      "BlockByHashNotFound",
+			blockHash: testLatestBlock.Hash(),
+			store: &debugEndpointMockStore{
+				getBlockByHashFn: func(hash types.Hash, full bool) (*types.Block, bool) {
+					require.Equal(t, testLatestBlock.Hash(), hash)
+					require.True(t, full)
+
+					return nil, false
+				},
+			},
+
+			returnErr: "not found",
+			result:    nil,
+			err:       true,
+		},
+
+		{
+			name:               "storageRangeAtNotValid",
+			blockHash:          testLatestBlock.Hash(),
+			storageRangeResult: state.StorageRangeResult{},
+			store: &debugEndpointMockStore{
+				getBlockByHashFn: func(hash types.Hash, full bool) (*types.Block, bool) {
+					return testLatestBlock, true
+				},
+				storageRangeAtFn: func(srr *state.StorageRangeResult, block *types.Block, address *types.Address, start []byte, txIndex, maxCount int) error {
+					require.Equal(t, block.Hash(), testLatestBlock.Hash())
+
+					return fmt.Errorf("storageRangeAt not valid")
+				},
+			},
+
+			returnErr: "storageRangeAt not valid",
+			result:    state.StorageRangeResult{},
+			err:       true,
+		},
+
+		{
+			name:               "resultsValid",
+			blockHash:          testLatestBlock.Hash(),
+			storageRangeResult: state.StorageRangeResult{},
+			store: &debugEndpointMockStore{
+				getBlockByHashFn: func(hash types.Hash, full bool) (*types.Block, bool) {
+					return testLatestBlock, true
+				},
+				storageRangeAtFn: func(srr *state.StorageRangeResult, block *types.Block, address *types.Address, start []byte, txIndex, maxCount int) error {
+					require.Equal(t, block.Hash(), testLatestBlock.Hash())
+
+					return nil
+				},
+			},
+
+			returnErr: "",
+			result:    state.StorageRangeResult{},
+			err:       false,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			endpoint := NewDebug(test.store, 100000)
+			res, err := endpoint.StorageRangeAt(test.blockHash, 0, addr0, []byte{}, 10)
+			require.Equal(t, test.result, res)
+
+			if test.err {
+				require.ErrorContains(t, err, test.returnErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestGetModifiedAccountsByHash(t *testing.T) {
+	t.Parallel()
+
+	hash := testLatestBlock.Hash()
+	tests := []struct {
+		name           string
+		startblockHash types.Hash
+		endblockHash   *types.Hash
+		store          *debugEndpointMockStore
+		result         interface{}
+		returnErr      string
+		err            bool
+	}{
+		{
+			name:           "BlockByHashNotFound",
+			startblockHash: hash,
+			store: &debugEndpointMockStore{
+				getBlockByHashFn: func(hash types.Hash, full bool) (*types.Block, bool) {
+					require.Equal(t, hash, hash)
+					require.True(t, full)
+
+					return nil, false
+				},
+			},
+
+			returnErr: "not found",
+			result:    nil,
+			err:       true,
+		},
+
+		{
+			name:           "ParentBlockByHashNotFound",
+			startblockHash: hash,
+			endblockHash:   nil,
+			store: &debugEndpointMockStore{
+				getBlockByHashFn: func(hashBlock types.Hash, full bool) (*types.Block, bool) {
+					if hashBlock == hash {
+						return testLatestBlock, true
+					}
+
+					return nil, false
+				},
+			},
+
+			returnErr: "parent block",
+			result:    nil,
+			err:       true,
+		},
+
+		{
+			name:           "GetModifiedAccountsByHashValid",
+			startblockHash: hash,
+			endblockHash:   &hash,
+			store: &debugEndpointMockStore{
+				getBlockByHashFn: func(hash types.Hash, full bool) (*types.Block, bool) {
+					return testLatestBlock, true
+				},
+				getModifiedAccountsFn: func(start *types.Block, end *types.Block) ([]types.Address, error) {
+					require.Equal(t, start.Hash(), hash)
+					require.Equal(t, end.Hash(), hash)
+
+					return []types.Address{addr0, addr1}, nil
+				},
+			},
+
+			returnErr: "",
+			result:    []types.Address{addr0, addr1},
+			err:       false,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			endpoint := NewDebug(test.store, 100000)
+			res, err := endpoint.GetModifiedAccountsByHash(test.startblockHash, test.endblockHash)
+			require.Equal(t, test.result, res)
+
+			if test.err {
+				require.ErrorContains(t, err, test.returnErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestGetModifiedAccountsByNumber(t *testing.T) {
+	t.Parallel()
+
+	number := testBlock10.Number()
+	tests := []struct {
+		name             string
+		startblockNumber uint64
+		endblockNumber   *uint64
+		store            *debugEndpointMockStore
+		result           interface{}
+		returnErr        string
+		err              bool
+	}{
+		{
+			name:             "BlockByNumberNotFound",
+			startblockNumber: number,
+			store: &debugEndpointMockStore{
+				getBlockByNumberFn: func(number uint64, full bool) (*types.Block, bool) {
+					require.Equal(t, testBlock10.Number(), number)
+					require.True(t, full)
+
+					return nil, false
+				},
+			},
+
+			returnErr: "not found",
+			result:    nil,
+			err:       true,
+		},
+
+		{
+			name:             "ParentBlockByHashNotFound",
+			startblockNumber: number,
+			endblockNumber:   nil,
+			store: &debugEndpointMockStore{
+				getBlockByNumberFn: func(number uint64, full bool) (*types.Block, bool) {
+					require.Equal(t, testBlock10.Number(), number)
+					require.True(t, full)
+
+					return testBlock10, true
+				},
+				getBlockByHashFn: func(hashBlock types.Hash, full bool) (*types.Block, bool) {
+					return nil, false
+				},
+			},
+
+			returnErr: "parent block",
+			result:    nil,
+			err:       true,
+		},
+
+		{
+			name:             "GetModifiedAccountsByNumberValid",
+			startblockNumber: number,
+			endblockNumber:   &number,
+			store: &debugEndpointMockStore{
+				getBlockByNumberFn: func(number uint64, full bool) (*types.Block, bool) {
+					require.Equal(t, testBlock10.Number(), number)
+					require.True(t, full)
+
+					return testBlock10, true
+				},
+				getModifiedAccountsFn: func(start *types.Block, end *types.Block) ([]types.Address, error) {
+					require.Equal(t, start.Hash(), testBlock10.Hash())
+					require.Equal(t, end.Hash(), testBlock10.Hash())
+
+					return []types.Address{addr0, addr1}, nil
+				},
+			},
+
+			returnErr: "",
+			result:    []types.Address{addr0, addr1},
+			err:       false,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			endpoint := NewDebug(test.store, 100000)
+			res, err := endpoint.GetModifiedAccountsByNumber(test.startblockNumber, test.endblockNumber)
 			require.Equal(t, test.result, res)
 
 			if test.err {

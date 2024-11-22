@@ -44,8 +44,9 @@ type Executor struct {
 	state   State
 	GetHash GetHashByNumberHelper
 
-	PostHook        func(txn *Transition)
-	GenesisPostHook func(*Transition) error
+	PostHook         func(txn *Transition)
+	GenesisPostHook  func(*Transition) error
+	GetPendingTxHook func(types.Hash) (*types.Transaction, bool)
 
 	IsL1OriginatedToken bool
 }
@@ -137,6 +138,17 @@ func (e *Executor) GetDumpTree(dump *Dump, parentHash types.Hash,
 	return next, nil
 }
 
+// Verbosity sets the log verbosity ceiling.
+func (e *Executor) Verbosity(level int) (string, error) {
+	if level < int(hclog.NoLevel) || level > int(hclog.Off) {
+		return hclog.Level(level).String(), fmt.Errorf("invalid log level: %d", level)
+	}
+
+	e.logger.SetLevel(hclog.Level(level))
+
+	return hclog.Level(level).String(), nil
+}
+
 // ProcessBlock already does all the handling of the whole process
 func (e *Executor) ProcessBlock(
 	parentRoot types.Hash,
@@ -160,9 +172,15 @@ func (e *Executor) ProcessBlock(
 		logLvl = e.logger.GetLevel()
 	)
 
-	for i, t := range block.Transactions {
+	for _, t := range block.Transactions {
 		if t.Gas() > block.Header.GasLimit {
 			return nil, runtime.ErrOutOfGas
+		}
+
+		if t.From() == emptyFrom && t.Type() != types.StateTxType {
+			if poolTx, ok := e.GetPendingTxHook(t.Hash()); ok {
+				t.SetFrom(poolTx.From())
+			}
 		}
 
 		if err = txn.Write(t); err != nil {
@@ -171,26 +189,21 @@ func (e *Executor) ProcessBlock(
 			return nil, err
 		}
 
-		if logLvl <= hclog.Debug {
-			if e.logger.IsTrace() {
-				_, _ = buf.WriteString(t.String())
-			}
-
-			if e.logger.IsDebug() {
-				_, _ = buf.WriteString(t.Hash().String())
-			}
-
-			if i != len(block.Transactions)-1 {
-				_, _ = buf.WriteString("\n")
-			}
+		if logLvl < hclog.Debug {
+			buf.WriteString(t.String())
+			buf.WriteString("\n")
 		}
 	}
 
 	if logLvl <= hclog.Debug {
 		var (
 			logMsg  = "[Executor.ProcessBlock] finished."
-			logArgs = []interface{}{"txs count", len(block.Transactions), "txs", buf.String()}
+			logArgs = []interface{}{"txs count", len(block.Transactions)}
 		)
+
+		if buf.Len() > 0 {
+			logArgs = append(logArgs, "txs", buf.String())
+		}
 
 		e.logger.Log(logLvl, logMsg, logArgs...)
 	}
@@ -324,6 +337,12 @@ func NewTransition(logger hclog.Logger, config chain.ForksInTime, snap Snapshot,
 		journal:     &runtime.Journal{},
 		accessList:  runtime.NewAccessList(),
 	}
+}
+
+// StorageRangeAt returns the storage at the given block height and transaction index.
+func (t *Transition) StorageRangeAt(storageRangeResult *StorageRangeResult,
+	addr *types.Address, keyStart []byte, maxResult int) error {
+	return t.state.StorageRangeAt(storageRangeResult, addr, keyStart, maxResult)
 }
 
 func (t *Transition) WithStateOverride(override types.StateOverride) error {

@@ -1,0 +1,24 @@
+---
+description: >-
+  This section gives a detailed description of how IBFT utilizes the IBFT
+  backend component to successfully reach consensus for a new block to be added
+  to the blockchain.
+---
+
+# Consensus Backend
+
+The truth is that every blockchain (in the blockchain system) starts with a genesis block identical for all participants. This is also the case in the Blade solution. Each subsequent block is added to the blockchain using a consensus algorithm, where a set of validators agrees or disagrees with the proposed block. Besides, the data used by selected validators for adding the block varies. To ensure that `IBFT` always has access to the necessary data needed for creation of a new block, the `IBFTBackend` component is leveraged.
+
+As already described in [IBFT 2.0 Initialization](initialization.md), `IBFT` is initiated by invoking the `RunSequence()` method and is implemented as a state machine. The initial state used for start is `newRound`. In the initial state, `IBFT` checks whether the current node is the block proposer for the given round and height. If the current node is chosen to be the proposer for the round and height, then it creates a new block. The creation of a new block is done by the `IBFTBackend,` and `IBFT` calls the `BuildProposal()`method from the `IBFTBackend`, which returns the created block.
+
+To ensure that the created block is known to other validators, the chosen proposer creates a `PrePrepare` message through which the block is sent to other validators. The creation of the `PrePrepare` message is also done in the `IBFTBackend` (by `BuildPrePrepareMessage()` method).
+
+After the `PrePrepare` message is created, the proposer marks the new block as an accepted proposal. Other validators participating in the consensus must perform certain validations on the block as well, before marking it as an accepted proposal. The first method called in the proposed block verification is `IBFTBackend`'s `IsProposer()`. This method checks whether the sender of the block is indeed the chosen proposer for the current round and height. After that, the `IsValidProposalHash()` method is called, which verifies whether the hash in the message matches the hash of the proposed block. To validate that the proposed block is correct, i.e., that the transactions in the block are valid, the `IsValidProposal()` method is used. This method executes all transactions and decides whether the sent block is valid. In the case that the round is greater than zero, during the verification of `RoundChange` messages, the `IsValidValidator()` method is called from the `IBFTBackend` to check whether the sender of the Round Change Certificate (RCC) is valid. The last method called from the `IBFTBackend` before `IBFT` transitions to a new state is `BuildPrepareMessage()`. After sending the `Prepare` message, `IBFT` transitions to the `prepare` state.
+
+In the `prepare` state, a validator retrieves all `Prepare` messages from its `Message` storage for the corresponding height and round. Subsequently, it performs validation of these messages. For each message, the `IsValidProposalHash()` method is called from the `IBFTBackend` to verify whether the hash in the `Prepare` message matches the `Proposal` hash. If a sufficient number of `Prepare` messages exist, satisfying the quorum requirement, a `Commit` message is sent. After sending the message, `IBFT` transitions to a new state called `commit`.
+
+Similarly to how the `IBFT` in the `prepare` state collects all Prepare messages from the `Message` storage, it now does the same but specifically collects `Commit` messages for a given round and height. Each message must undergo validation, and only valid messages are considered when checking the quorum for `Commit` messages. For each message, the first step is to verify whether the hash in the `Commit` message matches the `Proposal` hash. This verification is done by calling the `IBFTBackend`'s `IsValidProposalHash()`method. After this verification, the next step is to check whether the signature of the `Proposal` hash in the `CommittedSeal` is indeed signed by the validator. Once the quorum for `Commit` messages is reached, `IBFT` transitions to the `final` state.
+
+In the `final` state, `IBFT` adds a new block to its local blockchain and removes all messages from its `Message` storage that were used for previous decisions on the correctness of the block. The block is added to the blockchain by invoking the `InsertProposal()` method from the `IBFT Backend.` After successfully adding the new block to the blockchain, `IBFT` sends a signal on the `roundDone` channel, thus halting the execution of the initiated sequence.
+
+<figure><img src="../../../.gitbook/assets/polybft_backend_sequence (2).png" alt=""><figcaption><p>IBFT and IBFTBackend Interaction Sequence Diagram</p></figcaption></figure>

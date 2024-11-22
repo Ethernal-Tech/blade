@@ -86,7 +86,8 @@ func TestProperty_DropValidators(t *testing.T) {
 		activeValidator := cluster.Servers[numNodes-1]
 		currentBlock, err := activeValidator.JSONRPC().BlockNumber()
 		require.NoError(t, err)
-		require.NoError(t, cluster.WaitForBlock(currentBlock+1, 2*blockTime))
+		// round 1 possible due to syncer event on proposer -> sequence cancel, hence 6*blockTime
+		require.NoError(t, cluster.WaitForBlock(currentBlock+1, 6*blockTime))
 
 		// drop all validator nodes, leaving one node alive
 		numNodesToDrop := int(numNodes - 1)

@@ -101,6 +101,8 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
     			uint256 destinationChainId;
     			uint256[2] signature;
     			bytes bitmap;
+				uint256 threshold;
+				bool isRollback;
 			}
 
 			mapping(uint256 => SignedBridgeMessageBatch) public batches;
@@ -114,6 +116,8 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
 				signedBatch.destinationChainId = 3;
 				signedBatch.signature = [uint256(300), uint256(200)];
 				signedBatch.bitmap = "smth";
+				signedBatch.threshold = 1;
+				signedBatch.isRollback = false;
 				batches[_num] = signedBatch;
 			}
 
@@ -157,6 +161,8 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
 		DestinationChainID: big.NewInt(3),
 		Signature:          [2]*big.Int{big.NewInt(300), big.NewInt(200)},
 		Bitmap:             []byte("smth"),
+		Threshold:          big.NewInt(1),
+		IsRollback:         false,
 	}, sbmb)
 }
 
