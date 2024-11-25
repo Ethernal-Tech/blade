@@ -100,7 +100,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 	closeCh := make(chan struct{})
 
 	// Check if the client is already running
-	if cid, err := helper.GetBridgeChainID(); !errors.Is(err, helper.ErrExternalChainNotFound) {
+	if cid, err := helper.GetBridgeContainerID(params.chainID); !errors.Is(err, helper.ErrExternalChainNotFound) {
 		if err != nil {
 			outputter.SetError(err)
 		} else if cid != "" {
@@ -121,7 +121,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 	if err := PingServer(closeCh, params.port); err != nil {
 		close(closeCh)
 
-		if ip, err := helper.ReadBridgeChainIP(params.port); err != nil {
+		if ip, err := helper.ReadBridgeChainIP(params.port, params.chainID); err != nil {
 			outputter.SetError(fmt.Errorf("failed to ping external chain server: %w", err))
 		} else {
 			outputter.SetError(fmt.Errorf("failed to ping external chain server at address %s: %w", ip, err))
@@ -223,7 +223,7 @@ func runExternalChain(ctx context.Context, outputter command.OutputFormatter, cl
 		Image: imageName,
 		Cmd:   args,
 		Labels: map[string]string{
-			"edge-type": "external-chain",
+			"edge-type": imageName,
 		},
 	}
 
