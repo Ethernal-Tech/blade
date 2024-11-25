@@ -1,30 +1,6 @@
 ---
 name: Availability Tests
 on:
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: The environment to run against
-        required: true
-        type: string
-      rpc_url:
-        description: JSON-RPC URL
-        required: true
-        type: string
-      fund_amount:
-        description: Amount in Ether to fund
-        required: true
-        type: string
-        default: "5"
-      london:
-        description: Is London fork active?
-        required: true
-        type: boolean
-        default: true
-      notification:
-        description: Notification
-        type: boolean
-        default: true
   workflow_call:
     inputs:
       environment:

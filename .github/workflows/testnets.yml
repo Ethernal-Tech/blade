@@ -20,3 +20,16 @@ jobs:
       PREMINED_PRIVATE_KEY: ${{ secrets.FAUCET_PRIVATE_KEY }}
       ACCOUNT_PRIVATE_KEY: ${{ secrets.ACCOUNT_PRIVATE_KEY }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  pink_panda_testnet:
+    name: Pink Panda Testnet
+    uses: ./.github/workflows/availability-tests.yml
+    with:
+      environment: Pink Panda Testnet
+      rpc_url: https://blockchain-rpc.pinkpanda.network
+      fund_amount: "3"
+      london: true
+      notification: true
+    secrets:
+      PREMINED_PRIVATE_KEY: ${{ secrets.LOADTEST_PRIVATE_KEY }}
+      ACCOUNT_PRIVATE_KEY: ${{ secrets.ACCOUNT_PRIVATE_KEY }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
