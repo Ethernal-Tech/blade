@@ -1,0 +1,22 @@
+---
+name: Testnets Availability Tests
+on: # yamllint disable-line rule:truthy
+  schedule:
+    # * is a special character in YAML so you have to quote this string
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  blade_testnet:
+    name: Blade Testnet
+    uses: ./.github/workflows/availability-tests.yml
+    with:
+      environment: Blade Testnet
+      rpc_url: https://rpc.testnet.ethernal.work
+      fund_amount: "3"
+      london: true
+      notification: true
+    secrets:
+      PREMINED_PRIVATE_KEY: ${{ secrets.FAUCET_PRIVATE_KEY }}
+      ACCOUNT_PRIVATE_KEY: ${{ secrets.ACCOUNT_PRIVATE_KEY }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
