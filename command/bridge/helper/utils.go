@@ -83,7 +83,7 @@ func DecodePrivateKey(rawKey string) (crypto.Key, error) {
 }
 
 // GetBridgeContainerID returns chainID of bridge
-func GetBridgeContainerID(chainId uint64) (string, error) {
+func GetBridgeContainerID(chainID uint64) (string, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return "", fmt.Errorf("external chain id error: %w", err)
@@ -94,7 +94,7 @@ func GetBridgeContainerID(chainId uint64) (string, error) {
 		return "", fmt.Errorf("external chain id error: %w", err)
 	}
 
-	label := fmt.Sprintf("geth-external-chain-%d", chainId)
+	label := fmt.Sprintf("geth-external-chain-%d", chainID)
 	for _, c := range containers {
 		if c.Labels["edge-type"] == label {
 			return c.ID, nil
@@ -105,13 +105,13 @@ func GetBridgeContainerID(chainId uint64) (string, error) {
 }
 
 // ReadBridgeChainIP returns ip address of bridge
-func ReadBridgeChainIP(port, chainId uint64) (string, error) {
+func ReadBridgeChainIP(port, chainID uint64) (string, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		return "", fmt.Errorf("external chain id error: %w", err)
 	}
 
-	contID, err := GetBridgeContainerID(chainId)
+	contID, err := GetBridgeContainerID(chainID)
 	if err != nil {
 		return "", err
 	}
