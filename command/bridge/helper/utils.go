@@ -39,6 +39,9 @@ const (
 	AmountsFlag             = "amounts"
 	Erc20TokenFlag          = "erc20-token" //nolint:gosec
 	BladeManagerFlagDesc    = "address of blade manager contract on a external chain"
+
+	ExternalChainLabelID     = "external-chain"
+	ExternalChainImagePrefix = "geth-chain"
 )
 
 var (
@@ -82,7 +85,7 @@ func DecodePrivateKey(rawKey string) (crypto.Key, error) {
 	return externalChainAccountKey, nil
 }
 
-// GetBridgeContainerID returns chainID of bridge
+// GetBridgeContainerID returns container id for the external chain
 func GetBridgeContainerID(chainID uint64) (string, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
@@ -94,9 +97,9 @@ func GetBridgeContainerID(chainID uint64) (string, error) {
 		return "", fmt.Errorf("external chain id error: %w", err)
 	}
 
-	label := fmt.Sprintf("geth-external-chain-%d", chainID)
+	label := fmt.Sprintf("%s-%d", ExternalChainImagePrefix, chainID)
 	for _, c := range containers {
-		if c.Labels["edge-type"] == label {
+		if c.Labels[ExternalChainLabelID] == label {
 			return c.ID, nil
 		}
 	}

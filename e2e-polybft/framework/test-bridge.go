@@ -68,11 +68,7 @@ func (t *TestBridge) Start() error {
 
 	t.node = bridgeNode
 
-	if err = server.PingServer(nil, t.calculatePort()); err != nil {
-		return err
-	}
-
-	return nil
+	return server.PingServer(context.Background(), t.calculatePort())
 }
 
 func (t *TestBridge) Stop() {

@@ -118,7 +118,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 	}
 
 	// Ping geth server to make sure everything is up and running
-	if err := PingServer(closeCh, params.port); err != nil {
+	if err := PingServer(ctx, params.port); err != nil {
 		close(closeCh)
 
 		if ip, err := helper.ReadBridgeChainIP(params.port, params.chainID); err != nil {
@@ -139,7 +139,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 		}
 	}()
 
-	if err := handleSignals(ctx, closeCh); err != nil {
+	if err := handleSignals(ctx); err != nil {
 		outputter.SetError(fmt.Errorf("failed to handle signals: %w", err))
 	}
 }
@@ -166,7 +166,7 @@ func runExternalChain(ctx context.Context, outputter command.OutputFormatter, cl
 		image = gethImage
 	}
 
-	imageName := fmt.Sprintf("geth-external-chain-%d", params.chainID)
+	imageName := fmt.Sprintf("%s-%d", helper.ExternalChainImagePrefix, params.chainID)
 	dockerfile := fmt.Sprintf("FROM %s\nEXPOSE %d\n", image, params.port)
 
 	buildContext, err := createBuildContext(dockerfile)
@@ -174,9 +174,10 @@ func runExternalChain(ctx context.Context, outputter command.OutputFormatter, cl
 		return err
 	}
 
-	build, err := dockerClient.ImageBuild(ctx, buildContext, types.ImageBuildOptions{
-		Tags: []string{imageName},
-	})
+	build, err := dockerClient.ImageBuild(ctx, buildContext,
+		types.ImageBuildOptions{
+			Tags: []string{imageName},
+		})
 	if err != nil {
 		return err
 	}
@@ -223,7 +224,7 @@ func runExternalChain(ctx context.Context, outputter command.OutputFormatter, cl
 		Image: imageName,
 		Cmd:   args,
 		Labels: map[string]string{
-			"edge-type": imageName,
+			helper.ExternalChainLabelID: imageName,
 		},
 	}
 
@@ -331,11 +332,9 @@ func gatherLogs(ctx context.Context, outputter command.OutputFormatter) error {
 	return nil
 }
 
-func PingServer(closeCh <-chan struct{}, port uint64) error {
+func PingServer(ctx context.Context, port uint64) error {
 	httpTimer := time.NewTimer(30 * time.Second)
-	httpClient := http.Client{
-		Timeout: 5 * time.Second,
-	}
+	httpClient := http.Client{Timeout: 5 * time.Second}
 
 	for {
 		select {
@@ -346,21 +345,21 @@ func PingServer(closeCh <-chan struct{}, port uint64) error {
 			}
 		case <-httpTimer.C:
 			return fmt.Errorf("timeout to start http")
-		case <-closeCh:
+		case <-ctx.Done():
 			return fmt.Errorf(
-				"closed before connecting with http. Is there any other process running and using external chain dir?")
+				"closed before connecting with http. Is there any other process running and using external chain?")
 		}
 	}
 }
 
-func handleSignals(ctx context.Context, closeCh <-chan struct{}) error {
+func handleSignals(ctx context.Context) error {
 	signalCh := make(chan os.Signal, 4)
 	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 
 	stop := true
 	select {
 	case <-signalCh:
-	case <-closeCh:
+	case <-ctx.Done():
 		stop = false
 	}
 
