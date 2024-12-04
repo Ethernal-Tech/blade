@@ -23,8 +23,8 @@ const (
 	// flag names
 	exitHelperFlag   = "exit-helper"
 	exitEventIDFlag  = "exit-id"
-	rootJSONRPCFlag  = "root-json-rpc"
-	childJSONRPCFlag = "child-json-rpc"
+	rootJSONRPCFlag  = "root-jsonrpc"
+	childJSONRPCFlag = "child-jsonrpc"
 
 	// generateExitProofFn is JSON RPC endpoint which creates exit proof
 	generateExitProofFn = "bridge_generateExitProof"

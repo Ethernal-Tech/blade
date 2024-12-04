@@ -73,7 +73,7 @@ Just run blade cluster (start each node defined in the initial validator set). F
     --deployer-key <hex_encoded_rootchain_account_private_key> \
     --proxy-contracts-admin 0xaddressOfProxyContractsAdmin \
     [--genesis ./genesis.json] \
-    [--json-rpc http://127.0.0.1:8545] \
+    [--jsonrpc http://127.0.0.1:8545] \
     [--test]
     ```
 3. Fund validators on rootchain - in order for validators to be able to send transactions to Ethereum, they need to be funded in order to be able to cover gas cost on L1. **This command is for testing purposes only.**

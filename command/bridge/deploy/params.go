@@ -12,7 +12,7 @@ import (
 
 const (
 	deployerKeyFlag = "deployer-key"
-	jsonRPCFlag     = "json-rpc"
+	jsonRPCFlag     = "jsonrpc"
 	erc20AddrFlag   = "erc20-token"
 )
 

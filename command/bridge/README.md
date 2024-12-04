@@ -13,7 +13,7 @@ $ polygon-edge bridge deposit-erc20 \
     --amounts <amounts> \
     --root-token <root_erc20_token_address> \
     --root-predicate <root_erc20_predicate_address> \
-    --json-rpc <json_rpc_endpoint>
+    --jsonrpc <json_rpc_endpoint>
     [--minter-key <hex_encoded_minter_account_private_key>]
 ```
 
@@ -30,7 +30,7 @@ $ polygon-edge bridge withdraw-erc20 \
     --amounts <amounts> \
     --child-predicate <child_erc20_predicate_address> \
     [--child-token <child_erc20_token_address>] \
-    --json-rpc <json_rpc_endpoint>
+    --jsonrpc <json_rpc_endpoint>
 ```
 
 ## Exit
@@ -42,8 +42,8 @@ $ polygon-edge bridge exit \
     --sender-key <hex_encoded_txn_sender_private_key> \
     --exit-helper <exit_helper_address> \
     --exit-id <exit_event_id> \
-    --root-json-rpc <root_chain_json_rpc_endpoint> \
-    --child-json-rpc <child_chain_json_rpc_endpoint>
+    --root-jsonrpc <root_chain_json_rpc_endpoint> \
+    --child-jsonrpc <child_chain_json_rpc_endpoint>
 ```
 
 **Note:** for using test account provided by Geth dev instance, use `--test` flag. In that case `--sender-key` flag can be omitted and test account is used as an exit transaction sender.

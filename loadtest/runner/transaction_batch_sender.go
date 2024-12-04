@@ -74,7 +74,7 @@ func (h *TransactionBatchSender) SendBatch(params []string) ([]types.Hash, error
 		return nil, fmt.Errorf("status code is %d. response = %s", sc, string(res.Body()))
 	}
 
-	// Decode json-rpc response
+	// Decode jsonrpc response
 	var responses []*codec.Response
 	if err := json.Unmarshal(res.Body(), &responses); err != nil {
 		return nil, err

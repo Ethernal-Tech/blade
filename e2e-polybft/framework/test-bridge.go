@@ -136,7 +136,7 @@ func (t *TestBridge) Deposit(token bridgeCommon.TokenType, rootTokenAddr, rootPr
 			"--amounts", amounts,
 			"--sender-key", senderKey,
 			"--minter-key", minterKey,
-			"--json-rpc", jsonRPCAddr)
+			"--jsonrpc", jsonRPCAddr)
 
 		if childChainMintable {
 			args = append(args, "--child-chain-mintable")
@@ -156,7 +156,7 @@ func (t *TestBridge) Deposit(token bridgeCommon.TokenType, rootTokenAddr, rootPr
 			"--token-ids", tokenIDs,
 			"--sender-key", senderKey,
 			"--minter-key", minterKey,
-			"--json-rpc", jsonRPCAddr)
+			"--jsonrpc", jsonRPCAddr)
 
 		if childChainMintable {
 			args = append(args, "--child-chain-mintable")
@@ -181,7 +181,7 @@ func (t *TestBridge) Deposit(token bridgeCommon.TokenType, rootTokenAddr, rootPr
 			"--token-ids", tokenIDs,
 			"--sender-key", senderKey,
 			"--minter-key", minterKey,
-			"--json-rpc", jsonRPCAddr)
+			"--jsonrpc", jsonRPCAddr)
 
 		if childChainMintable {
 			args = append(args, "--child-chain-mintable")
@@ -228,7 +228,7 @@ func (t *TestBridge) Withdraw(token bridgeCommon.TokenType,
 			"--sender-key", senderKey,
 			"--receivers", receivers,
 			"--amounts", amounts,
-			"--json-rpc", jsonRPCAddr)
+			"--jsonrpc", jsonRPCAddr)
 
 		if childChainMintable {
 			args = append(args, "--child-chain-mintable")
@@ -247,7 +247,7 @@ func (t *TestBridge) Withdraw(token bridgeCommon.TokenType,
 			"--sender-key", senderKey,
 			"--receivers", receivers,
 			"--token-ids", tokenIDs,
-			"--json-rpc", jsonRPCAddr)
+			"--jsonrpc", jsonRPCAddr)
 
 		if childChainMintable {
 			args = append(args, "--child-chain-mintable")
@@ -271,7 +271,7 @@ func (t *TestBridge) Withdraw(token bridgeCommon.TokenType,
 			"--receivers", receivers,
 			"--amounts", amounts,
 			"--token-ids", tokenIDs,
-			"--json-rpc", jsonRPCAddr)
+			"--jsonrpc", jsonRPCAddr)
 
 		if childChainMintable {
 			args = append(args, "--child-chain-mintable")
@@ -292,8 +292,8 @@ func (t *TestBridge) SendExitTransaction(exitHelper types.Address, exitID uint64
 		"exit",
 		"--exit-helper", exitHelper.String(),
 		"--exit-id", strconv.FormatUint(exitID, 10),
-		"--root-json-rpc", t.JSONRPCAddr(),
-		"--child-json-rpc", childJSONRPCAddr,
+		"--root-jsonrpc", t.JSONRPCAddr(),
+		"--child-jsonrpc", childJSONRPCAddr,
 	)
 }
 
