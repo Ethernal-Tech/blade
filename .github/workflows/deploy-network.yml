@@ -192,7 +192,7 @@ jobs:
           ssh-add ~/private.key
       - name: Install Ansible / botocore / boto3
         run: |
-          python3 -m pip install --user ansible
+          python3 -m pip install --user ansible==8.7.0
           python3 -m pip install boto3 botocore
       - name: Configure Ansible
         working-directory: ansible
