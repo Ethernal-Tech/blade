@@ -34,7 +34,7 @@ const (
 	RootPredicateFlag      = "root-predicate"
 	ChildPredicateFlag     = "child-predicate"
 	ChildTokenFlag         = "child-token"
-	JSONRPCFlag            = "json-rpc"
+	JSONRPCFlag            = "jsonrpc"
 	ChildChainMintableFlag = "child-chain-mintable"
 
 	MinterKeyFlag     = "minter-key"

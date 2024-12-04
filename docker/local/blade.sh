@@ -52,7 +52,7 @@ case "$1" in
                 --proxy-contracts-admin ${proxyContractsAdmin}
 
               "$BLADE_BIN" bridge deploy \
-                --json-rpc http://rootchain:8545 \
+                --jsonrpc http://rootchain:8545 \
                 --genesis /data/genesis.json \
                 --proxy-contracts-admin ${proxyContractsAdmin} \
                 --test
@@ -60,7 +60,7 @@ case "$1" in
               addresses="$(echo "$secrets" | jq -r '.[0] | .address'),$(echo "$secrets" | jq -r '.[1] | .address'),$(echo "$secrets" | jq -r '.[2] | .address'),$(echo "$secrets" | jq -r '.[3] | .address')"
 
               "$BLADE_BIN" bridge fund \
-                --json-rpc http://rootchain:8545 \
+                --jsonrpc http://rootchain:8545 \
                 --addresses ${addresses} \
                 --amounts 1000000000000000000000000,1000000000000000000000000,1000000000000000000000000,1000000000000000000000000
 

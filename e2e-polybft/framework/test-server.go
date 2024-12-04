@@ -228,7 +228,7 @@ func (t *TestServer) RootchainFundFor(accounts []types.Address, amounts []*big.I
 	args := []string{
 		"bridge",
 		"fund",
-		"--json-rpc", t.BridgeJSONRPCAddr(),
+		"--jsonrpc", t.BridgeJSONRPCAddr(),
 	}
 
 	for i := 0; i < len(accounts); i++ {
