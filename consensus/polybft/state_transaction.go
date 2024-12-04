@@ -4,29 +4,30 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/bridge"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/helpers"
 )
 
-const abiMethodIDLength = 4
-
-func decodeStateTransaction(txData []byte) (contractsapi.StateTransactionInput, error) {
-	if len(txData) < abiMethodIDLength {
+func decodeStateTransaction(txData []byte) (contractsapi.ABIEncoder, error) {
+	if len(txData) < helpers.AbiMethodIDLength {
 		return nil, fmt.Errorf("state transactions have input")
 	}
 
-	sig := txData[:abiMethodIDLength]
+	sig := txData[:helpers.AbiMethodIDLength]
 
 	var (
-		commitBridgeTxFn    contractsapi.CommitStateReceiverFn
-		commitEpochFn       contractsapi.CommitEpochEpochManagerFn
-		distributeRewardsFn contractsapi.DistributeRewardForEpochManagerFn
-		obj                 contractsapi.StateTransactionInput
+		commitBridgeTxFn     contractsapi.CommitBatchBridgeStorageFn
+		commitValidatorSetFn contractsapi.CommitValidatorSetBridgeStorageFn
+		commitEpochFn        contractsapi.CommitEpochEpochManagerFn
+		distributeRewardsFn  contractsapi.DistributeRewardForEpochManagerFn
+		obj                  contractsapi.ABIEncoder
 	)
 
 	switch {
 	case bytes.Equal(sig, commitBridgeTxFn.Sig()):
-		// bridge commitment
-		obj = &CommitmentMessageSigned{}
+		// bridge batch
+		obj = &bridge.BridgeBatchSigned{}
 
 	case bytes.Equal(sig, commitEpochFn.Sig()):
 		// commit epoch
@@ -35,6 +36,10 @@ func decodeStateTransaction(txData []byte) (contractsapi.StateTransactionInput, 
 	case bytes.Equal(sig, distributeRewardsFn.Sig()):
 		// distribute rewards
 		obj = &contractsapi.DistributeRewardForEpochManagerFn{}
+
+	case bytes.Equal(sig, commitValidatorSetFn.Sig()):
+		// commit validator set
+		obj = &contractsapi.CommitValidatorSetBridgeStorageFn{}
 
 	default:
 		return nil, fmt.Errorf("unknown state transaction")

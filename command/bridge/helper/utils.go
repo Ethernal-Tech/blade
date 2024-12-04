@@ -10,10 +10,11 @@ import (
 	"github.com/Ethernal-Tech/ethgo"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 
 	polybftsecrets "github.com/0xPolygon/polygon-edge/command/secrets/init"
-	"github.com/0xPolygon/polygon-edge/consensus/polybft"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/validator"
 	polybftWallet "github.com/0xPolygon/polygon-edge/consensus/polybft/wallet"
 	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/crypto"
@@ -37,19 +38,18 @@ const (
 	AddressesFlag           = "addresses"
 	AmountsFlag             = "amounts"
 	Erc20TokenFlag          = "erc20-token" //nolint:gosec
-	BladeManagerFlag        = "blade-manager"
-	BladeManagerFlagDesc    = "address of blade manager contract on a rootchain"
+	BladeManagerFlagDesc    = "address of blade manager contract on a external chain"
+
+	ExternalChainLabelID     = "external-chain"
+	ExternalChainImagePrefix = "geth-chain"
 )
 
 var (
-	ErrRootchainNotFound = errors.New("rootchain not found")
-	ErrRootchainPortBind = errors.New("port 8545 is not bind with localhost")
-	errTestModeSecrets   = errors.New("rootchain test mode does not imply specifying secrets parameters")
+	ErrExternalChainNotFound = errors.New("external chain not found")
+	ErrNoAddressesProvided   = errors.New("no addresses provided")
+	ErrInconsistentLength    = errors.New("addresses and amounts must be equal length")
 
-	ErrNoAddressesProvided = errors.New("no addresses provided")
-	ErrInconsistentLength  = errors.New("addresses and amounts must be equal length")
-
-	rootchainAccountKey *crypto.ECDSAKey
+	externalChainAccountKey *crypto.ECDSAKey
 )
 
 type MessageResult struct {
@@ -77,53 +77,58 @@ func DecodePrivateKey(rawKey string) (crypto.Key, error) {
 		return nil, fmt.Errorf("failed to decode private key string '%s': %w", privateKeyRaw, err)
 	}
 
-	rootchainAccountKey, err = crypto.NewECDSAKeyFromRawPrivECDSA(dec)
+	externalChainAccountKey, err = crypto.NewECDSAKeyFromRawPrivECDSA(dec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize key from provided private key '%s': %w", privateKeyRaw, err)
 	}
 
-	return rootchainAccountKey, nil
+	return externalChainAccountKey, nil
 }
 
-func GetRootchainID() (string, error) {
+// GetBridgeContainerID returns container id for the external chain
+func GetBridgeContainerID(chainID uint64) (string, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return "", fmt.Errorf("rootchain id error: %w", err)
+		return "", fmt.Errorf("external chain id error: %w", err)
 	}
 
 	containers, err := cli.ContainerList(context.Background(), container.ListOptions{})
 	if err != nil {
-		return "", fmt.Errorf("rootchain id error: %w", err)
+		return "", fmt.Errorf("external chain id error: %w", err)
 	}
 
+	label := fmt.Sprintf("%s-%d", ExternalChainImagePrefix, chainID)
 	for _, c := range containers {
-		if c.Labels["edge-type"] == "rootchain" {
+		if c.Labels[ExternalChainLabelID] == label {
 			return c.ID, nil
 		}
 	}
 
-	return "", ErrRootchainNotFound
+	return "", ErrExternalChainNotFound
 }
 
-func ReadRootchainIP() (string, error) {
+// ReadBridgeChainIP returns ip address of bridge
+func ReadBridgeChainIP(port, chainID uint64) (string, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
-		return "", fmt.Errorf("rootchain id error: %w", err)
+		return "", fmt.Errorf("external chain id error: %w", err)
 	}
 
-	contID, err := GetRootchainID()
+	contID, err := GetBridgeContainerID(chainID)
 	if err != nil {
 		return "", err
 	}
 
 	inspect, err := cli.ContainerInspect(context.Background(), contID)
 	if err != nil {
-		return "", fmt.Errorf("rootchain ip error: %w", err)
+		return "", fmt.Errorf("external chain ip error: %w", err)
 	}
 
-	ports, ok := inspect.HostConfig.PortBindings["8545/tcp"]
+	portMapKey := fmt.Sprintf("%d/tcp", port)
+
+	ports, ok := inspect.HostConfig.PortBindings[nat.Port(portMapKey)]
 	if !ok || len(ports) == 0 {
-		return "", ErrRootchainPortBind
+		return "", fmt.Errorf("port %d is not bound with localhost", port)
 	}
 
 	return fmt.Sprintf("http://%s:%s", ports[0].HostIP, ports[0].HostPort), nil
@@ -153,7 +158,7 @@ func GetECDSAKey(privateKey, accountDir, accountConfig string) (crypto.Key, erro
 // GetValidatorInfo queries SupernetManager smart contract on root
 // and retrieves validator info for given address
 func GetValidatorInfo(validatorAddr types.Address, supernetManagerAddr, stakeManagerAddr types.Address,
-	txRelayer txrelayer.TxRelayer) (*polybft.ValidatorInfo, error) {
+	txRelayer txrelayer.TxRelayer) (*validator.ValidatorInfo, error) {
 	caller := contracts.SystemCaller
 	getValidatorMethod := contractsapi.StakeManager.Abi.GetMethod("stakeOf")
 
@@ -188,7 +193,7 @@ func GetValidatorInfo(validatorAddr types.Address, supernetManagerAddr, stakeMan
 	}
 
 	//nolint:forcetypeassert
-	validatorInfo := &polybft.ValidatorInfo{
+	validatorInfo := &validator.ValidatorInfo{
 		Address:       validatorAddr,
 		IsActive:      innerMap["isActive"].(bool),
 		IsWhitelisted: innerMap["isWhitelisted"].(bool),
@@ -216,9 +221,9 @@ func GetValidatorInfo(validatorAddr types.Address, supernetManagerAddr, stakeMan
 	return validatorInfo, nil
 }
 
-// CreateMintTxn encodes parameters for mint function on rootchain token contract
+// CreateMintTxn encodes parameters for mint function on external chain token contract
 func CreateMintTxn(receiver, erc20TokenAddr types.Address,
-	amount *big.Int, rootchainTx bool) (*types.Transaction, error) {
+	amount *big.Int, externalChainTx bool) (*types.Transaction, error) {
 	mintFn := &contractsapi.MintRootERC20Fn{
 		To:     receiver,
 		Amount: amount,
@@ -229,7 +234,7 @@ func CreateMintTxn(receiver, erc20TokenAddr types.Address,
 		return nil, fmt.Errorf("failed to encode provided parameters: %w", err)
 	}
 
-	txn := CreateTransaction(types.ZeroAddress, &erc20TokenAddr, input, nil, rootchainTx)
+	txn := CreateTransaction(types.ZeroAddress, &erc20TokenAddr, input, nil, externalChainTx)
 
 	return txn, nil
 }
@@ -237,7 +242,7 @@ func CreateMintTxn(receiver, erc20TokenAddr types.Address,
 // CreateApproveERC20Txn sends approve transaction
 // to ERC20 token for spender so that it is able to spend given tokens
 func CreateApproveERC20Txn(amount *big.Int,
-	spender, erc20TokenAddr types.Address, rootchainTx bool) (*types.Transaction, error) {
+	spender, erc20TokenAddr types.Address, externalChainTx bool) (*types.Transaction, error) {
 	approveFnParams := &contractsapi.ApproveRootERC20Fn{
 		Spender: spender,
 		Amount:  amount,
@@ -248,7 +253,7 @@ func CreateApproveERC20Txn(amount *big.Int,
 		return nil, fmt.Errorf("failed to encode parameters for RootERC20.approve. error: %w", err)
 	}
 
-	return CreateTransaction(types.ZeroAddress, &erc20TokenAddr, input, nil, rootchainTx), nil
+	return CreateTransaction(types.ZeroAddress, &erc20TokenAddr, input, nil, externalChainTx), nil
 }
 
 // SendTransaction sends provided transaction

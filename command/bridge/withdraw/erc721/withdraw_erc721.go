@@ -42,7 +42,7 @@ func GetCommand() *cobra.Command {
 	withdrawCmd.Flags().StringVar(
 		&wp.PredicateAddr,
 		common.ChildPredicateFlag,
-		contracts.ChildERC721PredicateContract.String(),
+		"",
 		"ERC 721 child chain predicate address",
 	)
 
@@ -137,15 +137,15 @@ func run(cmd *cobra.Command, _ []string) {
 		Title:        "WITHDRAW ERC 721",
 	}
 
-	if !wp.ChildChainMintable {
-		exitEventIDs, err := common.ExtractExitEventIDs(receipt)
+	if !wp.InternalChainMintable {
+		bridgeMsgEventIDs, err := common.ExtractBridgeMessageIDs(receipt)
 		if err != nil {
-			outputter.SetError(fmt.Errorf("failed to extract exit event: %w", err))
+			outputter.SetError(fmt.Errorf("failed to extract bridge message event: %w", err))
 
 			return
 		}
 
-		res.ExitEventIDs = exitEventIDs
+		res.BridgeMsgEventIDs = bridgeMsgEventIDs
 	}
 
 	outputter.SetCommandResult(res)
@@ -167,5 +167,5 @@ func createWithdrawTxn(receivers []types.Address, tokenIDs []*big.Int) (*types.T
 	addr := types.StringToAddress(wp.PredicateAddr)
 
 	return helper.CreateTransaction(types.ZeroAddress, &addr, input,
-		nil, wp.ChildChainMintable), nil
+		nil, wp.InternalChainMintable), nil
 }

@@ -220,19 +220,19 @@ func runCommand(cmd *cobra.Command, _ []string) {
 		Title:        "DEPOSIT ERC 1155",
 	}
 
-	if dp.ChildChainMintable {
-		exitEventIDs, err := common.ExtractExitEventIDs(receipt)
+	if dp.InternalChainMintable {
+		bridgeMsgEventIDs, err := common.ExtractBridgeMessageIDs(receipt)
 		if err != nil {
 			outputter.SetError(fmt.Errorf("failed to extract exit event: %w", err))
 
 			return
 		}
 
-		res.ExitEventIDs = exitEventIDs
+		res.BridgeMsgEventIDs = bridgeMsgEventIDs
 	}
 
 	// populate child token address if a token is mapped alongside with deposit
-	childToken, err := common.ExtractChildTokenAddr(receipt, dp.ChildChainMintable)
+	childToken, err := common.ExtractChildTokenAddr(receipt)
 	if err != nil {
 		outputter.SetError(fmt.Errorf("failed to extract child token address: %w", err))
 
@@ -262,7 +262,7 @@ func createDepositTxn(sender types.Address, receivers []types.Address,
 	addr := types.StringToAddress(dp.PredicateAddr)
 
 	return helper.CreateTransaction(sender, &addr, input,
-		nil, !dp.ChildChainMintable), nil
+		nil, !dp.InternalChainMintable), nil
 }
 
 // createMintTxn encodes parameters for mint function on rootchain token contract
@@ -281,7 +281,7 @@ func createMintTxn(sender, receiver types.Address, amounts, tokenIDs []*big.Int)
 	addr := types.StringToAddress(dp.TokenAddr)
 
 	return helper.CreateTransaction(sender, &addr,
-		input, nil, !dp.ChildChainMintable), nil
+		input, nil, !dp.InternalChainMintable), nil
 }
 
 // createApproveERC1155PredicateTxn sends approve transaction
@@ -299,5 +299,5 @@ func createApproveERC1155PredicateTxn(rootERC1155Predicate,
 	}
 
 	return helper.CreateTransaction(types.ZeroAddress, &rootERC1155Token,
-		input, nil, !dp.ChildChainMintable), nil
+		input, nil, !dp.InternalChainMintable), nil
 }

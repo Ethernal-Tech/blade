@@ -1,6 +1,8 @@
 package server
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -8,13 +10,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	dockerImg "github.com/docker/docker/api/types/image"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
@@ -26,11 +30,11 @@ import (
 )
 
 const (
-	gethConsoleImage = "ghcr.io/0xpolygon/go-ethereum-console:latest"
+	gethConsoleImage = "0xethernal/go-ethereum-console:v0.0.1"
 	gethImage        = "ethereum/client-go:v1.9.25"
 
-	defaultHostIP   = "127.0.0.1"
-	defaultHostPort = "8545"
+	defaultHostIP = "127.0.0.1"
+	defaultPort   = 8545
 )
 
 var (
@@ -41,23 +45,23 @@ var (
 
 // GetCommand returns the bridge server command
 func GetCommand() *cobra.Command {
-	rootchainServerCmd := &cobra.Command{
+	externalChainServerCmd := &cobra.Command{
 		Use:     "server",
-		Short:   "Start the rootchain command",
+		Short:   "Start the external chain command",
 		PreRunE: runPreRun,
 		Run:     runCommand,
 	}
 
-	setFlags(rootchainServerCmd)
+	setFlags(externalChainServerCmd)
 
-	return rootchainServerCmd
+	return externalChainServerCmd
 }
 
 func setFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(
 		&params.dataDir,
 		dataDirFlag,
-		"test-rootchain",
+		"test-external-chain",
 		"target directory for the chain",
 	)
 
@@ -66,6 +70,20 @@ func setFlags(cmd *cobra.Command) {
 		noConsole,
 		false,
 		"use the official geth image instead of the console fork",
+	)
+
+	cmd.Flags().Uint64Var(
+		&params.chainID,
+		"chain-id",
+		101,
+		"custom chain id for external chain",
+	)
+
+	cmd.Flags().Uint64Var(
+		&params.port,
+		"port",
+		defaultPort,
+		"port for external chain",
 	)
 }
 
@@ -82,31 +100,31 @@ func runCommand(cmd *cobra.Command, _ []string) {
 	closeCh := make(chan struct{})
 
 	// Check if the client is already running
-	if cid, err := helper.GetRootchainID(); !errors.Is(err, helper.ErrRootchainNotFound) {
+	if cid, err := helper.GetBridgeContainerID(params.chainID); !errors.Is(err, helper.ErrExternalChainNotFound) {
 		if err != nil {
 			outputter.SetError(err)
 		} else if cid != "" {
-			outputter.SetError(fmt.Errorf("rootchain already running: %s", cid))
+			outputter.SetError(fmt.Errorf("external chain already running: %s", cid))
 		}
 
 		return
 	}
 
 	// Start the client
-	if err := runRootchain(ctx, outputter, closeCh); err != nil {
-		outputter.SetError(fmt.Errorf("failed to run rootchain: %w", err))
+	if err := runExternalChain(ctx, outputter, closeCh); err != nil {
+		outputter.SetError(fmt.Errorf("failed to run external chain: %w", err))
 
 		return
 	}
 
 	// Ping geth server to make sure everything is up and running
-	if err := PingServer(closeCh); err != nil {
+	if err := PingServer(ctx, params.port); err != nil {
 		close(closeCh)
 
-		if ip, err := helper.ReadRootchainIP(); err != nil {
-			outputter.SetError(fmt.Errorf("failed to ping rootchain server: %w", err))
+		if ip, err := helper.ReadBridgeChainIP(params.port, params.chainID); err != nil {
+			outputter.SetError(fmt.Errorf("failed to ping external chain server: %w", err))
 		} else {
-			outputter.SetError(fmt.Errorf("failed to ping rootchain server at address %s: %w", ip, err))
+			outputter.SetError(fmt.Errorf("failed to ping external chain server at address %s: %w", ip, err))
 		}
 
 		return
@@ -121,13 +139,18 @@ func runCommand(cmd *cobra.Command, _ []string) {
 		}
 	}()
 
-	if err := handleSignals(ctx, closeCh); err != nil {
+	if err := handleSignals(ctx); err != nil {
 		outputter.SetError(fmt.Errorf("failed to handle signals: %w", err))
 	}
 }
 
-func runRootchain(ctx context.Context, outputter command.OutputFormatter, closeCh chan struct{}) error {
-	var err error
+func runExternalChain(ctx context.Context, outputter command.OutputFormatter, closeCh chan struct{}) error {
+	var (
+		err           error
+		webSocketPort = params.port + 1
+		authPort      = params.port + 2
+	)
+
 	if dockerClient, err = dockerclient.NewClientWithOpts(dockerclient.FromEnv,
 		dockerclient.WithAPIVersionNegotiation()); err != nil {
 		return err
@@ -143,16 +166,29 @@ func runRootchain(ctx context.Context, outputter command.OutputFormatter, closeC
 		image = gethImage
 	}
 
-	// try to pull the image
-	reader, err := dockerClient.ImagePull(ctx, image, dockerImg.PullOptions{})
+	imageName := fmt.Sprintf("%s-%d", helper.ExternalChainImagePrefix, params.chainID)
+	dockerfile := fmt.Sprintf("FROM %s\nEXPOSE %d\n", image, params.port)
+
+	buildContext, err := createBuildContext(dockerfile)
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
 
-	if _, err = io.Copy(outputter, reader); err != nil {
+	build, err := dockerClient.ImageBuild(ctx, buildContext,
+		types.ImageBuildOptions{
+			Tags: []string{imageName},
+		})
+	if err != nil {
+		return err
+	}
+
+	defer build.Body.Close()
+
+	if _, err = io.Copy(outputter, build.Body); err != nil {
 		return fmt.Errorf("cannot copy: %w", err)
 	}
+
+	folderName := fmt.Sprintf("/ethdata_%d", params.chainID)
 
 	// create the client
 	args := []string{"--dev"}
@@ -161,10 +197,10 @@ func runRootchain(ctx context.Context, outputter command.OutputFormatter, closeC
 	args = append(args, "--dev.period", "2")
 
 	// add data dir
-	args = append(args, "--datadir", "/eth1data")
+	args = append(args, "--datadir", folderName)
 
 	// add ipcpath
-	args = append(args, "--ipcpath", "/eth1data/geth.ipc")
+	args = append(args, "--ipcpath", path.Join(folderName, "geth.ipc"))
 
 	// enable rpc
 	args = append(args, "--http", "--http.addr", "0.0.0.0", "--http.api", "eth,net,web3,debug")
@@ -172,11 +208,23 @@ func runRootchain(ctx context.Context, outputter command.OutputFormatter, closeC
 	// enable ws
 	args = append(args, "--ws", "--ws.addr", "0.0.0.0")
 
+	// set chain id
+	args = append(args, "--networkid", fmt.Sprintf("%d", params.chainID))
+
+	// set http port value
+	args = append(args, "--http.port", strconv.FormatUint(params.port, 10))
+
+	// set websocket port +1 from start port value
+	args = append(args, "--ws.port", strconv.FormatUint(webSocketPort, 10))
+
+	// set authrpc port +2 from start port value
+	args = append(args, "--authrpc.port", strconv.FormatUint(authPort, 10))
+
 	config := &container.Config{
-		Image: image,
+		Image: imageName,
 		Cmd:   args,
 		Labels: map[string]string{
-			"edge-type": "rootchain",
+			helper.ExternalChainLabelID: imageName,
 		},
 	}
 
@@ -194,16 +242,16 @@ func runRootchain(ctx context.Context, outputter command.OutputFormatter, closeC
 		}
 	}
 
-	port := nat.Port(fmt.Sprintf("%s/tcp", defaultHostPort))
+	port := nat.Port(fmt.Sprintf("%d/tcp", params.port))
 	hostConfig := &container.HostConfig{
 		Binds: []string{
-			mountDir + ":/eth1data",
+			mountDir + fmt.Sprintf(":%s", folderName),
 		},
 		PortBindings: nat.PortMap{
 			port: []nat.PortBinding{
 				{
 					HostIP:   defaultHostIP,
-					HostPort: defaultHostPort,
+					HostPort: strconv.FormatUint(params.port, 10),
 				},
 			},
 		},
@@ -236,6 +284,35 @@ func runRootchain(ctx context.Context, outputter command.OutputFormatter, closeC
 	return nil
 }
 
+// createBuildContext creates a tar archive with the Dockerfile content, which is used as the build context,
+// for the image, after that it removes temporary directory
+func createBuildContext(dockerfileContent string) (io.Reader, error) {
+	// Create the tar archive in memory
+	var buf bytes.Buffer
+	tarWriter := tar.NewWriter(&buf)
+
+	// Add the Dockerfile to the tar archive
+	fileInfo := &tar.Header{
+		Name: "Dockerfile",
+		Mode: 0600,
+		Size: int64(len(dockerfileContent)),
+	}
+
+	if err := tarWriter.WriteHeader(fileInfo); err != nil {
+		return nil, fmt.Errorf("failed to write tar header: %w", err)
+	}
+
+	if _, err := tarWriter.Write([]byte(dockerfileContent)); err != nil {
+		return nil, fmt.Errorf("failed to write Dockerfile content: %w", err)
+	}
+
+	if err := tarWriter.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close tar writer: %w", err)
+	}
+
+	return &buf, nil
+}
+
 func gatherLogs(ctx context.Context, outputter command.OutputFormatter) error {
 	opts := container.LogsOptions{
 		ShowStderr: true,
@@ -255,35 +332,34 @@ func gatherLogs(ctx context.Context, outputter command.OutputFormatter) error {
 	return nil
 }
 
-func PingServer(closeCh <-chan struct{}) error {
+func PingServer(ctx context.Context, port uint64) error {
 	httpTimer := time.NewTimer(30 * time.Second)
-	httpClient := http.Client{
-		Timeout: 5 * time.Second,
-	}
+	httpClient := http.Client{Timeout: 5 * time.Second}
 
 	for {
 		select {
 		case <-time.After(500 * time.Millisecond):
-			resp, err := httpClient.Post(fmt.Sprintf("http://%s:%s", defaultHostIP, defaultHostPort), "application/json", nil)
+			resp, err := httpClient.Post(fmt.Sprintf("http://%s:%d", defaultHostIP, port), "application/json", nil)
 			if err == nil {
 				return resp.Body.Close()
 			}
 		case <-httpTimer.C:
 			return fmt.Errorf("timeout to start http")
-		case <-closeCh:
-			return fmt.Errorf("closed before connecting with http. Is there any other process running and using rootchain dir?")
+		case <-ctx.Done():
+			return fmt.Errorf(
+				"closed before connecting with http. Is there any other process running and using external chain?")
 		}
 	}
 }
 
-func handleSignals(ctx context.Context, closeCh <-chan struct{}) error {
+func handleSignals(ctx context.Context) error {
 	signalCh := make(chan os.Signal, 4)
 	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 
 	stop := true
 	select {
 	case <-signalCh:
-	case <-closeCh:
+	case <-ctx.Done():
 		stop = false
 	}
 

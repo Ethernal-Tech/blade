@@ -1,10 +1,8 @@
 package e2e
 
 import (
-	"errors"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/0xPolygon/polygon-edge/jsonrpc"
 	"github.com/Ethernal-Tech/ethgo"
@@ -22,10 +20,10 @@ import (
 	"github.com/0xPolygon/polygon-edge/types"
 )
 
-const nativeTokenNonMintableConfig = "Blade:BLD:18:false"
+const nativeTokenNonMintableConfig = "Blade:BLD:18:false:1"
 
 var (
-	stateSyncResultEvent contractsapi.StateSyncResultEvent
+	bridgeMessageResultEvent contractsapi.BridgeMessageResultEvent
 )
 
 func ABICall(relayer txrelayer.TxRelayer, artifact *contracts.Artifact, contractAddress types.Address, senderAddr types.Address, method string, params ...interface{}) (string, error) {
@@ -57,94 +55,45 @@ func ABITransaction(
 	return relayer.SendTransaction(tx, key)
 }
 
-// checkStateSyncResultLogs is helper function which parses given StateSyncResultEvent event's logs,
+// checkBridgeMessageResultLogs is helper function which parses given BridgeMessageResultEvent event's logs,
 // extracts status topic value and makes assertions against it.
-func checkStateSyncResultLogs(
+func checkBridgeMessageResultLogs(
 	t *testing.T,
 	logs []*ethgo.Log,
 	expectedCount int,
-	handler func(*testing.T, contractsapi.StateSyncResultEvent),
+	handler func(*testing.T, contractsapi.BridgeMessageResultEvent),
 ) {
 	t.Helper()
 	require.Equal(t, expectedCount, len(logs))
 
 	for _, log := range logs {
-		doesMatch, err := stateSyncResultEvent.ParseLog(log)
+		doesMatch, err := bridgeMessageResultEvent.ParseLog(log)
 		require.NoError(t, err)
 		require.True(t, doesMatch)
 
-		t.Logf("Block Number=%d, Decoded Log=%+v\n", log.BlockNumber, stateSyncResultEvent)
+		t.Logf("Block Number=%d, Decoded Log=%+v\n", log.BlockNumber, bridgeMessageResultEvent)
 
 		if handler != nil {
-			handler(t, stateSyncResultEvent)
+			handler(t, bridgeMessageResultEvent)
 		}
 	}
 }
 
-// assertStateSyncResultSuccess asserts that:
+// assertBridgeEventResultSuccess asserts that:
 // 1. there are required amount of logs,
-// 2. they are of contractsapi.StateSyncResult type
+// 2. they are of contractsapi.BridgeMessageResult type
 // 3. status is true, meaning that the state syncs were executed successfully
-func assertStateSyncResultSuccess(
+func assertBridgeEventResultSuccess(
 	t *testing.T,
 	logs []*ethgo.Log,
 	expectedCount int) {
 	t.Helper()
-	checkStateSyncResultLogs(t, logs, expectedCount,
-		func(t *testing.T, ssre contractsapi.StateSyncResultEvent) {
+	checkBridgeMessageResultLogs(t, logs, expectedCount,
+		func(t *testing.T, ssre contractsapi.BridgeMessageResultEvent) {
 			t.Helper()
 
 			require.True(t, ssre.Status)
 		})
-}
-
-// getCheckpointBlockNumber gets current checkpoint block number from checkpoint manager smart contract
-func getCheckpointBlockNumber(l1Relayer txrelayer.TxRelayer, checkpointManagerAddr types.Address) (uint64, error) {
-	checkpointBlockNumRaw, err := ABICall(l1Relayer, contractsapi.CheckpointManager,
-		checkpointManagerAddr, types.ZeroAddress, "currentCheckpointBlockNumber")
-	if err != nil {
-		return 0, err
-	}
-
-	actualCheckpointBlock, err := common.ParseUint64orHex(&checkpointBlockNumRaw)
-	if err != nil {
-		return 0, err
-	}
-
-	return actualCheckpointBlock, nil
-}
-
-// waitForRootchainEpoch blocks for some predefined timeout to reach target epoch
-func waitForRootchainEpoch(targetEpoch uint64, timeout time.Duration,
-	rootchainTxRelayer txrelayer.TxRelayer, checkpointManager types.Address) error {
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timer.C:
-			return errors.New("root chain hasn't progressed to the desired epoch")
-		case <-ticker.C:
-		}
-
-		rootchainEpochRaw, err := ABICall(rootchainTxRelayer, contractsapi.CheckpointManager,
-			checkpointManager, types.ZeroAddress, "currentEpoch")
-		if err != nil {
-			return err
-		}
-
-		rootchainEpoch, err := common.ParseUint64orHex(&rootchainEpochRaw)
-		if err != nil {
-			return err
-		}
-
-		if rootchainEpoch >= targetEpoch {
-			return nil
-		}
-	}
 }
 
 // setAccessListRole sets access list role to appropriate access list precompile
@@ -250,10 +199,10 @@ func getChildToken(t *testing.T, predicateABI *abi.ABI, predicateAddr types.Addr
 	rootToken types.Address, relayer txrelayer.TxRelayer) types.Address {
 	t.Helper()
 
-	rootToChildTokenFn, exists := predicateABI.Methods["rootTokenToChildToken"]
+	sourceToDestTokenMapFn, exists := predicateABI.Methods["sourceTokenToDestinationToken"]
 	require.True(t, exists, "rootTokenToChildToken function is not found in the provided predicate ABI definition")
 
-	input, err := rootToChildTokenFn.Encode([]interface{}{rootToken})
+	input, err := sourceToDestTokenMapFn.Encode([]interface{}{rootToken})
 	require.NoError(t, err)
 
 	childTokenRaw, err := relayer.Call(types.ZeroAddress, predicateAddr, input)
@@ -262,33 +211,16 @@ func getChildToken(t *testing.T, predicateABI *abi.ABI, predicateAddr types.Addr
 	return types.StringToAddress(childTokenRaw)
 }
 
-func getLastExitEventID(t *testing.T, relayer txrelayer.TxRelayer) uint64 {
+func isEventProcessed(t *testing.T, gatewayAddr types.Address,
+	relayer txrelayer.TxRelayer, bridgeEventID uint64) bool {
 	t.Helper()
 
-	exitEventsCounterFn := contractsapi.L2StateSender.Abi.Methods["counter"]
+	processedEventsFn := contractsapi.Gateway.Abi.Methods["processedEvents"]
 
-	input, err := exitEventsCounterFn.Encode([]interface{}{})
+	input, err := processedEventsFn.Encode([]interface{}{bridgeEventID})
 	require.NoError(t, err)
 
-	exitEventIDRaw, err := relayer.Call(types.ZeroAddress, contracts.L2StateSenderContract, input)
-	require.NoError(t, err)
-
-	exitEventID, err := common.ParseUint64orHex(&exitEventIDRaw)
-	require.NoError(t, err)
-
-	return exitEventID
-}
-
-func isExitEventProcessed(t *testing.T, exitHelperAddr types.Address,
-	relayer txrelayer.TxRelayer, exitEventID uint64) bool {
-	t.Helper()
-
-	processedExitsFn := contractsapi.ExitHelper.Abi.Methods["processedExits"]
-
-	input, err := processedExitsFn.Encode([]interface{}{exitEventID})
-	require.NoError(t, err)
-
-	isProcessedRaw, err := relayer.Call(types.ZeroAddress, exitHelperAddr, input)
+	isProcessedRaw, err := relayer.Call(types.ZeroAddress, gatewayAddr, input)
 	require.NoError(t, err)
 
 	isProcessedAsNumber, err := common.ParseUint64orHex(&isProcessedRaw)

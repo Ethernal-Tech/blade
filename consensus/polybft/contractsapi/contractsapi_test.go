@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/helper/common"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/Ethernal-Tech/ethgo"
@@ -13,25 +12,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type method interface {
-	EncodeAbi() ([]byte, error)
-	DecodeAbi(buf []byte) error
-}
-
 func TestEncoding_Method(t *testing.T) {
 	t.Parallel()
 
-	cases := []method{
-		// empty commit
-		&CommitStateReceiverFn{
-			Commitment: &StateSyncCommitment{
-				StartID: big.NewInt(1),
-				EndID:   big.NewInt(1),
-				Root:    types.EmptyRootHash,
-			},
-			Signature: []byte{},
-			Bitmap:    []byte{},
-		},
+	cases := []ABIEncoder{
 		// empty commit epoch
 		&CommitEpochEpochManagerFn{
 			ID: big.NewInt(1),
@@ -49,7 +33,7 @@ func TestEncoding_Method(t *testing.T) {
 
 		// use reflection to create another type and decode
 		val := reflect.New(reflect.TypeOf(c).Elem()).Interface()
-		obj, ok := val.(method)
+		obj, ok := val.(ABIEncoder)
 		require.True(t, ok)
 
 		err = obj.DecodeAbi(res)
@@ -61,71 +45,65 @@ func TestEncoding_Method(t *testing.T) {
 func TestEncoding_Struct(t *testing.T) {
 	t.Parallel()
 
-	commitment := &StateSyncCommitment{
-		StartID: big.NewInt(1),
-		EndID:   big.NewInt(10),
-		Root:    types.StringToHash("hash"),
+	bridgeBatch := SignedBridgeMessageBatch{
+		RootHash:           types.ZeroHash,
+		StartID:            big.NewInt(25),
+		EndID:              big.NewInt(35),
+		SourceChainID:      big.NewInt(1),
+		DestinationChainID: big.NewInt(0),
+		Signature:          [2]*big.Int{big.NewInt(1), big.NewInt(2)},
+		Threshold:          big.NewInt(0),
+		IsRollback:         false,
 	}
 
-	encoding, err := commitment.EncodeAbi()
+	encoding, err := bridgeBatch.EncodeAbi()
 	require.NoError(t, err)
 
-	var commitmentDecoded StateSyncCommitment
+	var bridgeBatchDecoded SignedBridgeMessageBatch
 
-	require.NoError(t, commitmentDecoded.DecodeAbi(encoding))
-	require.Equal(t, commitment.StartID, commitmentDecoded.StartID)
-	require.Equal(t, commitment.EndID, commitmentDecoded.EndID)
-	require.Equal(t, commitment.Root, commitmentDecoded.Root)
+	require.NoError(t, bridgeBatchDecoded.DecodeAbi(encoding))
+	require.Equal(t, bridgeBatch.SourceChainID, bridgeBatchDecoded.SourceChainID)
+	require.Equal(t, bridgeBatch.DestinationChainID.Uint64(), bridgeBatchDecoded.DestinationChainID.Uint64())
 }
 
 func TestEncodingAndParsingEvent(t *testing.T) {
 	t.Parallel()
 
 	var (
-		exitEventAPI      L2StateSyncedEvent
-		stateSyncEventAPI StateSyncedEvent
+		bridgeMsgEvent BridgeMsgEvent
 	)
 
 	topics := make([]ethgo.Hash, 4)
-	topics[0] = exitEventAPI.Sig()
+	topics[0] = bridgeMsgEvent.Sig()
 	topics[1] = ethgo.BytesToHash(common.EncodeUint64ToBytes(11))
 	topics[2] = ethgo.BytesToHash(types.StringToAddress("0x1111").Bytes())
 	topics[3] = ethgo.BytesToHash(types.StringToAddress("0x2222").Bytes())
-	someType := abi.MustNewType("tuple(string firstName, string lastName)")
-	encodedData, err := someType.Encode(map[string]string{"firstName": "John", "lastName": "Doe"})
+	someType := abi.MustNewType("tuple(string firstName,string secondName ,string lastName)")
+	encodedData, err := someType.Encode(map[string]string{"firstName": "John", "secondName": "data", "lastName": "Doe"})
 	require.NoError(t, err)
 
 	log := &ethgo.Log{
-		Address: ethgo.Address(contracts.L2StateSenderContract),
-		Topics:  topics,
-		Data:    encodedData,
+		Topics: topics,
+		Data:   encodedData,
 	}
 
-	var exitEvent L2StateSyncedEvent
-
 	// log matches event
-	doesMatch, err := exitEvent.ParseLog(log)
+	doesMatch, err := bridgeMsgEvent.ParseLog(log)
 	require.NoError(t, err)
 	require.True(t, doesMatch)
-	require.Equal(t, uint64(11), exitEvent.ID.Uint64())
+	require.Equal(t, uint64(11), bridgeMsgEvent.ID.Uint64())
 
 	// change exit event id
 	log.Topics[1] = ethgo.BytesToHash(common.EncodeUint64ToBytes(22))
-	doesMatch, err = exitEvent.ParseLog(log)
+	doesMatch, err = bridgeMsgEvent.ParseLog(log)
 	require.NoError(t, err)
 	require.True(t, doesMatch)
-	require.Equal(t, uint64(22), exitEvent.ID.Uint64())
-
-	// log does not match event
-	log.Topics[0] = stateSyncEventAPI.Sig()
-	doesMatch, err = exitEvent.ParseLog(log)
-	require.NoError(t, err)
-	require.False(t, doesMatch)
+	require.Equal(t, uint64(22), bridgeMsgEvent.ID.Uint64())
 
 	// error on parsing log
-	log.Topics[0] = exitEventAPI.Sig()
+	log.Topics[0] = bridgeMsgEvent.Sig()
 	log.Topics = log.Topics[:3]
-	doesMatch, err = exitEvent.ParseLog(log)
+	doesMatch, err = bridgeMsgEvent.ParseLog(log)
 	require.Error(t, err)
 	require.True(t, doesMatch)
 }

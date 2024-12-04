@@ -15,9 +15,15 @@ import (
 	"github.com/0xPolygon/go-ibft/core"
 	"github.com/0xPolygon/polygon-edge/chain"
 	"github.com/0xPolygon/polygon-edge/consensus"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/blockchain"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/bridge"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/config"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/signer"
+	polystate "github.com/0xPolygon/polygon-edge/consensus/polybft/state"
+	polytypes "github.com/0xPolygon/polygon-edge/consensus/polybft/types"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/validator"
+	vs "github.com/0xPolygon/polygon-edge/consensus/polybft/validator-snapshot"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/wallet"
 	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/forkmanager"
@@ -37,20 +43,6 @@ const (
 	// that is used to calculate the round 0 timeout for the go-ibft
 	baseRoundTimeoutScaleFactor = 2
 )
-
-// polybftBackend is an interface defining polybft methods needed by fsm and sync tracker
-type polybftBackend interface {
-	// GetValidators retrieves validator set for the given block
-	GetValidators(blockNumber uint64, parents []*types.Header) (validator.AccountSet, error)
-
-	// GetValidators retrieves validator set for the given block
-	// Function expects that db tx is already open
-	GetValidatorsWithTx(blockNumber uint64, parents []*types.Header,
-		dbTx *bolt.Tx) (validator.AccountSet, error)
-
-	// SetBlockTime updates the block time
-	SetBlockTime(blockTime time.Duration)
-}
 
 // Factory is the factory function to create a discovery consensus
 func Factory(params *consensus.Params) (consensus.Consensus, error) {
@@ -87,16 +79,16 @@ type Polybft struct {
 	ibft *IBFTConsensusWrapper
 
 	// state is reference to the struct which encapsulates consensus data persistence logic
-	state *State
+	state *polystate.State
 
 	// consensus parameters
 	config *consensus.Params
 
 	// genesisClientConfig is genesis configuration for polybft consensus protocol
-	genesisClientConfig *PolyBFTConfig
+	genesisClientConfig *config.PolyBFT
 
 	// blockchain is a reference to the blockchain object
-	blockchain blockchainBackend
+	blockchain blockchain.Blockchain
 
 	// runtime handles consensus runtime features like epoch, state and event management
 	runtime *consensusRuntime
@@ -117,18 +109,18 @@ type Polybft struct {
 	key *wallet.Key
 
 	// validatorsCache represents cache of validators snapshots
-	validatorsCache *validatorsSnapshotCache
+	validatorsCache *vs.ValidatorsSnapshotCache
 
 	// logger
 	logger hclog.Logger
 
 	// tx pool as interface
-	txPool txPoolInterface
+	txPool blockchain.TxPool
 }
 
-func GenesisPostHookFactory(config *chain.Chain, engineName string) func(txn *state.Transition) error {
+func GenesisPostHookFactory(cfg *chain.Chain, engineName string) func(txn *state.Transition) error {
 	return func(transition *state.Transition) error {
-		polyBFTConfig, err := GetPolyBFTConfig(config.Params)
+		polyBFTConfig, err := config.GetPolyBFTConfig(cfg.Params)
 		if err != nil {
 			return err
 		}
@@ -138,7 +130,7 @@ func GenesisPostHookFactory(config *chain.Chain, engineName string) func(txn *st
 		// that is used for minting and burning native token
 		initialTotalSupply := big.NewInt(0)
 
-		for addr, alloc := range config.Genesis.Alloc {
+		for addr, alloc := range cfg.Genesis.Alloc {
 			if addr == types.ZeroAddress {
 				continue
 			}
@@ -146,23 +138,12 @@ func GenesisPostHookFactory(config *chain.Chain, engineName string) func(txn *st
 			initialTotalSupply.Add(initialTotalSupply, alloc.Balance)
 		}
 
-		proxyAddrMapping := contracts.GetProxyImplementationMapping()
-
-		burnContractAddress, isBurnContractSet := getBurnContractAddress(config, polyBFTConfig)
-		if isBurnContractSet {
-			proxyAddrMapping[contracts.DefaultBurnContract] = burnContractAddress
-		}
-
-		if _, ok := config.Genesis.Alloc[contracts.RewardTokenContract]; ok {
-			proxyAddrMapping[contracts.RewardTokenContract] = contracts.RewardTokenContractV1
-		}
-
-		if err = initProxies(transition, polyBFTConfig.ProxyContractsAdmin, proxyAddrMapping); err != nil {
+		if err = initProxies(transition, cfg, polyBFTConfig); err != nil {
 			return err
 		}
 
 		// initialize NetworkParams SC
-		if err = initNetworkParamsContract(config.Params.BaseFeeChangeDenom, polyBFTConfig, transition); err != nil {
+		if err = initNetworkParamsContract(cfg.Params.BaseFeeChangeDenom, polyBFTConfig, transition); err != nil {
 			return err
 		}
 
@@ -205,177 +186,130 @@ func GenesisPostHookFactory(config *chain.Chain, engineName string) func(txn *st
 			return err
 		}
 
-		bridgeCfg := polyBFTConfig.Bridge
-		if bridgeCfg != nil {
-			// check if there are Bridge Allow List Admins and Bridge Block List Admins
-			// and if there are, get the first address as the Admin
-			bridgeAllowListAdmin := types.ZeroAddress
-			if config.Params.BridgeAllowList != nil && len(config.Params.BridgeAllowList.AdminAddresses) > 0 {
-				bridgeAllowListAdmin = config.Params.BridgeAllowList.AdminAddresses[0]
+		if polyBFTConfig.IsBridgeEnabled() {
+			// initialize BridgeStorage SC
+			if err = initBridgeStorageContract(polyBFTConfig, transition); err != nil {
+				return err
 			}
 
-			bridgeBlockListAdmin := types.ZeroAddress
-			if config.Params.BridgeBlockList != nil && len(config.Params.BridgeBlockList.AdminAddresses) > 0 {
-				bridgeBlockListAdmin = config.Params.BridgeBlockList.AdminAddresses[0]
-			}
+			bridgeCfgMap := polyBFTConfig.Bridge
+			isBridgeAllowListEnabled := cfg.Params.IsBridgeAllowListEnabled()
+			isBridgeBlockListEnabled := cfg.Params.IsBridgeBlockListEnabled()
 
 			// initialize Predicate SCs
-			if bridgeAllowListAdmin != types.ZeroAddress || bridgeBlockListAdmin != types.ZeroAddress {
+			if isBridgeAllowListEnabled || isBridgeBlockListEnabled {
 				// The owner of the contract will be the allow list admin or the block list admin, if any of them is set.
-				owner := contracts.SystemCaller
-				useBridgeAllowList := bridgeAllowListAdmin != types.ZeroAddress
-				useBridgeBlockList := bridgeBlockListAdmin != types.ZeroAddress
+				owner := cfg.Params.GetBridgeOwner()
+				useBridgeAllowList := isBridgeAllowListEnabled
+				useBridgeBlockList := isBridgeBlockListEnabled
 
-				if bridgeAllowListAdmin != types.ZeroAddress {
-					owner = bridgeAllowListAdmin
-				} else if bridgeBlockListAdmin != types.ZeroAddress {
-					owner = bridgeBlockListAdmin
-				}
+				for chainID, chainBridgeCfg := range bridgeCfgMap {
+					chainIDBig := new(big.Int).SetUint64(chainID)
 
-				// initialize ChildERC20PredicateAccessList SC
-				input, err := getInitERC20PredicateACLInput(polyBFTConfig.Bridge, owner,
-					useBridgeAllowList, useBridgeBlockList, false)
-				if err != nil {
-					return err
-				}
+					// initialize Gateway SC
+					if err = initGatewayContract(polyBFTConfig, chainBridgeCfg, transition, cfg.Genesis.Alloc); err != nil {
+						return err
+					}
 
-				if err = callContract(contracts.SystemCaller, contracts.ChildERC20PredicateContract, input,
-					"ChildERC20PredicateAccessList", transition); err != nil {
-					return err
-				}
+					// initialize InternalERC20PredicateAccessList SC
+					if err = initERC20ACLPredicateContract(transition, chainBridgeCfg, cfg.Genesis.Alloc,
+						owner, useBridgeAllowList, useBridgeBlockList, false, chainIDBig,
+						"InternalERC20PredicateAccessList"); err != nil {
+						return err
+					}
 
-				// initialize ChildERC721PredicateAccessList SC
-				input, err = getInitERC721PredicateACLInput(polyBFTConfig.Bridge, owner,
-					useBridgeAllowList, useBridgeBlockList, false)
-				if err != nil {
-					return err
-				}
+					// initialize InternalERC721PredicateAccessList SC
+					if err = initERC721ACLPredicateContract(transition, chainBridgeCfg, cfg.Genesis.Alloc,
+						owner, useBridgeAllowList, useBridgeBlockList, false, chainIDBig,
+						"InternalERC721PredicateAccessList"); err != nil {
+						return err
+					}
 
-				if err = callContract(contracts.SystemCaller, contracts.ChildERC721PredicateContract, input,
-					"ChildERC721PredicateAccessList", transition); err != nil {
-					return err
-				}
+					// initialize InternalERC1155PredicateAccessList SC
+					if err = initERC1155ACLPredicateContract(transition, chainBridgeCfg, cfg.Genesis.Alloc,
+						owner, useBridgeAllowList, useBridgeBlockList, false, chainIDBig,
+						"InternalERC1155PredicateAccessList"); err != nil {
+						return err
+					}
 
-				// initialize ChildERC1155PredicateAccessList SC
-				input, err = getInitERC1155PredicateACLInput(polyBFTConfig.Bridge, owner,
-					useBridgeAllowList, useBridgeBlockList, false)
-				if err != nil {
-					return err
-				}
+					// initialize InternalMintableERC20PredicateAccessList SC
+					if err = initERC20ACLPredicateContract(transition, chainBridgeCfg, cfg.Genesis.Alloc,
+						owner, useBridgeAllowList, useBridgeBlockList, true, chainIDBig,
+						"InternalERC20MintablePredicateAccessList"); err != nil {
+						return err
+					}
 
-				if err = callContract(contracts.SystemCaller, contracts.ChildERC1155PredicateContract, input,
-					"ChildERC1155PredicateAccessList", transition); err != nil {
-					return err
-				}
+					// initialize InternalMintableERC721PredicateAccessList SC
+					if err = initERC721ACLPredicateContract(transition, chainBridgeCfg, cfg.Genesis.Alloc,
+						owner, useBridgeAllowList, useBridgeBlockList, true, chainIDBig,
+						"InternalERC721MintablePredicateAccessList"); err != nil {
+						return err
+					}
 
-				// initialize RootMintableERC20PredicateAccessList SC
-				input, err = getInitERC20PredicateACLInput(polyBFTConfig.Bridge, owner,
-					useBridgeAllowList, useBridgeBlockList, true)
-				if err != nil {
-					return err
-				}
-
-				if err = callContract(contracts.SystemCaller, contracts.RootMintableERC20PredicateContract, input,
-					"RootMintableERC20PredicateAccessList", transition); err != nil {
-					return err
-				}
-
-				// initialize RootMintableERC721PredicateAccessList SC
-				input, err = getInitERC721PredicateACLInput(polyBFTConfig.Bridge, owner,
-					useBridgeAllowList, useBridgeBlockList, true)
-				if err != nil {
-					return err
-				}
-
-				if err = callContract(contracts.SystemCaller, contracts.RootMintableERC721PredicateContract, input,
-					"RootMintableERC721PredicateAccessList", transition); err != nil {
-					return err
-				}
-
-				// initialize RootMintableERC1155PredicateAccessList SC
-				input, err = getInitERC1155PredicateACLInput(polyBFTConfig.Bridge, owner,
-					useBridgeAllowList, useBridgeBlockList, true)
-				if err != nil {
-					return err
-				}
-
-				if err = callContract(contracts.SystemCaller, contracts.RootMintableERC1155PredicateContract, input,
-					"RootMintableERC1155PredicateAccessList", transition); err != nil {
-					return err
+					// initialize InternalMintableERC1155PredicateAccessList SC
+					if err = initERC1155ACLPredicateContract(transition, chainBridgeCfg, cfg.Genesis.Alloc,
+						owner, useBridgeAllowList, useBridgeBlockList, true, chainIDBig,
+						"InternalERC1155MintablePredicateAccessList"); err != nil {
+						return err
+					}
 				}
 			} else {
-				// initialize ChildERC20Predicate SC
-				input, err := getInitERC20PredicateInput(bridgeCfg, false)
-				if err != nil {
-					return err
-				}
+				for destChainID, chainBridgeCfg := range bridgeCfgMap {
+					destChainIDBig := new(big.Int).SetUint64(destChainID)
 
-				if err = callContract(contracts.SystemCaller, contracts.ChildERC20PredicateContract, input,
-					"ChildERC20Predicate", transition); err != nil {
-					return err
-				}
+					// initialize Gateway SC
+					if err = initGatewayContract(polyBFTConfig, chainBridgeCfg, transition, cfg.Genesis.Alloc); err != nil {
+						return err
+					}
 
-				// initialize ChildERC721Predicate SC
-				input, err = getInitERC721PredicateInput(bridgeCfg, false)
-				if err != nil {
-					return err
-				}
+					// initialize InternalERC20Predicate SC
+					if err = initERC20PredicateContract(transition, chainBridgeCfg, cfg.Genesis.Alloc,
+						false, destChainIDBig, "InternalERC20Predicate"); err != nil {
+						return err
+					}
 
-				if err = callContract(contracts.SystemCaller, contracts.ChildERC721PredicateContract, input,
-					"ChildERC721Predicate", transition); err != nil {
-					return err
-				}
+					// initialize InternalERC721Predicate SC
+					if err = initERC721PredicateContract(transition, chainBridgeCfg, cfg.Genesis.Alloc,
+						false, destChainIDBig, "InternalERC721Predicate"); err != nil {
+						return err
+					}
 
-				// initialize ChildERC1155Predicate SC
-				input, err = getInitERC1155PredicateInput(bridgeCfg, false)
-				if err != nil {
-					return err
-				}
+					// initialize InternalERC1155Predicate SC
+					if err = initERC1155PredicateContract(transition, chainBridgeCfg, cfg.Genesis.Alloc,
+						false, destChainIDBig, "InternalERC1155Predicate"); err != nil {
+						return err
+					}
 
-				if err = callContract(contracts.SystemCaller, contracts.ChildERC1155PredicateContract, input,
-					"ChildERC1155Predicate", transition); err != nil {
-					return err
-				}
+					// initialize InternalMintableERC20Predicate SC
+					if err = initERC20PredicateContract(transition, chainBridgeCfg, cfg.Genesis.Alloc,
+						true, destChainIDBig, "InternalERC20MintablePredicate"); err != nil {
+						return err
+					}
 
-				// initialize RootMintableERC20Predicate SC
-				input, err = getInitERC20PredicateInput(bridgeCfg, true)
-				if err != nil {
-					return err
-				}
+					// initialize InternalMintableERC721Predicate SC
+					if err = initERC721PredicateContract(transition, chainBridgeCfg, cfg.Genesis.Alloc,
+						true, destChainIDBig, "InternalERC721MintablePredicate"); err != nil {
+						return err
+					}
 
-				if err = callContract(contracts.SystemCaller, contracts.RootMintableERC20PredicateContract, input,
-					"RootMintableERC20Predicate", transition); err != nil {
-					return err
-				}
-
-				// initialize RootMintableERC721Predicate SC
-				input, err = getInitERC721PredicateInput(bridgeCfg, true)
-				if err != nil {
-					return err
-				}
-
-				if err = callContract(contracts.SystemCaller, contracts.RootMintableERC721PredicateContract, input,
-					"RootMintableERC721Predicate", transition); err != nil {
-					return err
-				}
-
-				// initialize RootMintableERC1155Predicate SC
-				input, err = getInitERC1155PredicateInput(bridgeCfg, true)
-				if err != nil {
-					return err
-				}
-
-				if err = callContract(contracts.SystemCaller, contracts.RootMintableERC1155PredicateContract, input,
-					"RootMintableERC1155Predicate", transition); err != nil {
-					return err
+					// initialize InternalMintableERC1155Predicate SC
+					if err = initERC1155PredicateContract(transition, chainBridgeCfg, cfg.Genesis.Alloc,
+						true, destChainIDBig, "InternalERC1155MintablePredicate"); err != nil {
+						return err
+					}
 				}
 			}
 		}
 
 		if polyBFTConfig.NativeTokenConfig.IsMintable {
+			predicateAddress := types.ZeroAddress
+			if bridgeCfg, exists := polyBFTConfig.Bridge[polyBFTConfig.NativeTokenConfig.ChainID]; exists {
+				predicateAddress = bridgeCfg.InternalERC20PredicateAddr
+			}
+
 			// initialize NativeERC20Mintable SC
 			params := &contractsapi.InitializeNativeERC20MintableFn{
-				Predicate_:   contracts.ChildERC20PredicateContract,
+				Predicate_:   predicateAddress,
 				Owner_:       polyBFTConfig.BladeAdmin,
 				RootToken_:   types.ZeroAddress, // in case native mintable token is used, it is always root token
 				Name_:        polyBFTConfig.NativeTokenConfig.Name,
@@ -399,8 +333,8 @@ func GenesisPostHookFactory(config *chain.Chain, engineName string) func(txn *st
 				Name_:        polyBFTConfig.NativeTokenConfig.Name,
 				Symbol_:      polyBFTConfig.NativeTokenConfig.Symbol,
 				Decimals_:    polyBFTConfig.NativeTokenConfig.Decimals,
-				RootToken_:   polyBFTConfig.Bridge.RootNativeERC20Addr,
-				Predicate_:   contracts.ChildERC20PredicateContract,
+				RootToken_:   polyBFTConfig.Bridge[polyBFTConfig.NativeTokenConfig.ChainID].ExternalNativeERC20Addr,
+				Predicate_:   polyBFTConfig.Bridge[polyBFTConfig.NativeTokenConfig.ChainID].InternalERC20PredicateAddr,
 				TokenSupply_: initialTotalSupply,
 			}
 
@@ -414,11 +348,13 @@ func GenesisPostHookFactory(config *chain.Chain, engineName string) func(txn *st
 				return err
 			}
 
+			burnContractAddress, isBurnContractSet := getBurnContractAddress(cfg, polyBFTConfig)
+
 			// initialize EIP1559Burn SC
 			if isBurnContractSet {
 				burnParams := &contractsapi.InitializeEIP1559BurnFn{
-					NewChildERC20Predicate: contracts.ChildERC20PredicateContract,
-					NewBurnDestination:     config.Params.BurnContractDestinationAddress,
+					NewChildERC20Predicate: polyBFTConfig.Bridge[polyBFTConfig.NativeTokenConfig.ChainID].InternalERC20PredicateAddr,
+					NewBurnDestination:     cfg.Params.BurnContractDestinationAddress,
 				}
 
 				input, err = burnParams.EncodeAbi()
@@ -444,8 +380,8 @@ func ForkManagerFactory(forks *chain.Forks) error {
 }
 
 // IsL1OriginatedTokenCheck checks if the token is originated from L1
-func IsL1OriginatedTokenCheck(config *chain.Params) (bool, error) {
-	polyBFTConfig, err := GetPolyBFTConfig(config)
+func IsL1OriginatedTokenCheck(cfg *chain.Params) (bool, error) {
+	polyBFTConfig, err := config.GetPolyBFTConfig(cfg)
 	if err != nil {
 		return false, err
 	}
@@ -475,11 +411,11 @@ func (p *Polybft) Initialize() error {
 	)
 
 	// set blockchain backend
-	p.blockchain = &blockchainWrapper{
-		logger:     p.logger.Named("blockchain_wrapper"),
-		blockchain: p.config.Blockchain,
-		executor:   p.config.Executor,
-	}
+	p.blockchain = blockchain.NewBlockchainWrapper(
+		p.logger.Named("blockchain_wrapper"),
+		p.config.Blockchain,
+		p.config.Executor,
+	)
 
 	// create bridge and consensus topics
 	if err = p.createTopics(); err != nil {
@@ -493,13 +429,15 @@ func (p *Polybft) Initialize() error {
 		return fmt.Errorf("failed to create data directory. Error: %w", err)
 	}
 
-	stt, err := newState(filepath.Join(p.dataDir, stateFileName), p.closeCh)
+	p.state, err = polystate.NewState(filepath.Join(p.dataDir, stateFileName), p.closeCh)
 	if err != nil {
 		return fmt.Errorf("failed to create state instance. Error: %w", err)
 	}
 
-	p.state = stt
-	p.validatorsCache = newValidatorsSnapshotCache(p.config.Logger, stt, p.blockchain)
+	p.validatorsCache, err = vs.NewValidatorsSnapshotCache(p.config.Logger, p.state, p.blockchain)
+	if err != nil {
+		return fmt.Errorf("failed to create validators cache. Error: %w", err)
+	}
 
 	// create runtime
 	if err := p.initRuntime(); err != nil {
@@ -515,8 +453,8 @@ func (p *Polybft) Initialize() error {
 	return nil
 }
 
-func ForkManagerInitialParamsFactory(config *chain.Chain) (*forkmanager.ForkParams, error) {
-	pbftConfig, err := GetPolyBFTConfig(config.Params)
+func ForkManagerInitialParamsFactory(cfg *chain.Chain) (*forkmanager.ForkParams, error) {
+	pbftConfig, err := config.GetPolyBFTConfig(cfg.Params)
 	if err != nil {
 		return nil, err
 	}
@@ -561,7 +499,7 @@ func (p *Polybft) Start() error {
 	}
 
 	// start state DB process
-	go p.state.startStatsReleasing()
+	go p.state.StartStatsReleasing()
 
 	/* 	// polybft rootchain metrics
 	   	go p.publishRootchainMetrics(p.logger.Named("rootchain_metrics")) */
@@ -571,22 +509,18 @@ func (p *Polybft) Start() error {
 
 // initRuntime creates consensus runtime
 func (p *Polybft) initRuntime() error {
-	runtimeConfig := &runtimeConfig{
-		genesisParams:   p.config.Config.Params,
+	runtimeConfig := &config.Runtime{
+		ChainParams:     p.config.Config.Params,
 		GenesisConfig:   p.genesisClientConfig,
 		Forks:           p.config.Config.Params.Forks,
 		Key:             p.key,
-		DataDir:         p.dataDir,
-		State:           p.state,
-		blockchain:      p.blockchain,
-		polybftBackend:  p,
-		txPool:          p.txPool,
-		bridgeTopic:     p.bridgeTopic,
-		consensusConfig: p.config.Config,
-		eventTracker:    p.config.EventTracker,
+		StateDataDir:    p.dataDir,
+		ConsensusConfig: p.config.Config,
+		EventTracker:    p.config.EventTracker,
 	}
 
-	runtime, err := newConsensusRuntime(p.logger, runtimeConfig)
+	runtime, err := newConsensusRuntime(p.logger, runtimeConfig, p.state, p,
+		p.blockchain, p.txPool, p.bridgeTopic)
 	if err != nil {
 		return err
 	}
@@ -715,9 +649,8 @@ func (p *Polybft) Close() error {
 
 	close(p.closeCh)
 	p.runtime.close()
-	p.state.db.Close()
 
-	return nil
+	return p.state.Close()
 }
 
 // GetSyncProgression retrieves the current sync progression, if any
@@ -750,14 +683,14 @@ func (p *Polybft) verifyHeaderImpl(parent, header *types.Header, blockTimeDrift 
 	}
 
 	// decode the extra data
-	extra, err := GetIbftExtra(header.ExtraData)
+	extra, err := polytypes.GetIbftExtra(header.ExtraData)
 	if err != nil {
 		return fmt.Errorf("failed to verify header for block %d. get extra error = %w", header.Number, err)
 	}
 
 	// validate extra data
 	return extra.ValidateFinalizedData(
-		header, parent, parents, p.blockchain.GetChainID(), p, signer.DomainCheckpointManager, p.logger)
+		header, parent, parents, p.blockchain.GetChainID(), p, signer.DomainBridge, p.logger)
 }
 
 func (p *Polybft) GetValidators(blockNumber uint64, parents []*types.Header) (validator.AccountSet, error) {
@@ -795,14 +728,14 @@ func (p *Polybft) GetBlockCreator(h *types.Header) (types.Address, error) {
 
 // PreCommitState a hook to be called before finalizing state transition on inserting block
 func (p *Polybft) PreCommitState(block *types.Block, _ *state.Transition) error {
-	commitmentTxExists := false
+	bridgeBatchTxExists := false
 
 	validators, err := p.GetValidators(block.Number()-1, nil)
 	if err != nil {
 		return err
 	}
 
-	// validate commitment state transactions
+	// validate bridge batch state transactions
 	for _, tx := range block.Transactions {
 		if tx.Type() != types.StateTxType {
 			continue
@@ -813,17 +746,17 @@ func (p *Polybft) PreCommitState(block *types.Block, _ *state.Transition) error 
 			return fmt.Errorf("unknown state transaction: tx=%v, error: %w", tx.Hash(), err)
 		}
 
-		if signedCommitment, ok := decodedStateTx.(*CommitmentMessageSigned); ok {
-			if commitmentTxExists {
-				return fmt.Errorf("only one commitment state tx is allowed per block: %v", tx.Hash())
+		if signedBridgeBatch, ok := decodedStateTx.(*bridge.BridgeBatchSigned); ok {
+			if bridgeBatchTxExists {
+				return fmt.Errorf("only one bridge batch state tx is allowed per block: %v", tx.Hash())
 			}
 
-			commitmentTxExists = true
+			bridgeBatchTxExists = true
 
-			if err := verifyBridgeCommitmentTx(
+			if err := bridge.VerifyBridgeBatchTx(
 				block.Number(),
 				tx.Hash(),
-				signedCommitment,
+				signedBridgeBatch,
 				validator.NewValidatorSet(validators, p.logger)); err != nil {
 				return err
 			}
@@ -842,21 +775,45 @@ func (p *Polybft) GetLatestChainConfig() (*chain.Params, error) {
 	return nil, nil
 }
 
-// GetBridgeProvider is an implementation of Consensus interface
-// Returns an instance of BridgeDataProvider
-func (p *Polybft) GetBridgeProvider() consensus.BridgeDataProvider {
-	return p.runtime
-}
-
 // FilterExtra is an implementation of Consensus interface
 func (p *Polybft) FilterExtra(extra []byte) ([]byte, error) {
-	return GetIbftExtraClean(extra)
+	return polytypes.GetIbftExtraClean(extra)
 }
 
 // initProxies initializes proxy contracts, that allow upgradeability of contracts implementation
-func initProxies(transition *state.Transition, admin types.Address,
-	proxyToImplMap map[types.Address]types.Address) error {
-	for proxyAddress, implAddress := range proxyToImplMap {
+func initProxies(transition *state.Transition, chainCfg *chain.Chain, polybftCfg config.PolyBFT) error {
+	admin := polybftCfg.ProxyContractsAdmin
+
+	proxyAddrMapping := contracts.GetProxyImplementationMapping()
+
+	burnContractAddress, isBurnContractSet := getBurnContractAddress(chainCfg, polybftCfg)
+	if isBurnContractSet {
+		proxyAddrMapping[contracts.DefaultBurnContract] = burnContractAddress
+	}
+
+	if _, ok := chainCfg.Genesis.Alloc[contracts.RewardTokenContract]; ok {
+		proxyAddrMapping[contracts.RewardTokenContract] = contracts.RewardTokenContractV1
+	}
+
+	if polybftCfg.IsBridgeEnabled() {
+		// init proxies for each bridge as well (but only for bridges deployed on bootstrap)
+		for _, bridgeCfg := range polybftCfg.Bridge {
+			// if the first address implementation exists in pre-alloc map, all of them do
+			if _, exists := chainCfg.Genesis.Alloc[bridgeCfg.InternalGatewayAddr.IncrementBy(1)]; !exists {
+				continue
+			}
+
+			proxyAddrMapping[bridgeCfg.InternalGatewayAddr] = bridgeCfg.InternalGatewayAddr.IncrementBy(1)
+			proxyAddrMapping[bridgeCfg.InternalERC20PredicateAddr] = bridgeCfg.InternalERC20PredicateAddr.IncrementBy(1)
+			proxyAddrMapping[bridgeCfg.InternalERC721PredicateAddr] = bridgeCfg.InternalERC721PredicateAddr.IncrementBy(1)
+			proxyAddrMapping[bridgeCfg.InternalERC1155PredicateAddr] = bridgeCfg.InternalERC1155PredicateAddr.IncrementBy(1)
+			proxyAddrMapping[bridgeCfg.InternalMintableERC20PredicateAddr] = bridgeCfg.InternalMintableERC20PredicateAddr.IncrementBy(1)     //nolint:lll
+			proxyAddrMapping[bridgeCfg.InternalMintableERC721PredicateAddr] = bridgeCfg.InternalMintableERC721PredicateAddr.IncrementBy(1)   //nolint:lll
+			proxyAddrMapping[bridgeCfg.InternalMintableERC1155PredicateAddr] = bridgeCfg.InternalMintableERC1155PredicateAddr.IncrementBy(1) //nolint:lll
+		}
+	}
+
+	for proxyAddress, implAddress := range proxyAddrMapping {
 		protectSetupProxyFn := &contractsapi.ProtectSetUpProxyGenesisProxyFn{Initiator: contracts.SystemCaller}
 
 		proxyInput, err := protectSetupProxyFn.EncodeAbi()
@@ -889,7 +846,7 @@ func initProxies(transition *state.Transition, admin types.Address,
 	return nil
 }
 
-func getBurnContractAddress(config *chain.Chain, polyBFTConfig PolyBFTConfig) (types.Address, bool) {
+func getBurnContractAddress(config *chain.Chain, polyBFTConfig config.PolyBFT) (types.Address, bool) {
 	if config.Params.BurnContract != nil &&
 		len(config.Params.BurnContract) == 1 &&
 		!polyBFTConfig.NativeTokenConfig.IsMintable {

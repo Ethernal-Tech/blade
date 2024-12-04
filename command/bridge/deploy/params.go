@@ -7,23 +7,28 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/command/helper"
-	"github.com/0xPolygon/polygon-edge/consensus/polybft"
+	polycfg "github.com/0xPolygon/polygon-edge/consensus/polybft/config"
 )
 
 const (
 	deployerKeyFlag = "deployer-key"
 	jsonRPCFlag     = "json-rpc"
 	erc20AddrFlag   = "erc20-token"
+	isBootstrapFlag = "bootstrap"
+	externalRPCFlag = "external-json-rpc"
+	internalRPCFlag = "internal-json-rpc"
 )
 
 type deployParams struct {
 	genesisPath         string
 	deployerKey         string
-	jsonRPCAddress      string
+	externalRPCAddress  string
+	internalRPCAddress  string
 	rootERC20TokenAddr  string
 	proxyContractsAdmin string
 	txTimeout           time.Duration
 	isTestMode          bool
+	isBootstrap         bool
 }
 
 func (ip *deployParams) validateFlags() error {
@@ -33,7 +38,7 @@ func (ip *deployParams) validateFlags() error {
 		return fmt.Errorf("provided genesis path '%s' is invalid. Error: %w ", ip.genesisPath, err)
 	}
 
-	consensusCfg, err = polybft.LoadPolyBFTConfig(ip.genesisPath)
+	consensusCfg, err = polycfg.LoadPolyBFTConfig(ip.genesisPath)
 	if err != nil {
 		return err
 	}

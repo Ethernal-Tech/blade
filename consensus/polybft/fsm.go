@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/0xPolygon/go-ibft/messages"
@@ -13,13 +12,15 @@ import (
 	"github.com/hashicorp/go-metrics"
 
 	"github.com/0xPolygon/polygon-edge/bls"
-	"github.com/0xPolygon/polygon-edge/chain"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/bitmap"
-	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/blockchain"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/config"
+	polymetrics "github.com/0xPolygon/polygon-edge/consensus/polybft/metrics"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/oracle"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/proposer"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/signer"
-	"github.com/0xPolygon/polygon-edge/consensus/polybft/validator"
+	polytypes "github.com/0xPolygon/polygon-edge/consensus/polybft/types"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/wallet"
-	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/state"
 	"github.com/0xPolygon/polygon-edge/types"
 )
@@ -34,16 +35,6 @@ type blockBuilder interface {
 }
 
 var (
-	errCommitEpochTxDoesNotExist   = errors.New("commit epoch transaction is not found in the epoch ending block")
-	errCommitEpochTxNotExpected    = errors.New("didn't expect commit epoch transaction in a non epoch ending block")
-	errCommitEpochTxSingleExpected = errors.New("only one commit epoch transaction is allowed " +
-		"in an epoch ending block")
-	errDistributeRewardsTxDoesNotExist = errors.New("distribute rewards transaction is " +
-		"not found in the given block, though it is expected to be present")
-	errDistributeRewardsTxNotExpected = errors.New("distribute rewards transaction " +
-		"is not expected at this block")
-	errDistributeRewardsTxSingleExpected = errors.New("only one distribute rewards transaction is " +
-		"allowed in the given block")
 	errProposalDontMatch = errors.New("failed to insert proposal, because the validated proposal " +
 		"is either nil or it does not match the received one")
 	errValidatorSetDeltaMismatch           = errors.New("validator set delta mismatch")
@@ -53,52 +44,19 @@ var (
 
 type fsm struct {
 	// PolyBFT consensus protocol configuration
-	config *PolyBFTConfig
+	config *config.PolyBFT
 
-	// forks holds forks configuration
-	forks *chain.Forks
-
-	// parent block header
-	parent *types.Header
-
-	// backend implements methods for retrieving data from block chain
-	backend blockchainBackend
+	// blockchain implements methods for retrieving data from block chain
+	blockchain blockchain.Blockchain
 
 	// polybftBackend implements methods needed from the polybft
-	polybftBackend polybftBackend
-
-	// validators is the list of validators for this round
-	validators validator.ValidatorSet
+	polybftBackend polytypes.Polybft
 
 	// proposerSnapshot keeps information about new proposer
-	proposerSnapshot *ProposerSnapshot
+	proposerSnapshot *proposer.ProposerSnapshot
 
 	// blockBuilder is the block builder for proposers
 	blockBuilder blockBuilder
-
-	// epochNumber denotes current epoch number
-	epochNumber uint64
-
-	// commitEpochInput holds info about a single epoch
-	// It is populated only for epoch-ending blocks.
-	commitEpochInput *contractsapi.CommitEpochEpochManagerFn
-
-	// distributeRewardsInput holds info about validators work in a single epoch
-	// mainly, how many blocks they signed during given epoch
-	// It is populated only for epoch-ending blocks.
-	distributeRewardsInput *contractsapi.DistributeRewardForEpochManagerFn
-
-	// isEndOfEpoch indicates if epoch reached its end
-	isEndOfEpoch bool
-
-	// isEndOfSprint indicates if sprint reached its end
-	isEndOfSprint bool
-
-	// isFirstBlockOfEpoch indicates if this is the start of new epoch
-	isFirstBlockOfEpoch bool
-
-	// proposerCommitmentToRegister is a commitment that is registered via state transaction by proposer
-	proposerCommitmentToRegister *CommitmentMessageSigned
 
 	// logger instance
 	logger hclog.Logger
@@ -106,98 +64,58 @@ type fsm struct {
 	// target is the block being computed
 	target *types.FullBlock
 
-	// exitEventRootHash is the calculated root hash for given checkpoint block
-	exitEventRootHash types.Hash
+	// oracles is the collection of registered oracles
+	oracles oracle.Oracles
 
-	// newValidatorsDelta carries the updates of validator set on epoch ending block
-	newValidatorsDelta *validator.ValidatorSetDelta
+	// blockInfo holds information about the new block
+	blockInfo oracle.NewBlockInfo
 }
 
 // BuildProposal builds a proposal for the current round (used if proposer)
 func (f *fsm) BuildProposal(currentRound uint64) ([]byte, error) {
 	start := time.Now().UTC()
-	defer metrics.SetGauge([]string{consensusMetricsPrefix, "block_building_time"},
+	defer metrics.SetGauge([]string{polymetrics.ConsensusMetricsPrefix, "block_building_time"},
 		float32(time.Now().UTC().Sub(start).Seconds()))
 
-	parent := f.parent
+	parent := f.blockInfo.ParentBlock
 
-	extraParent, err := GetIbftExtra(parent.ExtraData)
+	extraParent, err := polytypes.GetIbftExtra(parent.ExtraData)
 	if err != nil {
 		return nil, err
 	}
 
-	extra := &Extra{Parent: extraParent.Committed}
-	// for non-epoch ending blocks, currentValidatorsHash is the same as the nextValidatorsHash
-	nextValidators := f.validators.Accounts()
+	extra := &polytypes.Extra{Parent: extraParent.Committed}
 
 	if err := f.blockBuilder.Reset(); err != nil {
 		return nil, fmt.Errorf("failed to initialize block builder: %w", err)
 	}
 
-	if f.isEndOfEpoch {
-		tx, err := f.createCommitEpochTx()
-		if err != nil {
-			return nil, err
-		}
-
-		if err := f.blockBuilder.WriteTx(tx); err != nil {
-			return nil, fmt.Errorf("failed to apply commit epoch transaction: %w", err)
-		}
+	if f.blockInfo.IsEndOfEpoch {
+		extra.Validators = f.blockInfo.NewValidatorSetDelta
 	}
 
-	if isRewardDistributionBlock(f.isFirstBlockOfEpoch, f.Height()) {
-		tx, err := f.createDistributeRewardsTx()
-		if err != nil {
-			return nil, err
-		}
-
-		if err := f.blockBuilder.WriteTx(tx); err != nil {
-			return nil, fmt.Errorf("failed to apply distribute rewards transaction: %w", err)
-		}
+	txs, err := f.oracles.GetTransactions(f.blockInfo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get oracle transactions: %w", err)
 	}
 
-	if f.config.IsBridgeEnabled() {
-		if err := f.applyBridgeCommitmentTx(); err != nil {
-			return nil, err
+	for _, tx := range txs {
+		if err := f.blockBuilder.WriteTx(tx); err != nil {
+			return nil, fmt.Errorf("failed to apply oracle transaction: %w", err)
 		}
 	}
 
 	// fill the block with transactions
 	f.blockBuilder.Fill()
 
-	if f.isEndOfEpoch {
-		nextValidators, err = nextValidators.ApplyDelta(f.newValidatorsDelta)
-		if err != nil {
-			return nil, err
-		}
-
-		extra.Validators = f.newValidatorsDelta
+	extra.BlockMetaData = &polytypes.BlockMetaData{
+		BlockRound:  currentRound,
+		EpochNumber: f.blockInfo.CurrentEpoch,
 	}
-
-	currentValidatorsHash, err := f.validators.Accounts().Hash()
-	if err != nil {
-		return nil, err
-	}
-
-	nextValidatorsHash, err := nextValidators.Hash()
-	if err != nil {
-		return nil, err
-	}
-
-	extra.Checkpoint = &CheckpointData{
-		BlockRound:            currentRound,
-		EpochNumber:           f.epochNumber,
-		CurrentValidatorsHash: currentValidatorsHash,
-		NextValidatorsHash:    nextValidatorsHash,
-		EventRoot:             f.exitEventRootHash,
-	}
-
-	f.logger.Trace("[FSM.BuildProposal]", "Current validators hash", currentValidatorsHash,
-		"Next validators hash", nextValidatorsHash)
 
 	stateBlock, err := f.blockBuilder.Build(func(h *types.Header) {
 		h.ExtraData = extra.MarshalRLPTo(nil)
-		h.MixHash = PolyBFTMixDigest
+		h.MixHash = polytypes.PolyBFTMixDigest
 	})
 
 	if err != nil {
@@ -206,7 +124,7 @@ func (f *fsm) BuildProposal(currentRound uint64) ([]byte, error) {
 
 	logLvl := f.logger.GetLevel()
 	if logLvl <= hclog.Debug {
-		checkpointHash, err := extra.Checkpoint.Hash(f.backend.GetChainID(), f.Height(), stateBlock.Block.Hash())
+		blockMetaHash, err := extra.BlockMetaData.Hash(stateBlock.Block.Hash())
 		if err != nil {
 			return nil, fmt.Errorf("failed to calculate proposal hash: %w", err)
 		}
@@ -215,7 +133,7 @@ func (f *fsm) BuildProposal(currentRound uint64) ([]byte, error) {
 			"block num", stateBlock.Block.Number(),
 			"round", currentRound,
 			"state root", stateBlock.Block.Header.StateRoot,
-			"proposal hash", checkpointHash.String(),
+			"proposal hash", blockMetaHash.String(),
 			"txs count", len(stateBlock.Block.Transactions),
 			"finishedIn", time.Since(start),
 		)
@@ -237,71 +155,11 @@ func (f *fsm) BuildProposal(currentRound uint64) ([]byte, error) {
 	return stateBlock.Block.MarshalRLP(), nil
 }
 
-// applyBridgeCommitmentTx builds state transaction which contains data for bridge commitment registration
-func (f *fsm) applyBridgeCommitmentTx() error {
-	if f.proposerCommitmentToRegister != nil {
-		bridgeCommitmentTx, err := f.createBridgeCommitmentTx()
-		if err != nil {
-			return fmt.Errorf("creation of bridge commitment transaction failed: %w", err)
-		}
-
-		if err := f.blockBuilder.WriteTx(bridgeCommitmentTx); err != nil {
-			return fmt.Errorf("failed to apply bridge commitment state transaction. Error: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// createBridgeCommitmentTx builds bridge commitment registration transaction
-func (f *fsm) createBridgeCommitmentTx() (*types.Transaction, error) {
-	inputData, err := f.proposerCommitmentToRegister.EncodeAbi()
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode input data for bridge commitment registration: %w", err)
-	}
-
-	return createStateTransactionWithData(contracts.StateReceiverContract, inputData), nil
-}
-
-// getValidatorsTransition applies delta to the current validators,
-func (f *fsm) getValidatorsTransition(delta *validator.ValidatorSetDelta) (validator.AccountSet, error) {
-	nextValidators, err := f.validators.Accounts().ApplyDelta(delta)
-	if err != nil {
-		return nil, err
-	}
-
-	f.logger.Debug("getValidatorsTransition", "Next validators", nextValidators)
-
-	return nextValidators, nil
-}
-
-// createCommitEpochTx create a StateTransaction, which invokes ValidatorSet smart contract
-// and sends all the necessary metadata to it.
-func (f *fsm) createCommitEpochTx() (*types.Transaction, error) {
-	input, err := f.commitEpochInput.EncodeAbi()
-	if err != nil {
-		return nil, err
-	}
-
-	return createStateTransactionWithData(contracts.EpochManagerContract, input), nil
-}
-
-// createDistributeRewardsTx create a StateTransaction, which invokes RewardPool smart contract
-// and sends all the necessary metadata to it.
-func (f *fsm) createDistributeRewardsTx() (*types.Transaction, error) {
-	input, err := f.distributeRewardsInput.EncodeAbi()
-	if err != nil {
-		return nil, err
-	}
-
-	return createStateTransactionWithData(contracts.EpochManagerContract, input), nil
-}
-
 // ValidateCommit is used to validate that a given commit is valid
 func (f *fsm) ValidateCommit(signerAddr []byte, seal []byte, proposalHash []byte) error {
 	from := types.BytesToAddress(signerAddr)
 
-	validator := f.validators.Accounts().GetValidatorMetadata(from)
+	validator := f.blockInfo.CurrentEpochValidatorSet.Accounts().GetValidatorMetadata(from)
 	if validator == nil {
 		return fmt.Errorf("unable to resolve validator %s", from)
 	}
@@ -311,7 +169,7 @@ func (f *fsm) ValidateCommit(signerAddr []byte, seal []byte, proposalHash []byte
 		return fmt.Errorf("failed to unmarshall signature: %w", err)
 	}
 
-	if !signature.Verify(validator.BlsKey, proposalHash, signer.DomainCheckpointManager) {
+	if !signature.Verify(validator.BlsKey, proposalHash, signer.DomainBridge) {
 		return fmt.Errorf("incorrect commit signature from %s", from)
 	}
 
@@ -321,6 +179,7 @@ func (f *fsm) ValidateCommit(signerAddr []byte, seal []byte, proposalHash []byte
 // Validate validates a raw proposal (used if non-proposer)
 func (f *fsm) Validate(proposal []byte) error {
 	start := time.Now().UTC()
+	parent := f.blockInfo.ParentBlock
 
 	var block types.Block
 	if err := block.UnmarshalRLP(proposal); err != nil {
@@ -328,35 +187,35 @@ func (f *fsm) Validate(proposal []byte) error {
 	}
 
 	// validate header fields
-	if err := validateHeaderFields(f.parent, block.Header, f.config.BlockTimeDrift); err != nil {
+	if err := validateHeaderFields(parent, block.Header, f.config.BlockTimeDrift); err != nil {
 		return fmt.Errorf(
 			"failed to validate header (parent header# %d, current header#%d): %w",
-			f.parent.Number,
+			parent.Number,
 			block.Number(),
 			err,
 		)
 	}
 
-	extra, err := GetIbftExtra(block.Header.ExtraData)
+	extra, err := polytypes.GetIbftExtra(block.Header.ExtraData)
 	if err != nil {
 		return fmt.Errorf("cannot get extra data:%w", err)
 	}
 
-	parentExtra, err := GetIbftExtra(f.parent.ExtraData)
+	parentExtra, err := polytypes.GetIbftExtra(parent.ExtraData)
 	if err != nil {
 		return err
 	}
 
-	if extra.Checkpoint == nil {
-		return fmt.Errorf("checkpoint data for block %d is missing", block.Number())
+	if extra.BlockMetaData == nil {
+		return fmt.Errorf("block meta data for block %d is missing", block.Number())
 	}
 
-	if parentExtra.Checkpoint == nil {
-		return fmt.Errorf("checkpoint data for parent block %d is missing", f.parent.Number)
+	if parentExtra.BlockMetaData == nil {
+		return fmt.Errorf("block meta data for parent block %d is missing", parent.Number)
 	}
 
-	if err := extra.ValidateParentSignatures(block.Number(), f.polybftBackend, nil, f.parent, parentExtra,
-		f.backend.GetChainID(), signer.DomainCheckpointManager, f.logger); err != nil {
+	if err := extra.ValidateParentSignatures(block.Number(), f.polybftBackend, nil, parent, parentExtra,
+		signer.DomainBridge, f.logger); err != nil {
 		return err
 	}
 
@@ -364,30 +223,21 @@ func (f *fsm) Validate(proposal []byte) error {
 		return err
 	}
 
-	currentValidators := f.validators.Accounts()
-
 	// validate validators delta
-	if f.isEndOfEpoch {
+	if f.blockInfo.IsEndOfEpoch {
 		if extra.Validators == nil {
 			return errValidatorDeltaNilInEpochEndingBlock
 		}
 
-		if !extra.Validators.Equals(f.newValidatorsDelta) {
+		if !extra.Validators.Equals(f.blockInfo.NewValidatorSetDelta) {
 			return errValidatorSetDeltaMismatch
 		}
 	} else if extra.Validators != nil {
 		// delta should be nil in non epoch ending blocks
 		return errValidatorsUpdateInNonEpochEnding
 	}
-
-	nextValidators, err := f.getValidatorsTransition(extra.Validators)
-	if err != nil {
-		return err
-	}
-
-	// validate checkpoint data
-	if err := extra.Checkpoint.Validate(parentExtra.Checkpoint,
-		currentValidators, nextValidators, f.exitEventRootHash); err != nil {
+	// validate block meta data
+	if err := extra.BlockMetaData.Validate(parentExtra.BlockMetaData); err != nil {
 		return err
 	}
 
@@ -400,13 +250,13 @@ func (f *fsm) Validate(proposal []byte) error {
 		f.logger.Trace("[FSM.Validate]", "block num", block.Number(), "parent validators", validators)
 	}
 
-	stateBlock, err := f.backend.ProcessBlock(f.parent, &block)
+	stateBlock, err := f.blockchain.ProcessBlock(f.blockInfo.ParentBlock, &block)
 	if err != nil {
 		return err
 	}
 
 	if f.logger.IsDebug() {
-		checkpointHash, err := extra.Checkpoint.Hash(f.backend.GetChainID(), block.Number(), block.Hash())
+		blockMetaHash, err := extra.BlockMetaData.Hash(block.Hash())
 		if err != nil {
 			return fmt.Errorf("failed to calculate proposal hash: %w", err)
 		}
@@ -415,7 +265,7 @@ func (f *fsm) Validate(proposal []byte) error {
 			"block num", block.Number(),
 			"state root", block.Header.StateRoot,
 			"proposer", types.BytesToHash(block.Header.Miner),
-			"proposal hash", checkpointHash,
+			"proposal hash", blockMetaHash,
 			"finishedIn", time.Since(start),
 		)
 	}
@@ -443,93 +293,16 @@ func (f *fsm) ValidateSender(msg *proto.IbftMessage) error {
 	}
 
 	// verify the sender is in the active validator set
-	if !f.validators.Includes(signerAddress) {
+	if !f.blockInfo.CurrentEpochValidatorSet.Includes(signerAddress) {
 		return fmt.Errorf("signer address %s is not included in validator set", signerAddress.String())
 	}
 
 	return nil
 }
 
+// VerifyStateTransactions verifies the system transactions
 func (f *fsm) VerifyStateTransactions(transactions []*types.Transaction) error {
-	var (
-		commitmentTxExists        bool
-		commitEpochTxExists       bool
-		distributeRewardsTxExists bool
-	)
-
-	for _, tx := range transactions {
-		if tx.Type() != types.StateTxType {
-			continue
-		}
-
-		decodedStateTx, err := decodeStateTransaction(tx.Input())
-		if err != nil {
-			return fmt.Errorf("unknown state transaction: tx = %v, err = %w", tx.Hash(), err)
-		}
-
-		switch stateTxData := decodedStateTx.(type) {
-		case *CommitmentMessageSigned:
-			if !f.isEndOfSprint {
-				return fmt.Errorf("found commitment tx in block which should not contain it (tx hash=%s)", tx.Hash())
-			}
-
-			if commitmentTxExists {
-				return fmt.Errorf("only one commitment tx is allowed per block (tx hash=%s)", tx.Hash())
-			}
-
-			commitmentTxExists = true
-
-			if err = verifyBridgeCommitmentTx(f.Height(), tx.Hash(), stateTxData, f.validators); err != nil {
-				return err
-			}
-		case *contractsapi.CommitEpochEpochManagerFn:
-			if commitEpochTxExists {
-				// if we already validated commit epoch tx,
-				// that means someone added more than one commit epoch tx to block,
-				// which is invalid
-				return errCommitEpochTxSingleExpected
-			}
-
-			commitEpochTxExists = true
-
-			if err := f.verifyCommitEpochTx(tx); err != nil {
-				return fmt.Errorf("error while verifying commit epoch transaction. error: %w", err)
-			}
-		case *contractsapi.DistributeRewardForEpochManagerFn:
-			if distributeRewardsTxExists {
-				// if we already validated distribute rewards tx,
-				// that means someone added more than one distribute rewards tx to block,
-				// which is invalid
-				return errDistributeRewardsTxSingleExpected
-			}
-
-			distributeRewardsTxExists = true
-
-			if err := f.verifyDistributeRewardsTx(tx); err != nil {
-				return fmt.Errorf("error while verifying distribute rewards transaction. error: %w", err)
-			}
-		default:
-			return fmt.Errorf("invalid state transaction data type: %v", stateTxData)
-		}
-	}
-
-	if f.isEndOfEpoch {
-		if !commitEpochTxExists {
-			// this is a check if commit epoch transaction is not in the list of transactions at all
-			// but it should be
-			return errCommitEpochTxDoesNotExist
-		}
-	}
-
-	if isRewardDistributionBlock(f.isFirstBlockOfEpoch, f.Height()) {
-		if !distributeRewardsTxExists {
-			// this is a check if distribute rewards transaction is not in the list of transactions at all
-			// but it should be
-			return errDistributeRewardsTxDoesNotExist
-		}
-	}
-
-	return nil
+	return f.oracles.VerifyTransactions(f.blockInfo, transactions)
 }
 
 // Insert inserts the sealed proposal
@@ -549,14 +322,14 @@ func (f *fsm) Insert(proposal []byte, committedSeals []*messages.CommittedSeal) 
 	// In this function we should try to return little to no errors since
 	// at this point everything we have to do is just commit something that
 	// we should have already computed beforehand.
-	extra, err := GetIbftExtra(newBlock.Block.Header.ExtraData)
+	extra, err := polytypes.GetIbftExtra(newBlock.Block.Header.ExtraData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert proposal, due to not being able to extract extra data: %w", err)
 	}
 
 	// create map for faster access to indexes
-	nodeIDIndexMap := make(map[types.Address]int, f.validators.Len())
-	for i, addr := range f.validators.Accounts().GetAddresses() {
+	nodeIDIndexMap := make(map[types.Address]int, f.blockInfo.CurrentEpochValidatorSet.Len())
+	for i, addr := range f.blockInfo.CurrentEpochValidatorSet.Accounts().GetAddresses() {
 		nodeIDIndexMap[addr] = i
 	}
 
@@ -590,7 +363,7 @@ func (f *fsm) Insert(proposal []byte, committedSeals []*messages.CommittedSeal) 
 
 	// include aggregated signature of all committed seals
 	// also includes bitmap which contains all indexes from validator set which provides there seals
-	extra.Committed = &Signature{
+	extra.Committed = &polytypes.Signature{
 		AggregatedSignature: aggregatedSignature,
 		Bitmap:              bitmap,
 	}
@@ -598,7 +371,7 @@ func (f *fsm) Insert(proposal []byte, committedSeals []*messages.CommittedSeal) 
 	// Write extra data to header
 	newBlock.Block.Header.ExtraData = extra.MarshalRLPTo(nil)
 
-	if err := f.backend.CommitBlock(newBlock); err != nil {
+	if err := f.blockchain.CommitBlock(newBlock); err != nil {
 		return nil, err
 	}
 
@@ -607,95 +380,13 @@ func (f *fsm) Insert(proposal []byte, committedSeals []*messages.CommittedSeal) 
 
 // Height returns the height for the current round
 func (f *fsm) Height() uint64 {
-	return f.parent.Number + 1
-}
-
-// ValidatorSet returns the validator set for the current round
-func (f *fsm) ValidatorSet() validator.ValidatorSet {
-	return f.validators
-}
-
-// verifyCommitEpochTx creates commit epoch transaction and compares its hash with the one extracted from the block.
-func (f *fsm) verifyCommitEpochTx(commitEpochTx *types.Transaction) error {
-	if f.isEndOfEpoch {
-		localCommitEpochTx, err := f.createCommitEpochTx()
-		if err != nil {
-			return err
-		}
-
-		if commitEpochTx.Hash() != localCommitEpochTx.Hash() {
-			return fmt.Errorf(
-				"invalid commit epoch transaction. Expected '%s', but got '%s' commit epoch transaction hash",
-				localCommitEpochTx.Hash(),
-				commitEpochTx.Hash(),
-			)
-		}
-
-		return nil
-	}
-
-	return errCommitEpochTxNotExpected
-}
-
-// verifyDistributeRewardsTx creates distribute rewards transaction
-// and compares its hash with the one extracted from the block.
-func (f *fsm) verifyDistributeRewardsTx(distributeRewardsTx *types.Transaction) error {
-	// we don't have distribute rewards tx if we just started the chain
-	if isRewardDistributionBlock(f.isFirstBlockOfEpoch, f.Height()) {
-		localDistributeRewardsTx, err := f.createDistributeRewardsTx()
-		if err != nil {
-			return err
-		}
-
-		if distributeRewardsTx.Hash() != localDistributeRewardsTx.Hash() {
-			return fmt.Errorf(
-				"invalid distribute rewards transaction. Expected '%s', but got '%s' distribute rewards hash",
-				localDistributeRewardsTx.Hash(),
-				distributeRewardsTx.Hash(),
-			)
-		}
-
-		return nil
-	}
-
-	return errDistributeRewardsTxNotExpected
-}
-
-// verifyBridgeCommitmentTx validates bridge commitment transaction
-func verifyBridgeCommitmentTx(blockNumber uint64, txHash types.Hash,
-	commitment *CommitmentMessageSigned,
-	validators validator.ValidatorSet) error {
-	signers, err := validators.Accounts().GetFilteredValidators(commitment.AggSignature.Bitmap)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve signers for state tx (%s): %w", txHash, err)
-	}
-
-	if !validators.HasQuorum(blockNumber, signers.GetAddressesAsSet()) {
-		return fmt.Errorf("quorum size not reached for state tx (%s)", txHash)
-	}
-
-	commitmentHash, err := commitment.Hash()
-	if err != nil {
-		return err
-	}
-
-	signature, err := bls.UnmarshalSignature(commitment.AggSignature.AggregatedSignature)
-	if err != nil {
-		return fmt.Errorf("error for state tx (%s) while unmarshaling signature: %w", txHash, err)
-	}
-
-	verified := signature.VerifyAggregated(signers.GetBlsKeys(), commitmentHash.Bytes(), signer.DomainStateReceiver)
-	if !verified {
-		return fmt.Errorf("invalid signature for state tx (%s)", txHash)
-	}
-
-	return nil
+	return f.blockInfo.CurrentBlock()
 }
 
 func validateHeaderFields(parent *types.Header, header *types.Header, blockTimeDrift uint64) error {
 	// header extra data must be higher or equal to ExtraVanity = 32 in order to be compliant with Ethereum blocks
-	if len(header.ExtraData) < ExtraVanity {
-		return fmt.Errorf("extra-data shorter than %d bytes (%d)", ExtraVanity, len(header.ExtraData))
+	if len(header.ExtraData) < polytypes.ExtraVanity {
+		return fmt.Errorf("extra-data shorter than %d bytes (%d)", polytypes.ExtraVanity, len(header.ExtraData))
 	}
 	// verify parent hash
 	if parent.Hash != header.ParentHash {
@@ -723,7 +414,7 @@ func validateHeaderFields(parent *types.Header, header *types.Header, blockTimeD
 		return fmt.Errorf("timestamp older than parent")
 	}
 	// verify mix digest
-	if header.MixHash != PolyBFTMixDigest {
+	if header.MixHash != polytypes.PolyBFTMixDigest {
 		return fmt.Errorf("mix digest is not correct")
 	}
 	// difficulty must be > 0
@@ -736,18 +427,4 @@ func validateHeaderFields(parent *types.Header, header *types.Header, blockTimeD
 	}
 
 	return nil
-}
-
-// createStateTransactionWithData creates a state transaction
-// with provided target address and inputData parameter which is ABI encoded byte array.
-func createStateTransactionWithData(target types.Address, inputData []byte) *types.Transaction {
-	tx := types.NewTx(types.NewStateTx(
-		types.WithGasPrice(big.NewInt(0)),
-		types.WithFrom(contracts.SystemCaller),
-		types.WithTo(&target),
-		types.WithInput(inputData),
-		types.WithGas(types.StateTransactionGasLimit),
-	))
-
-	return tx.ComputeHash()
 }
