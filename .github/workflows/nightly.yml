@@ -55,7 +55,7 @@ jobs:
   sanity_check_tests:
     name: Sanity Check Tests
     uses: ./.github/workflows/sanity-check-test.yml
-    needs: deploy_network
+    needs: [deploy_network, availability_tests]
     with:
       environment: nightly
     secrets:
