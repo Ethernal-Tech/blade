@@ -228,3 +228,21 @@ func isEventProcessed(t *testing.T, gatewayAddr types.Address,
 
 	return isProcessedAsNumber == 1
 }
+
+func isEventProcessedRollback(t *testing.T, gatewayAddr types.Address,
+	relayer txrelayer.TxRelayer, bridgeEventID uint64) bool {
+	t.Helper()
+
+	processedEventsFn := contractsapi.Gateway.Abi.Methods["processedEventsRollback"]
+
+	input, err := processedEventsFn.Encode([]interface{}{bridgeEventID})
+	require.NoError(t, err)
+
+	isProcessedRaw, err := relayer.Call(types.ZeroAddress, gatewayAddr, input)
+	require.NoError(t, err)
+
+	isProcessedAsNumber, err := common.ParseUint64orHex(&isProcessedRaw)
+	require.NoError(t, err)
+
+	return isProcessedAsNumber == 1
+}

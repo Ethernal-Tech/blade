@@ -728,7 +728,7 @@ func (p *Polybft) GetBlockCreator(h *types.Header) (types.Address, error) {
 
 // PreCommitState a hook to be called before finalizing state transition on inserting block
 func (p *Polybft) PreCommitState(block *types.Block, _ *state.Transition) error {
-	bridgeBatchTxExists := false
+	//bridgeBatchTxExists := false
 
 	validators, err := p.GetValidators(block.Number()-1, nil)
 	if err != nil {
@@ -747,11 +747,11 @@ func (p *Polybft) PreCommitState(block *types.Block, _ *state.Transition) error 
 		}
 
 		if signedBridgeBatch, ok := decodedStateTx.(*bridge.BridgeBatchSigned); ok {
-			if bridgeBatchTxExists {
-				return fmt.Errorf("only one bridge batch state tx is allowed per block: %v", tx.Hash())
-			}
+			// if bridgeBatchTxExists {
+			// 	return fmt.Errorf("only one bridge batch state tx is allowed per block: %v", tx.Hash())
+			// }
 
-			bridgeBatchTxExists = true
+			// bridgeBatchTxExists = true
 
 			if err := bridge.VerifyBridgeBatchTx(
 				block.Number(),

@@ -1438,13 +1438,20 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 	})
 
 	t.Run("transfer more native tokens than 0x0 balance is", func(t *testing.T) {
-		const expectedStateSyncsCount = 1
+		const expectedBridgeBatchResult = 1
 
 		// since bridging native token is essentially minting
 		// (i.e. transferring tokens from 0x0 to receiver address using native transfer precompile),
 		// this test tries to deposit more tokens than 0x0 address has on its balance
 		currentBlock, err := childEthEndpoint.GetBlockByNumber(jsonrpc.LatestBlockNumber, false)
 		require.NoError(t, err)
+
+		balance := erc20BalanceOf(t, nonValidatorKey.Address(),
+			bridgeCfg.ExternalNativeERC20Addr, externalChainTxRelayer)
+		t.Log("Balance of native ERC20 token on root before deposit", balance, "Address", nonValidatorKey.Address())
+		balance, err = childEthEndpoint.GetBalance(nonValidatorKey.Address(), jsonrpc.LatestBlockNumberOrHash)
+		require.NoError(t, err)
+		t.Log("Balance of native ERC20 token on child", balance, "Address", nonValidatorKey.Address())
 
 		require.NoError(t, cluster.Bridges[bridgeOne].Deposit(
 			common.ERC20,
@@ -1463,6 +1470,13 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 		finalBlockNum := currentBlock.Header.Number + epochSize
 		require.NoError(t, cluster.WaitForBlock(finalBlockNum, 2*time.Minute))
 
+		balance = erc20BalanceOf(t, nonValidatorKey.Address(), bridgeCfg.ExternalNativeERC20Addr, externalChainTxRelayer)
+		t.Log("Balance of native ERC20 token on root after  deposit", balance, "Address", nonValidatorKey.Address())
+
+		balance, err = childEthEndpoint.GetBalance(nonValidatorKey.Address(), jsonrpc.LatestBlockNumberOrHash)
+		require.NoError(t, err)
+		t.Log("Balance of native ERC20 token on child", balance, "Address", nonValidatorKey.Address())
+
 		// the transaction is processed and there should be a success event
 		var bridgeMessageResult contractsapi.BridgeMessageResultEvent
 
@@ -1470,20 +1484,25 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 			logs, err := getFilteredLogs(bridgeMessageResult.Sig(), currentBlock.Number()+1, finalBlockNum+i*epochSize, childEthEndpoint)
 			require.NoError(t, err)
 
-			if len(logs) == expectedStateSyncsCount || i == numberOfAttempts-1 {
-				// assert that sent deposit has failed
-				checkBridgeMessageResultLogs(t, logs, expectedStateSyncsCount,
-					func(t *testing.T, ssre contractsapi.BridgeMessageResultEvent) {
-						t.Helper()
-
-						require.False(t, ssre.Status)
-					})
-
-				break
-			}
+			require.Equal(t, 0, len(logs))
 
 			require.NoError(t, cluster.WaitForBlock(finalBlockNum+(i+1)*epochSize, time.Minute))
 		}
+
+		balance = erc20BalanceOf(t, nonValidatorKey.Address(), bridgeCfg.ExternalNativeERC20Addr, externalChainTxRelayer)
+		t.Log("Balance of native ERC20 token on root after  deposit", balance, "Address", nonValidatorKey.Address())
+
+		balance, err = childEthEndpoint.GetBalance(nonValidatorKey.Address(), jsonrpc.LatestBlockNumberOrHash)
+		require.NoError(t, err)
+		t.Log("Balance of native ERC20 token on child", balance, "Address", nonValidatorKey.Address())
+
+		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
+			if !isEventProcessedRollback(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, 3) {
+				return false
+			}
+			return true
+		}))
+
 	})
 }
 
