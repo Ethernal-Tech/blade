@@ -718,14 +718,14 @@ func (b *bridgeEventManager) PostBlock(req *oracle.PostBlockRequest) error {
 	}
 
 	if err := b.internalChainRollbackHandler(big.NewInt(int64(req.FullBlock.Block.Number())), req.DBTx); err != nil {
-		// we don't return an error here. If bridge message event is inserted in db,
+		// we don't return an error here. If threshold is less than block number,
 		// we will just try to build a batch on next block or next event arrival
 		b.logger.Error("could not build an external chain originated batch on PostBlock",
 			"err", err)
 	}
 
 	if err := b.externalChainRollbackHandler(req.DBTx); err != nil {
-		// we don't return an error here. If bridge message event is inserted in db,
+		// we don't return an error here. If threshold is less than block number,
 		// we will just try to build a batch on next block or next event arrival
 		b.logger.Error("could not build an external chain originated batch on PostBlock",
 			"err", err)
