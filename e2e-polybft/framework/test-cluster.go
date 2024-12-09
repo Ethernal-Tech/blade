@@ -116,6 +116,7 @@ type TestClusterConfig struct {
 	BladeAdmin           string
 	RewardWallet         string
 	PredeployContract    string
+	Threshold            uint64
 
 	ContractDeployerAllowListAdmin   []types.Address
 	ContractDeployerAllowListEnabled []types.Address
@@ -478,6 +479,12 @@ func WithTLSCertificate(certFile string, keyFile string) ClusterOption {
 	}
 }
 
+func WithThreshold(threshold uint64) ClusterOption {
+	return func(h *TestClusterConfig) {
+		h.Threshold = threshold
+	}
+}
+
 func isTrueEnv(e string) bool {
 	return strings.ToLower(os.Getenv(e)) == "true"
 }
@@ -506,6 +513,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		StakeAmounts:    []*big.Int{},
 		NumberOfBridges: 0,
 		VotingDelay:     10,
+		Threshold:       25,
 	}
 
 	if config.ValidatorPrefix == "" {
@@ -757,7 +765,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		require.NoError(t, err)
 
 		// deploy bridge chain contracts
-		err = bridge.deployExternalChainContracts(genesisPath)
+		err = bridge.deployExternalChainContracts(genesisPath, cluster.Config.Threshold)
 		require.NoError(t, err)
 
 		polybftConfig, err := polycfg.LoadPolyBFTConfig(genesisPath)

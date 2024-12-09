@@ -2154,3 +2154,31 @@ func (b *BridgeMsgEvent) ParseLog(log *ethgo.Log) (bool, error) {
 func (b *BridgeMsgEvent) Decode(input []byte) error {
 	return Gateway.Abi.Events["BridgeMsg"].Inputs.DecodeStruct(input, &b)
 }
+
+type BridgeBatchResultEvent struct {
+	StartID            *big.Int `abi:"startId"`
+	EndID              *big.Int `abi:"endId"`
+	SourceChainID      *big.Int `abi:"sourceChainId"`
+	DestinationChainID *big.Int `abi:"destinationChainId"`
+	IsRollback         bool     `abi:"isRollback"`
+}
+
+func (*BridgeBatchResultEvent) Sig() ethgo.Hash {
+	return Gateway.Abi.Events["BridgeBatchResult"].ID()
+}
+
+func (b *BridgeBatchResultEvent) Encode() ([]byte, error) {
+	return Gateway.Abi.Events["BridgeBatchResult"].Inputs.Encode(b)
+}
+
+func (b *BridgeBatchResultEvent) ParseLog(log *ethgo.Log) (bool, error) {
+	if !Gateway.Abi.Events["BridgeBatchResult"].Match(log) {
+		return false, nil
+	}
+
+	return true, decodeEvent(Gateway.Abi.Events["BridgeBatchResult"], log, b)
+}
+
+func (b *BridgeBatchResultEvent) Decode(input []byte) error {
+	return Gateway.Abi.Events["BridgeBatchResult"].Inputs.DecodeStruct(input, &b)
+}

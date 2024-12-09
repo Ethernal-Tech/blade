@@ -76,6 +76,7 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
+		framework.WithThreshold(100),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(addrs); i++ {
 				// premine receivers, so that they are able to do withdrawals
@@ -1438,7 +1439,7 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 	})
 
 	t.Run("transfer more native tokens than 0x0 balance is", func(t *testing.T) {
-		const expectedStateSyncsCount = 1
+		const expectedBridgeBatchResult = 1
 
 		// since bridging native token is essentially minting
 		// (i.e. transferring tokens from 0x0 to receiver address using native transfer precompile),
@@ -1470,20 +1471,18 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 			logs, err := getFilteredLogs(bridgeMessageResult.Sig(), currentBlock.Number()+1, finalBlockNum+i*epochSize, childEthEndpoint)
 			require.NoError(t, err)
 
-			if len(logs) == expectedStateSyncsCount || i == numberOfAttempts-1 {
-				// assert that sent deposit has failed
-				checkBridgeMessageResultLogs(t, logs, expectedStateSyncsCount,
-					func(t *testing.T, ssre contractsapi.BridgeMessageResultEvent) {
-						t.Helper()
-
-						require.False(t, ssre.Status)
-					})
-
-				break
-			}
+			require.Equal(t, 0, len(logs))
 
 			require.NoError(t, cluster.WaitForBlock(finalBlockNum+(i+1)*epochSize, time.Minute))
 		}
+
+		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
+			if !isEventProcessedRollback(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, 3) {
+				return false
+			}
+
+			return true
+		}))
 	})
 }
 

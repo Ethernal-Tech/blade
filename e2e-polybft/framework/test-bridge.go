@@ -305,7 +305,7 @@ func (t *TestBridge) cmdRun(args ...string) error {
 }
 
 // deployExternalChainContracts deploys and initializes external chain contracts
-func (t *TestBridge) deployExternalChainContracts(genesisPath string) error {
+func (t *TestBridge) deployExternalChainContracts(genesisPath string, threshold uint64) error {
 	args := []string{
 		"bridge",
 		"deploy",
@@ -313,6 +313,7 @@ func (t *TestBridge) deployExternalChainContracts(genesisPath string) error {
 		"--genesis", genesisPath,
 		"--test",
 		"--bootstrap",
+		"--threshold", strconv.FormatUint(threshold, 10),
 	}
 
 	if err := t.cmdRun(args...); err != nil {

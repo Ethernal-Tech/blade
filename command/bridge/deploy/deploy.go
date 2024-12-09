@@ -111,6 +111,13 @@ func GetCommand() *cobra.Command {
 			"otherwise it will pre-allocate the internal predicates addresses in the genesis configuration.",
 	)
 
+	cmd.Flags().Uint64Var(
+		&params.threshold,
+		thresholdFlag,
+		100,
+		"block offset for execution of bridge transaction",
+	)
+
 	cmd.MarkFlagsMutuallyExclusive(helper.TestModeFlag, deployerKeyFlag)
 
 	return cmd
@@ -192,6 +199,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 	consensusCfg.Bridge[externalChainID].EventTrackerStartBlocks = map[types.Address]uint64{
 		deploymentResultInfo.BridgeCfg.ExternalGatewayAddr: latestBlockNum,
 	}
+	consensusCfg.Bridge[externalChainID].Threshold = params.threshold
 
 	// write updated consensus configuration
 	chainConfig.Params.Engine[polycfg.ConsensusName] = consensusCfg

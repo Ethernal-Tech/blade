@@ -236,7 +236,6 @@ func (b *bridge) GetTransactions(blockInfo oracle.NewBlockInfo) ([]*types.Transa
 // VerifyTransactions verifies the system transactions associated with the given block.
 func (b *bridge) VerifyTransactions(blockInfo oracle.NewBlockInfo, txs []*types.Transaction) error {
 	var (
-		bridgeBatchTxExists      bool
 		commitValidatorSetExists bool
 		commitBatchFn            = new(contractsapi.CommitBatchBridgeStorageFn)
 		commitValidatorSetFn     = new(contractsapi.CommitValidatorSetBridgeStorageFn)
@@ -259,12 +258,6 @@ func (b *bridge) VerifyTransactions(blockInfo oracle.NewBlockInfo, txs []*types.
 			if !blockInfo.IsEndOfSprint {
 				return errBridgeBatchTxInNonSprintBlock
 			}
-
-			if bridgeBatchTxExists {
-				return errBridgeBatchTxExists
-			}
-
-			bridgeBatchTxExists = true
 
 			bridgeBatchFn := &BridgeBatchSigned{}
 			if err := bridgeBatchFn.DecodeAbi(txData); err != nil {

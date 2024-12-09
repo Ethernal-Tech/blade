@@ -17,6 +17,7 @@ const (
 	isBootstrapFlag = "bootstrap"
 	externalRPCFlag = "external-json-rpc"
 	internalRPCFlag = "internal-json-rpc"
+	thresholdFlag   = "threshold"
 )
 
 type deployParams struct {
@@ -29,6 +30,7 @@ type deployParams struct {
 	txTimeout           time.Duration
 	isTestMode          bool
 	isBootstrap         bool
+	threshold           uint64
 }
 
 func (ip *deployParams) validateFlags() error {
