@@ -1500,9 +1500,9 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 			if !isEventProcessedRollback(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, 3) {
 				return false
 			}
+
 			return true
 		}))
-
 	})
 }
 

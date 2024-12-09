@@ -548,6 +548,7 @@ func (b *bridgeEventManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSign
 	if err != nil {
 		return nil, err
 	}
+
 	signedBridgeBatches = append(signedBridgeBatches, rollbackbatches...)
 
 	return signedBridgeBatches, nil
@@ -562,6 +563,7 @@ func (b *bridgeEventManager) getRollbackBatch(blockNumber uint64) ([]*BridgeBatc
 		if err != nil {
 			return nil, err
 		}
+
 		if !seen[hash] {
 			seen[hash] = true
 
@@ -815,7 +817,8 @@ func (b *bridgeEventManager) buildBridgeBatch(
 		return err
 	}
 
-	pendingBridgeBatch.Threshold = new(big.Int).SetUint64(uint64((math.Ceil(float64(blockNumber)/10) * 10)) + b.config.bridgeCfg.Threshold)
+	pendingBridgeBatch.Threshold = new(big.Int).SetUint64(
+		uint64((math.Ceil(float64(blockNumber)/10) * 10)) + b.config.bridgeCfg.Threshold)
 
 	hash, err := pendingBridgeBatch.Hash()
 	if err != nil {
