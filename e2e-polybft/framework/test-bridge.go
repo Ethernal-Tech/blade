@@ -313,7 +313,7 @@ func (t *TestBridge) deployExternalChainContracts(genesisPath string, threshold 
 		"--genesis", genesisPath,
 		"--test",
 		"--bootstrap",
-		"--threshold", strconv.FormatUint(threshold, 10),
+		"--bridge-threshold", strconv.FormatUint(threshold, 10),
 	}
 
 	if err := t.cmdRun(args...); err != nil {

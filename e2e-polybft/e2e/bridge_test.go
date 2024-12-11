@@ -76,7 +76,7 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
-		framework.WithThreshold(100),
+		framework.WithBridgeBatchThreshold(100),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(addrs); i++ {
 				// premine receivers, so that they are able to do withdrawals
