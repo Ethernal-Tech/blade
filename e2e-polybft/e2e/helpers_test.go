@@ -212,28 +212,14 @@ func getChildToken(t *testing.T, predicateABI *abi.ABI, predicateAddr types.Addr
 }
 
 func isEventProcessed(t *testing.T, gatewayAddr types.Address,
-	relayer txrelayer.TxRelayer, bridgeEventID uint64) bool {
+	relayer txrelayer.TxRelayer, bridgeEventID uint64, isRollback bool) bool {
 	t.Helper()
 
 	processedEventsFn := contractsapi.Gateway.Abi.Methods["processedEvents"]
 
-	input, err := processedEventsFn.Encode([]interface{}{bridgeEventID})
-	require.NoError(t, err)
-
-	isProcessedRaw, err := relayer.Call(types.ZeroAddress, gatewayAddr, input)
-	require.NoError(t, err)
-
-	isProcessedAsNumber, err := common.ParseUint64orHex(&isProcessedRaw)
-	require.NoError(t, err)
-
-	return isProcessedAsNumber == 1
-}
-
-func isEventProcessedRollback(t *testing.T, gatewayAddr types.Address,
-	relayer txrelayer.TxRelayer, bridgeEventID uint64) bool {
-	t.Helper()
-
-	processedEventsFn := contractsapi.Gateway.Abi.Methods["processedEventsRollback"]
+	if isRollback {
+		processedEventsFn = contractsapi.Gateway.Abi.Methods["processedEvents"]
+	}
 
 	input, err := processedEventsFn.Encode([]interface{}{bridgeEventID})
 	require.NoError(t, err)

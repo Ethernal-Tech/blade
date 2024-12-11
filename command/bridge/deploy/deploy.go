@@ -199,7 +199,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 	consensusCfg.Bridge[externalChainID].EventTrackerStartBlocks = map[types.Address]uint64{
 		deploymentResultInfo.BridgeCfg.ExternalGatewayAddr: latestBlockNum,
 	}
-	consensusCfg.Bridge[externalChainID].Threshold = params.bridgeBatchThreshold
+	consensusCfg.Bridge[externalChainID].BridgeBatchThreshold = params.bridgeBatchThreshold
 
 	// write updated consensus configuration
 	chainConfig.Params.Engine[polycfg.ConsensusName] = consensusCfg

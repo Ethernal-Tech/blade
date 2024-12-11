@@ -513,7 +513,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		StakeAmounts:         []*big.Int{},
 		NumberOfBridges:      0,
 		VotingDelay:          10,
-		BridgeBatchThreshold: 25,
+		BridgeBatchThreshold: 100,
 	}
 
 	if config.ValidatorPrefix == "" {

@@ -17,7 +17,7 @@ const (
 	isBootstrapFlag          = "bootstrap"
 	externalRPCFlag          = "external-json-rpc"
 	internalRPCFlag          = "internal-json-rpc"
-	bridgeBatchThresholdFlag = "bridge-threshold"
+	bridgeBatchThresholdFlag = "batch-threshold"
 )
 
 type deployParams struct {

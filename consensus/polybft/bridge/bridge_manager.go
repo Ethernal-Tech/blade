@@ -173,7 +173,7 @@ func (b *bridgeEventManager) internalChainRollbackHandler(blockNumber *big.Int, 
 	if err := b.createRollbackBatches(blockNumber, b.externalChainID, b.internalChainID, dbTx); err != nil {
 		b.logger.Error("could not create a rollback batches", "err", err)
 
-		return nil
+		return err
 	}
 
 	return nil
@@ -818,7 +818,7 @@ func (b *bridgeEventManager) buildBridgeBatch(
 	}
 
 	pendingBridgeBatch.Threshold = new(big.Int).SetUint64(
-		uint64((math.Ceil(float64(blockNumber)/10) * 10)) + b.config.bridgeCfg.Threshold)
+		uint64((math.Ceil(float64(blockNumber)/10) * 10)) + b.config.bridgeCfg.BridgeBatchThreshold)
 
 	hash, err := pendingBridgeBatch.Hash()
 	if err != nil {
