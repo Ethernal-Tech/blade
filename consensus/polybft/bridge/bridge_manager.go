@@ -460,6 +460,17 @@ func (b *bridgeEventManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error
 
 		b.lock.Lock()
 
+		for i := 0; i < len(b.unexecutedBatches); {
+			if b.unexecutedBatches[i].SourceChainID.Cmp(event.SourceChainID) == 0 &&
+				b.unexecutedBatches[i].DestinationChainID.Cmp(event.DestinationChainID) == 0 &&
+				b.unexecutedBatches[i].StartID.Cmp(event.StartID) == 0 &&
+				b.unexecutedBatches[i].EndID.Cmp(event.EndID) == 0 {
+				b.unexecutedBatches = append(b.unexecutedBatches[:i], b.unexecutedBatches[i+1:]...)
+			} else {
+				i++
+			}
+		}
+
 		if event.IsRollback {
 			for i := 0; i < len(b.rollbackBatches); {
 				if b.rollbackBatches[i].SourceChainID.Cmp(event.SourceChainID) == 0 &&
@@ -467,17 +478,6 @@ func (b *bridgeEventManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error
 					b.rollbackBatches[i].StartID.Cmp(event.StartID) == 0 &&
 					b.rollbackBatches[i].EndID.Cmp(event.EndID) == 0 {
 					b.rollbackBatches = append(b.rollbackBatches[:i], b.rollbackBatches[i+1:]...)
-				} else {
-					i++
-				}
-			}
-		} else {
-			for i := 0; i < len(b.unexecutedBatches); {
-				if b.unexecutedBatches[i].SourceChainID.Cmp(event.SourceChainID) == 0 &&
-					b.unexecutedBatches[i].DestinationChainID.Cmp(event.DestinationChainID) == 0 &&
-					b.unexecutedBatches[i].StartID.Cmp(event.StartID) == 0 &&
-					b.unexecutedBatches[i].EndID.Cmp(event.EndID) == 0 {
-					b.unexecutedBatches = append(b.unexecutedBatches[:i], b.unexecutedBatches[i+1:]...)
 				} else {
 					i++
 				}
@@ -996,6 +996,17 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, log *ethgo.Log, db
 
 		b.lock.Lock()
 
+		for i := 0; i < len(b.unexecutedBatches); {
+			if b.unexecutedBatches[i].SourceChainID.Cmp(event.SourceChainID) == 0 &&
+				b.unexecutedBatches[i].DestinationChainID.Cmp(event.DestinationChainID) == 0 &&
+				b.unexecutedBatches[i].StartID.Cmp(event.StartID) == 0 &&
+				b.unexecutedBatches[i].EndID.Cmp(event.EndID) == 0 {
+				b.unexecutedBatches = append(b.unexecutedBatches[:i], b.unexecutedBatches[i+1:]...)
+			} else {
+				i++
+			}
+		}
+
 		if event.IsRollback {
 			for i := 0; i < len(b.rollbackBatches); {
 				if b.rollbackBatches[i].SourceChainID.Cmp(event.SourceChainID) == 0 &&
@@ -1003,17 +1014,6 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, log *ethgo.Log, db
 					b.rollbackBatches[i].StartID.Cmp(event.StartID) == 0 &&
 					b.rollbackBatches[i].EndID.Cmp(event.EndID) == 0 {
 					b.rollbackBatches = append(b.rollbackBatches[:i], b.rollbackBatches[i+1:]...)
-				} else {
-					i++
-				}
-			}
-		} else {
-			for i := 0; i < len(b.unexecutedBatches); {
-				if b.unexecutedBatches[i].SourceChainID.Cmp(event.SourceChainID) == 0 &&
-					b.unexecutedBatches[i].DestinationChainID.Cmp(event.DestinationChainID) == 0 &&
-					b.unexecutedBatches[i].StartID.Cmp(event.StartID) == 0 &&
-					b.unexecutedBatches[i].EndID.Cmp(event.EndID) == 0 {
-					b.unexecutedBatches = append(b.unexecutedBatches[:i], b.unexecutedBatches[i+1:]...)
 				} else {
 					i++
 				}
