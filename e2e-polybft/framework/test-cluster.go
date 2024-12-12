@@ -142,6 +142,7 @@ type TestClusterConfig struct {
 	RootTrackerPollInterval time.Duration
 
 	ProxyContractsAdmin string
+	TestRollback        bool
 
 	VotingPeriod uint64
 	VotingDelay  uint64
@@ -485,6 +486,12 @@ func WithThreshold(threshold uint64) ClusterOption {
 	}
 }
 
+func WithTestRollback() ClusterOption {
+	return func(h *TestClusterConfig) {
+		h.TestRollback = true
+	}
+}
+
 func isTrueEnv(e string) bool {
 	return strings.ToLower(os.Getenv(e)) == "true"
 }
@@ -765,7 +772,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		require.NoError(t, err)
 
 		// deploy bridge chain contracts
-		err = bridge.deployExternalChainContracts(genesisPath, cluster.Config.Threshold)
+		err = bridge.deployExternalChainContracts(genesisPath, cluster.Config.Threshold, cluster.Config.TestRollback)
 		require.NoError(t, err)
 
 		polybftConfig, err := polycfg.LoadPolyBFTConfig(genesisPath)
