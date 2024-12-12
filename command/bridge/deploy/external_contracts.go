@@ -17,7 +17,7 @@ import (
 
 // initExternalContracts initializes the external contracts
 func initExternalContracts(bridgeCfg *polycfg.Bridge,
-	externalChainClient *jsonrpc.EthClient, externalChainID *big.Int) ([]*contract, error) {
+	externalChainClient *jsonrpc.EthClient, externalChainID *big.Int, isTestRollback bool) ([]*contract, error) {
 	externalContracts := make([]*contract, 0)
 
 	// deploy root ERC20 token only if non-mintable native token flavor is used on a child chain
@@ -62,42 +62,56 @@ func initExternalContracts(bridgeCfg *polycfg.Bridge,
 		},
 	})
 
-	// Gateway contract
-	externalContracts = append(externalContracts, &contract{
-		name:     getContractName(false, gatewayName),
-		hasProxy: true,
-		artifact: contractsapi.Gateway,
-		addressPopulatorFn: func(bc *polycfg.Bridge, dcr []*deployContractResult) {
-			bc.ExternalGatewayAddr = dcr[1].Address
-		},
-		initializeFn: func(fmt command.OutputFormatter, relayer txrelayer.TxRelayer,
-			genesisValidators []*validator.GenesisValidator,
-			config *polycfg.Bridge,
-			key crypto.Key,
-			destinationChainID int64) error {
-			if !consensusCfg.NativeTokenConfig.IsMintable {
-				// we can not initialize Gateway contract at this moment if native token is not mintable
-				// we will do that on finalize command when validators do premine and stake on BladeManager
-				// this is done like this because Gateway contract needs to have correct
-				// voting powers in order to correctly validate batches
-				return nil
-			}
+	initGatewayFn := func(fmt command.OutputFormatter, relayer txrelayer.TxRelayer,
+		genesisValidators []*validator.GenesisValidator,
+		config *polycfg.Bridge,
+		key crypto.Key,
+		destinationChainID int64) error {
+		if !consensusCfg.NativeTokenConfig.IsMintable {
+			// we can not initialize Gateway contract at this moment if native token is not mintable
+			// we will do that on finalize command when validators do premine and stake on BladeManager
+			// this is done like this because Gateway contract needs to have correct
+			// voting powers in order to correctly validate batches
+			return nil
+		}
 
-			validatorSet, err := getValidatorSet(fmt, genesisValidators)
-			if err != nil {
-				return err
-			}
+		validatorSet, err := getValidatorSet(fmt, genesisValidators)
+		if err != nil {
+			return err
+		}
 
-			inputParams := &contractsapi.InitializeGatewayFn{
-				NewBls:     config.BLSAddress,
-				NewBn256G2: config.BN256G2Address,
-				Validators: validatorSet,
-			}
+		inputParams := &contractsapi.InitializeGatewayFn{
+			NewBls:     config.BLSAddress,
+			NewBn256G2: config.BN256G2Address,
+			Validators: validatorSet,
+		}
 
-			return initContract(fmt, relayer, inputParams, config.ExternalGatewayAddr,
-				gatewayName, key)
-		},
-	})
+		return initContract(fmt, relayer, inputParams, config.ExternalGatewayAddr,
+			gatewayName, key)
+	}
+
+	if isTestRollback {
+		externalContracts = append(externalContracts, &contract{
+			name:     getContractName(false, testRollbackGatewayName),
+			hasProxy: true,
+			artifact: contractsapi.TestRollbackGateway,
+			addressPopulatorFn: func(bc *polycfg.Bridge, dcr []*deployContractResult) {
+				bc.ExternalGatewayAddr = dcr[1].Address
+			},
+			initializeFn: initGatewayFn,
+		})
+	} else {
+		// Gateway contract
+		externalContracts = append(externalContracts, &contract{
+			name:     getContractName(false, gatewayName),
+			hasProxy: true,
+			artifact: contractsapi.Gateway,
+			addressPopulatorFn: func(bc *polycfg.Bridge, dcr []*deployContractResult) {
+				bc.ExternalGatewayAddr = dcr[1].Address
+			},
+			initializeFn: initGatewayFn,
+		})
+	}
 
 	// External ERC20Predicate contract
 	externalContracts = append(externalContracts, &contract{
