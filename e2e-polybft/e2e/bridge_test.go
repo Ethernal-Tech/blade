@@ -295,6 +295,9 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 			return true
 		}))
 
+		finalBlockNum, err = childEthEndpoint.BlockNumber()
+		require.NoError(t, err)
+
 		// the transactions are mined and state syncs should be executed by the relayer
 		// and there should be a success events
 		logs, err := getFilteredLogs(bridgeMessageResult.Sig(), initialBlockNum, finalBlockNum, childEthEndpoint)
