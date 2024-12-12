@@ -218,7 +218,7 @@ func isEventProcessed(t *testing.T, gatewayAddr types.Address,
 	processedEventsFn := contractsapi.Gateway.Abi.Methods["processedEvents"]
 
 	if isRollback {
-		processedEventsFn = contractsapi.Gateway.Abi.Methods["processedEvents"]
+		processedEventsFn = contractsapi.Gateway.Abi.Methods["processedEventsRollback"]
 	}
 
 	input, err := processedEventsFn.Encode([]interface{}{bridgeEventID})
