@@ -63,7 +63,7 @@ func TestDeployContracts_NoPanics(t *testing.T) {
 	}
 
 	require.NotPanics(t, func() {
-		_, err = deployContracts(outputter, client, big.NewInt(2), chainCfg, []*validator.GenesisValidator{}, context.Background())
+		_, err = deployContracts(outputter, client, big.NewInt(2), false, chainCfg, []*validator.GenesisValidator{}, context.Background())
 	})
 	require.NoError(t, err)
 }
