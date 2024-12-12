@@ -21,6 +21,7 @@ const (
 	internalPrefix = "Internal"
 
 	gatewayName                  = "Gateway"
+	testRollbackGatewayName      = "TestRollbackGateway"
 	bladeManagerName             = "BladeManager"
 	blsName                      = "BLS"
 	bn256G2Name                  = "BN256G2"

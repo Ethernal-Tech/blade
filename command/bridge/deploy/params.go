@@ -18,6 +18,7 @@ const (
 	externalRPCFlag = "external-json-rpc"
 	internalRPCFlag = "internal-json-rpc"
 	thresholdFlag   = "threshold"
+	isTestRollback  = "test-rollback"
 )
 
 type deployParams struct {
@@ -29,6 +30,7 @@ type deployParams struct {
 	proxyContractsAdmin string
 	txTimeout           time.Duration
 	isTestMode          bool
+	isTestRollback      bool
 	isBootstrap         bool
 	threshold           uint64
 }
