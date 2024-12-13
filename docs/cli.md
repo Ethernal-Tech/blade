@@ -187,7 +187,8 @@ Usage: `./blade secrets init [flags]`
 | `--output`    | The flag indicating whether to output existing secrets  | FALSE            | NO       |
 | `--private`           | The flag indicating whether the private key is printed            | FALSE         | NO        |
 
-> [!NOTE] Mutually Exclusive Parameters
+> **Info**<br>
+> Mutually Exclusive Parameters
 >- `--config` and `--data-dir`: These flags are mutually >exclusive. Use either `--config` to specify the path to the SecretsManager config file or `--data-dir` to set the directory for the Blade data if the local FS is used.
 >
 >- `--num` and `--config`: These flags are mutually exclusive. Set `--num` to define number of secrets to be created (only for local FS) or use `--config` to provide the SecretsManager config file path.
@@ -216,7 +217,8 @@ Usage: `./blade secrets output [flags]`
 | `--node-id`    | Output only the node id from the provided secrets manager  | FALSE            | NO       |
 | `--validator`    | Output only the validator key address from the provided secrets manager  | FALSE            | NO       |
 
-> [!NOTE] Mutually Exclusive Parameters
+> **Info**<br>
+> Mutually Exclusive Parameters
 >- `--config` and `--data-dir`: These flags are mutually >exclusive. Use either `--config` to specify the path to the SecretsManager config file or `--data-dir` to set the directory for the Blade data if the local FS is used.
 
 </details>
@@ -323,7 +325,8 @@ Usage: `./blade validator info [flags]`
 | `--jsonrpc string`    | The JSON RPC interface  | 0.0.0.0:8545            | NO       |
 | `--tx-timeout duration`    | Timeout for transaction processing  | 50s            | NO       |
 
-> [!NOTE] Mutually Exclusive Parameters
+> **Info**<br>
+> Mutually Exclusive Parameters
 >- `--config` and `--data-dir`: These flags are mutually >exclusive. Use either `--config` to specify the path to the SecretsManager config file or `--data-dir` to set the directory for the Blade data if the local FS is used.
 </details>
 
@@ -349,7 +352,8 @@ Usage: `./blade validator register-validator [flags]`
 | `--stake-token string`    | Stake token address  | 0x0000000000000000000000000000000000001010            | NO       |
 | `--tx-timeout duration`    | Timeout for transaction processing  | 50s            | NO       |
 
-> [!NOTE] Mutually Exclusive Parameters
+> **Info**<br>
+> Mutually Exclusive Parameters
 >- `--config` and `--data-dir`: These flags are mutually >exclusive. Use either `--config` to specify the path to the SecretsManager config file or `--data-dir` to set the directory for the Blade data if the local FS is used.
 </details>
 
@@ -375,7 +379,8 @@ Usage: `./blade validator stake [flags]`
 | `--stake-token string`    | Stake token address  | 0x0000000000000000000000000000000000001010            | NO       |
 | `--tx-timeout duration`    | Timeout for transaction processing  | 2m30s            | NO       |
 
-> [!NOTE] Mutually Exclusive Parameters
+> **Info**<br>
+> Mutually Exclusive Parameters
 >- `--config` and `--data-dir`: These flags are mutually >exclusive. Use either `--config` to specify the path to the SecretsManager config file or `--data-dir` to set the directory for the Blade data if the local FS is used.
 </details>
 
@@ -400,7 +405,8 @@ Usage: `./blade validator unstake [flags]`
 | `--jsonrpc string`    | The JSON RPC interface  | 0.0.0.0:8545            | NO       |
 | `--tx-timeout duration`    | Timeout for transaction processing  | 2m30s            | NO       |
 
-> [!NOTE] Mutually Exclusive Parameters
+> **Info**<br>
+> Mutually Exclusive Parameters
 >- `--config` and `--data-dir`: These flags are mutually >exclusive. Use either `--config` to specify the path to the SecretsManager config file or `--data-dir` to set the directory for the Blade data if the local FS is used.
 </details>
 
@@ -426,7 +432,8 @@ Usage: `./blade validator whitelist-validators [flags]`
 | `--private-key string`    | Hex-encoded private key of the account executing the command  |            | YES       |
 | `--tx-timeout duration`    | Timeout for transaction processing  | 2m30s            | NO       |
 
-> [!NOTE] Mutually Exclusive Parameters
+> **Info**<br>
+> Mutually Exclusive Parameters
 >- `--config` and `--data-dir`: These flags are mutually >exclusive. Use either `--config` to specify the path to the SecretsManager config file or `--data-dir` to set the directory for the Blade data if the local FS is used.
 </details>
 
@@ -450,7 +457,8 @@ Usage: `./blade validator withdraw [flags]`
 | `--jsonrpc string`    | The JSON RPC interface  | 0.0.0.0:8545            | NO       |
 | `--tx-timeout duration`    | Timeout for transaction processing  | 2m30s            | NO       |
 
-> [!NOTE] Mutually Exclusive Parameters
+> **Info**<br>
+> Mutually Exclusive Parameters
 >- `--config` and `--data-dir`: These flags are mutually >exclusive. Use either `--config` to specify the path to the SecretsManager config file or `--data-dir` to set the directory for the Blade data if the local FS is used.
 </details>
 
@@ -474,7 +482,8 @@ Usage: `./blade validator withdraw-rewards [flags]`
 | `--jsonrpc string`    | The JSON RPC interface  | 0.0.0.0:8545            | NO       |
 | `--tx-timeout duration`    | Timeout for transaction processing  | 2m30s            | NO       |
 
-> [!NOTE] Mutually Exclusive Parameters
+> **Info**<br>
+> Mutually Exclusive Parameters
 >- `--config` and `--data-dir`: These flags are mutually >exclusive. Use either `--config` to specify the path to the SecretsManager config file or `--data-dir` to set the directory for the Blade data if the local FS is used.
 </details>
 
@@ -554,7 +563,8 @@ Available commands:<br>
 | `--withdrawal-wait-period uint` | Number of epochs after which withdrawal can be done from child chain. | 1 | NO |
 
 
-> [!NOTE] Mutually Exclusive Parameters
+> **Info**<br>
+> Mutually Exclusive Parameters
 >- `--validators`: Validators defined by the user (format: `<P2P multi address>:<public ECDSA address>:<public BLS key>`). If this flag is set, the entire multi address must be specified. If not set, validators configuration will be read from `--validators-path`.
 >- `--validators-path`: Root path containing polybft validators' secrets. If `--validators` flag is not specified, validators' configuration will be read from this path.
 >- `--validators-prefix`: Folder prefix names for polybft validators' secrets. If `--validators` flag is set, this prefix will be used for folder names.
@@ -583,7 +593,8 @@ Usage: `./blade genesis predeploy [flags]`
 | `--deployer-address string`    | Contract deployer account address   |  0           | YES       |
 | `--predeploye-address string`    | The address to predeploy to. Must be >= 0x0000000000000000000000000000000000001100   |  0x0000000000000000000000000000000000001100   | NO       |
 
-> [!NOTE] Mutually Exclusive Parameters
+> **Info**<br>
+> Mutually Exclusive Parameters
 >- `--artifacts-name` and `--artifacts-path`: These flags are mutually >exclusive. Use either `--artifacts-name` for built-in contracts or `--artifacts-path` for externaly defined contracts.
 </details>
 

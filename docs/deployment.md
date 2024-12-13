@@ -21,7 +21,7 @@ Blade provides a Docker image to run a Blade node in a Docker container. Use thi
 #### Prerequisites
 * Docker
 * Linux or MacOS
-> [!NOTE]  
+> **Info**<br>
 > The Docker image doesn't run on Windows.
 
 #### Pull the image
@@ -84,7 +84,7 @@ The generated secrets include the following information for a validator node:
 - **BLS Private and Public Keys**: These keys are used in the Byzantine fault-tolerant (BFT) consensus protocol to aggregate and verify signatures efficiently.
 - **P2P Networking Node ID**: This is a unique identifier for each validator node in the network, allowing them to establish and maintain connections with other nodes.
 
-> [!NOTE]  
+> **Info**<br>
 > The secrets output can be retrieved again if needed by running the following command: `docker run -v <your-local-directory>:/container-dir -w /container-dir 0xethernal/blade:latest secrets output --data-dir data`
 
 ### Genesis
@@ -109,9 +109,10 @@ docker run -v <your-local-directory>:/container-dir -w /container-dir 0xethernal
 
 * proxy-contracts-admin and blade-admin are some Ethereum accounts
 * validators is array of validators in the network in the format `<P2P multi address>:<ECDSA address>:<public BLS key>`. If param bootnode is omitted then genesis validators will be also bootnodes. In the example above a local validator will be a bootnode as well, hence genesis is generated with 127.0.0.1. Other validators connecting to that bootnode/validator should have set private/public IP address of the bootnode/validator during genesis generation. There can be multiple bootnodes (up to the total number of validators).
-> [!NOTE]  
+> **Info**<br>
 > More information about Blade configuration parameters can be found in section CLI.
-> [!IMPORTANT]  
+>
+> **Warning**  
 > Permission over `<your-local-directory>` should be set to 777 (only for Docker deployment).
 
 ## Start Blade
