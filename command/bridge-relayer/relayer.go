@@ -37,6 +37,16 @@ func setFlags(cmd *cobra.Command) {
 	_ = cmd.MarkFlagRequired("internal-chain-rpc")
 
 	cmd.Flags().StringVarP(
+		&params.internalChainRPC,
+		"genesis-path",
+		"g",
+		"",
+		"internal chain genesis path",
+	)
+
+	_ = cmd.MarkFlagRequired("genesis-path")
+
+	cmd.Flags().StringVarP(
 		&params.relayerPrivateKey,
 		"private-key",
 		"k",

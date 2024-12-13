@@ -7,6 +7,10 @@ type relayerParams struct {
 	// network (Blade).
 	internalChainRPC string
 
+	// genesisPath denotes the path to the genesis file of the internal blockchain
+	// network (Blade).
+	genesisPath string
+
 	// relayerPrivateKey contains the cryptographic private key utilized by the
 	// relayer to sign and send transactions.
 	// SECURITY WARNING: This key must be kept strictly confidential and never
