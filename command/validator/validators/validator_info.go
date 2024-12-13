@@ -46,13 +46,6 @@ func setFlags(cmd *cobra.Command) {
 		polybftsecrets.AccountConfigFlagDesc,
 	)
 
-	cmd.Flags().Int64Var(
-		&params.chainID,
-		polybftsecrets.ChainIDFlag,
-		0,
-		polybftsecrets.ChainIDFlagDesc,
-	)
-
 	cmd.Flags().DurationVar(
 		&params.txTimeout,
 		helper.TxTimeoutFlag,
