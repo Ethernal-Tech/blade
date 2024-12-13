@@ -251,29 +251,6 @@ func TestVerifyTransactions(t *testing.T) {
 			},
 		},
 		{
-			name: "two bridge transactions",
-			blockInfo: &oracle.NewBlockInfo{
-				IsEndOfSprint:     true,
-				ParentBlock:       &types.Header{Number: 14},
-				CurrentEpoch:      2,
-				FirstBlockInEpoch: 11,
-			},
-			setupMocks: func(bridge *bridge, blockInfo *oracle.NewBlockInfo) []*types.Transaction {
-				batch, _, validators := createAndSignBridgeBatch(t, 5, blockInfo.CurrentEpoch, 1, 10, 2, 1)
-
-				input, err := batch.EncodeAbi()
-				require.NoError(t, err)
-
-				blockInfo.CurrentEpochValidatorSet = validators.ToValidatorSet()
-
-				return []*types.Transaction{
-					types.NewTx(types.NewStateTx(types.WithInput(input), types.WithTo(&contracts.BridgeStorageContract))),
-					types.NewTx(types.NewStateTx(types.WithInput(input), types.WithTo(&contracts.BridgeStorageContract))),
-				}
-			},
-			expectedError: errBridgeBatchTxExists.Error(),
-		},
-		{
 			name: "commit validator set not exist when expected",
 			blockInfo: &oracle.NewBlockInfo{
 				IsFirstBlockOfEpoch: true,

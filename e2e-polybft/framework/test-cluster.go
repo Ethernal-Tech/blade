@@ -116,6 +116,7 @@ type TestClusterConfig struct {
 	BladeAdmin           string
 	RewardWallet         string
 	PredeployContract    string
+	BridgeBatchThreshold uint64
 
 	ContractDeployerAllowListAdmin   []types.Address
 	ContractDeployerAllowListEnabled []types.Address
@@ -478,6 +479,12 @@ func WithTLSCertificate(certFile string, keyFile string) ClusterOption {
 	}
 }
 
+func WithBridgeBatchThreshold(threshold uint64) ClusterOption {
+	return func(h *TestClusterConfig) {
+		h.BridgeBatchThreshold = threshold
+	}
+}
+
 func isTrueEnv(e string) bool {
 	return strings.ToLower(os.Getenv(e)) == "true"
 }
@@ -496,16 +503,17 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 	var err error
 
 	config := &TestClusterConfig{
-		t:               t,
-		WithLogs:        isTrueEnv(envLogsEnabled),
-		WithStdout:      isTrueEnv(envStdoutEnabled),
-		Binary:          resolveBinary(),
-		EpochSize:       10,
-		EpochReward:     1,
-		BlockGasLimit:   1e7, // 10M
-		StakeAmounts:    []*big.Int{},
-		NumberOfBridges: 0,
-		VotingDelay:     10,
+		t:                    t,
+		WithLogs:             isTrueEnv(envLogsEnabled),
+		WithStdout:           isTrueEnv(envStdoutEnabled),
+		Binary:               resolveBinary(),
+		EpochSize:            10,
+		EpochReward:          1,
+		BlockGasLimit:        1e7, // 10M
+		StakeAmounts:         []*big.Int{},
+		NumberOfBridges:      0,
+		VotingDelay:          10,
+		BridgeBatchThreshold: 100,
 	}
 
 	if config.ValidatorPrefix == "" {
@@ -757,7 +765,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		require.NoError(t, err)
 
 		// deploy bridge chain contracts
-		err = bridge.deployExternalChainContracts(genesisPath)
+		err = bridge.deployExternalChainContracts(genesisPath, cluster.Config.BridgeBatchThreshold)
 		require.NoError(t, err)
 
 		polybftConfig, err := polycfg.LoadPolyBFTConfig(genesisPath)

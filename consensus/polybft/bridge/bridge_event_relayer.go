@@ -136,15 +136,28 @@ func (ber *bridgeEventRelayerImpl) sendSignedBridgeMessageBatch(event *contracts
 		exists             bool
 	)
 
-	if event.DestinationChainID.Cmp(ber.internalChainID) != 0 {
-		txRelayer, exists = ber.externalTxRelayers[destinationChainID]
-		if !exists {
-			return fmt.Errorf("tx relayer for chain %d not found", destinationChainID)
+	if event.IsExternalRollbackBatch(ber.internalChainID) ||
+		event.IsInternalRegularBatch(ber.internalChainID) {
+		var chainID uint64
+
+		if event.IsRollback {
+			chainID = sourceChainID
+		} else {
+			chainID = destinationChainID
 		}
 
-		to = ber.bridgeConfig[destinationChainID].ExternalGatewayAddr
+		txRelayer, exists = ber.externalTxRelayers[chainID]
+		if !exists {
+			return fmt.Errorf("tx relayer for chain %d not found", chainID)
+		}
+
+		to = ber.bridgeConfig[chainID].ExternalGatewayAddr
 	} else {
-		to = ber.bridgeConfig[sourceChainID].InternalGatewayAddr
+		if event.IsRollback {
+			to = ber.bridgeConfig[destinationChainID].InternalGatewayAddr
+		} else {
+			to = ber.bridgeConfig[sourceChainID].InternalGatewayAddr
+		}
 	}
 
 	events, err := ber.state.getBridgeMessageEventsForBridgeBatch(
