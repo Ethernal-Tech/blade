@@ -10,6 +10,6 @@ type relayerParams struct {
 	// relayerPrivateKey contains the cryptographic private key utilized by the
 	// relayer to sign and send transactions.
 	// SECURITY WARNING: This key must be kept strictly confidential and never
-	// exposed or commited to any public service or version control system.
+	// exposed or committed to any public service or version control system.
 	relayerPrivateKey string
 }

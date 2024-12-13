@@ -34,7 +34,7 @@ func setFlags(cmd *cobra.Command) {
 		"internal chain rpc endpoint",
 	)
 
-	cmd.MarkFlagRequired("internal-chain-rpc")
+	_ = cmd.MarkFlagRequired("internal-chain-rpc")
 
 	cmd.Flags().StringVarP(
 		&params.relayerPrivateKey,
@@ -44,5 +44,5 @@ func setFlags(cmd *cobra.Command) {
 		"relayer's private key",
 	)
 
-	cmd.MarkFlagRequired("private-key")
+	_ = cmd.MarkFlagRequired("private-key")
 }
