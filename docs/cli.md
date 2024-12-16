@@ -15,10 +15,10 @@ Usage: `./blade backup [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--from string`     | Backup starting block number                        | 0            | NO        |
-| `--grpc-address string`   | The GRPC interface   | 127.0.0.1:9632            | NO       |
-| `--out string`          | Export path for the backup file |       | YES        |
-| `--to string`           | Backup ending block number          | latest block          | NO        |
+| `--from string`     | Backup starting block number.                        | 0            | NO        |
+| `--grpc-address string`   | The GRPC interface.   | 127.0.0.1:9632            | NO       |
+| `--out string`          | Export path for the backup file. |       | YES        |
+| `--to string`           | Backup ending block number.          | latest block          | NO        |
 </details>
 
 ### Example
@@ -36,12 +36,12 @@ Usage: `./blade mint-erc20 [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--addresses strings`     | Receivers addresses                        |             | YES        |
-| `--amounts strings`   | ERC20 token amounts   |             | YES       |
-| `--erc20-token string`          | ERC20 token address |       | YES        |
-| `--jsonrpc string`           | JSON RPC interface          | 0.0.0.0:8545          | NO        |
-| `--private-key string`           | Minter user private key          |           | YES        |
-| `--tx-timeout duration`           | Timeout for transaction processing          | 50s          | NO        |
+| `--addresses strings`     | Receivers addresses.                        |             | YES        |
+| `--amounts strings`   | ERC20 token amounts.   |             | YES       |
+| `--erc20-token string`          | ERC20 token address. |       | YES        |
+| `--jsonrpc string`           | JSON RPC interface.          | 0.0.0.0:8545          | NO        |
+| `--private-key string`           | Minter user private key.          |           | YES        |
+| `--tx-timeout duration`           | Timeout for transaction processing.          | 50s          | NO        |
 </details>
 
 ### Example
@@ -59,7 +59,7 @@ Usage: `./blade monitor [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--grpc-address string`   | The GRPC interface   | 127.0.0.1:9632            | NO       |
+| `--grpc-address string`   | The GRPC interface.   | 127.0.0.1:9632            | NO       |
 </details>
 
 ### Example
@@ -86,8 +86,8 @@ Usage: `./blade peers add [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--grpc-address string`   | The GRPC interface   | 127.0.0.1:9632            | NO       |
-| `--addr strings`   | The libp2p peers addresses  |             | YES       |
+| `--grpc-address string`   | The GRPC interface.   | 127.0.0.1:9632            | NO       |
+| `--addr strings`   | The libp2p peers addresses.  |             | YES       |
 </details>
 
 ### Example
@@ -105,7 +105,7 @@ Usage: `./blade peers list [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--grpc-address string`   | The GRPC interface   | 127.0.0.1:9632            | NO       |
+| `--grpc-address string`   | The GRPC interface.   | 127.0.0.1:9632            | NO       |
 </details>
 
 ### Example
@@ -123,8 +123,8 @@ Usage: `./blade peers status [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--grpc-address string`   | The GRPC interface   | 127.0.0.1:9632            | NO       |
-| `--peer-id string`   | Libp2p node ID of a specific peer within p2p network  |             | YES       |
+| `--grpc-address string`   | The GRPC interface.   | 127.0.0.1:9632            | NO       |
+| `--peer-id string`   | Libp2p node ID of a specific peer within p2p network.  |             | YES       |
 </details>
 
 ### Example
@@ -151,14 +151,14 @@ Usage: `./blade secrets generate [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--grpc-address string`   | The GRPC interface   | 127.0.0.1:9632            | NO       |
-| `--dir string`    | File path for the secrets manager configuration file  | ./secretsManagerConfig.json            | NO       |
-| `--extra string`    | Specifies the extra fields map in string format 'key1=val1,key2=val2'  |             | NO       |
-| `--name string`    | Name of the node for on-service record keeping  |             | YES       |
-| `--namespace string`    | Namespace for the service  | admin            | NO       |
-| `--server-url string`    | Server URL for the service  |             | YES       |
-| `--token string`    | Access token for the hashicorp-vault service  |             | YES (only for hashicorp-vault)       |
-| `--type string`    | Type of the secrets manager. Available types: hashicorp-vault, aws-ssm, gcp-ssm and alibaba-ssm  | hashicorp-vault            | NO       |
+| `--grpc-address string`   | The GRPC interface.   | 127.0.0.1:9632            | NO       |
+| `--dir string`    | File path for the secrets manager configuration file.  | ./secretsManagerConfig.json            | NO       |
+| `--extra string`    | Specifies the extra fields map in string format 'key1=val1,key2=val2'.  |             | NO       |
+| `--name string`    | Name of the node for on-service record keeping.  |             | YES       |
+| `--namespace string`    | Namespace for the service.  | admin            | NO       |
+| `--server-url string`    | Server URL for the service.  |             | YES       |
+| `--token string`    | Access token for the hashicorp-vault service.  |             | YES (only for hashicorp-vault)       |
+| `--type string`    | Type of the secrets manager. Available types: hashicorp-vault, aws-ssm, gcp-ssm and alibaba-ssm.  | hashicorp-vault            | NO       |
 </details>
 
 ### Example
@@ -176,16 +176,16 @@ Usage: `./blade secrets init [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--grpc-address string`   | The GRPC interface   | 127.0.0.1:9632            | NO       |
-| `--account`    | The flag indicating whether a new account is created  | TRUE            | NO       |
-| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used  |             | NO       |
-| `--data-dir string`    | Directory for the Blade data if the local FS is used  |             | YES       |
-| `--insecure`    | The flag indicating whether the secrets stored locally are encrypted  | FALSE            | NO       |
-| `--json-tls-cert`    | The flag indicating whether a new self signed TLS certificate is created for JSON RPC  | TRUE            | NO       |
-| `--network`    | The flag indicating whether a new network key is created  | TRUE            | NO       |
-| `--num int`    | Indicating how many secrets should be created, only for the local FS  | 1            | NO       |
-| `--output`    | The flag indicating whether to output existing secrets  | FALSE            | NO       |
-| `--private`           | The flag indicating whether the private key is printed            | FALSE         | NO        |
+| `--grpc-address string`   | The GRPC interface.   | 127.0.0.1:9632            | NO       |
+| `--account`    | The flag indicating whether a new account is created.  | TRUE            | NO       |
+| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used.  |             | NO       |
+| `--data-dir string`    | Directory for the Blade data if the local FS is used.  |             | YES       |
+| `--insecure`    | The flag indicating whether the secrets stored locally are encrypted.  | FALSE            | NO       |
+| `--json-tls-cert`    | The flag indicating whether a new self signed TLS certificate is created for JSON RPC.  | TRUE            | NO       |
+| `--network`    | The flag indicating whether a new network key is created.  | TRUE            | NO       |
+| `--num int`    | Indicating how many secrets should be created, only for the local FS.  | 1            | NO       |
+| `--output`    | The flag indicating whether to output existing secrets.  | FALSE            | NO       |
+| `--private`           | The flag indicating whether the private key is printed.            | FALSE         | NO        |
 
 > **Info**<br>
 > Mutually Exclusive Parameters
@@ -210,12 +210,12 @@ Usage: `./blade secrets output [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--grpc-address string`   | The GRPC interface   | 127.0.0.1:9632            | NO       |
-| `--bls`    | Output only the BLS public key from the provided secrets manager  | FALSE            | NO       |
-| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used  |             | NO       |
-| `--data-dir string`    | Directory for the Blade data if the local FS is used  |             | YES       |
-| `--node-id`    | Output only the node id from the provided secrets manager  | FALSE            | NO       |
-| `--validator`    | Output only the validator key address from the provided secrets manager  | FALSE            | NO       |
+| `--grpc-address string`   | The GRPC interface.   | 127.0.0.1:9632            | NO       |
+| `--bls`    | Output only the BLS public key from the provided secrets manager.  | FALSE            | NO       |
+| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used.  |             | NO       |
+| `--data-dir string`    | Directory for the Blade data if the local FS is used.  |             | YES       |
+| `--node-id`    | Output only the node id from the provided secrets manager.  | FALSE            | NO       |
+| `--validator`    | Output only the validator key address from the provided secrets manager.  | FALSE            | NO       |
 
 > **Info**<br>
 > Mutually Exclusive Parameters
@@ -238,7 +238,7 @@ Usage: `./blade status [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--grpc-address string`   | The GRPC interface   | 127.0.0.1:9632            | NO       |
+| `--grpc-address string`   | The GRPC interface.   | 127.0.0.1:9632            | NO       |
 </details>
 
 ### Example
@@ -264,7 +264,7 @@ Usage: `./blade txpool status [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--grpc-address string`   | The GRPC interface   | 127.0.0.1:9632            | NO       |
+| `--grpc-address string`   | The GRPC interface.   | 127.0.0.1:9632            | NO       |
 </details>
 
 ### Example
@@ -282,14 +282,14 @@ Usage: `./blade txpool subscribe [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--grpc-address string`   | The GRPC interface   | 127.0.0.1:9632            | NO       |
-| `--added`   | Subscribe to transaction added events   | FALSE            | NO       |
-| `--demoted`   | Subscribe to transaction demoted events   | FALSE            | NO       |
-| `--dropped`   | Subscribe to transaction dropped events   | FALSE            | NO       |
-| `--enqueued`   | Subscribe to transaction enqueued events   | FALSE            | NO       |
-| `--promoted`   | Subscribe to transaction promoted events   | FALSE            | NO       |
-| `--pruned-enqueued`   | Subscribe to transaction pruned-enqueued events   | FALSE            | NO       |
-| `--pruned-promoted`   | Subscribe to transaction pruned-promoted events   | FALSE            | NO       |
+| `--grpc-address string`   | The GRPC interface.   | 127.0.0.1:9632            | NO       |
+| `--added`   | Subscribe to transaction added events.   | FALSE            | NO       |
+| `--demoted`   | Subscribe to transaction demoted events.   | FALSE            | NO       |
+| `--dropped`   | Subscribe to transaction dropped events.   | FALSE            | NO       |
+| `--enqueued`   | Subscribe to transaction enqueued events.   | FALSE            | NO       |
+| `--promoted`   | Subscribe to transaction promoted events.   | FALSE            | NO       |
+| `--pruned-enqueued`   | Subscribe to transaction pruned-enqueued events.   | FALSE            | NO       |
+| `--pruned-promoted`   | Subscribe to transaction pruned-promoted events.   | FALSE            | NO       |
 </details>
 
 ### Example
@@ -320,10 +320,10 @@ Usage: `./blade validator info [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used  |             | NO       |
-| `--data-dir string`    | Directory for the Blade data if the local FS is used  |             | YES       |
-| `--jsonrpc string`    | The JSON RPC interface  | 0.0.0.0:8545            | NO       |
-| `--tx-timeout duration`    | Timeout for transaction processing  | 50s            | NO       |
+| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used.  |             | NO       |
+| `--data-dir string`    | Directory for the Blade data if the local FS is used.  |             | YES       |
+| `--jsonrpc string`    | The JSON RPC interface.  | 0.0.0.0:8545            | NO       |
+| `--tx-timeout duration`    | Timeout for transaction processing.  | 50s            | NO       |
 
 > **Info**<br>
 > Mutually Exclusive Parameters
@@ -345,12 +345,12 @@ Usage: `./blade validator register-validator [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--amount string`   | Amount to stake to validator   | 0            | NO       |
-| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used  |             | NO       |
-| `--data-dir string`    | Directory for the Blade data if the local FS is used  |             | YES       |
-| `--jsonrpc string`    | The JSON RPC interface  | 0.0.0.0:8545            | NO       |
-| `--stake-token string`    | Stake token address  | 0x0000000000000000000000000000000000001010            | NO       |
-| `--tx-timeout duration`    | Timeout for transaction processing  | 50s            | NO       |
+| `--amount string`   | Amount to stake to validator.   | 0            | NO       |
+| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used.  |             | NO       |
+| `--data-dir string`    | Directory for the Blade data if the local FS is used.  |             | YES       |
+| `--jsonrpc string`    | The JSON RPC interface.  | 0.0.0.0:8545            | NO       |
+| `--stake-token string`    | Stake token address.  | 0x0000000000000000000000000000000000001010            | NO       |
+| `--tx-timeout duration`    | Timeout for transaction processing.  | 50s            | NO       |
 
 > **Info**<br>
 > Mutually Exclusive Parameters
@@ -373,11 +373,11 @@ Usage: `./blade validator stake [flags]`
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
 | `--amount string`   | Amount to stake to validator   |            | YES       |
-| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used  |             | NO       |
-| `--data-dir string`    | Directory for the Blade data if the local FS is used  |             | YES       |
-| `--jsonrpc string`    | The JSON RPC interface  | 0.0.0.0:8545            | NO       |
-| `--stake-token string`    | Stake token address  | 0x0000000000000000000000000000000000001010            | NO       |
-| `--tx-timeout duration`    | Timeout for transaction processing  | 2m30s            | NO       |
+| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used.  |             | NO       |
+| `--data-dir string`    | Directory for the Blade data if the local FS is used.  |             | YES       |
+| `--jsonrpc string`    | The JSON RPC interface.  | 0.0.0.0:8545            | NO       |
+| `--stake-token string`    | Stake token address.  | 0x0000000000000000000000000000000000001010            | NO       |
+| `--tx-timeout duration`    | Timeout for transaction processing.  | 2m30s            | NO       |
 
 > **Info**<br>
 > Mutually Exclusive Parameters
@@ -400,10 +400,10 @@ Usage: `./blade validator unstake [flags]`
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
 | `--amount string`   | Amount to unstake from validator   |            | YES       |
-| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used  |             | NO       |
-| `--data-dir string`    | Directory for the Blade data if the local FS is used  |             | YES       |
-| `--jsonrpc string`    | The JSON RPC interface  | 0.0.0.0:8545            | NO       |
-| `--tx-timeout duration`    | Timeout for transaction processing  | 2m30s            | NO       |
+| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used.  |             | NO       |
+| `--data-dir string`    | Directory for the Blade data if the local FS is used.  |             | YES       |
+| `--jsonrpc string`    | The JSON RPC interface.  | 0.0.0.0:8545            | NO       |
+| `--tx-timeout duration`    | Timeout for transaction processing.  | 2m30s            | NO       |
 
 > **Info**<br>
 > Mutually Exclusive Parameters
@@ -425,12 +425,12 @@ Usage: `./blade validator whitelist-validators [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--addresses strings`   | Account addresses of a possible validators   |            | YES       |
-| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used  |             | NO       |
-| `--data-dir string`    | Directory for the Blade data if the local FS is used  |             | YES       |
-| `--jsonrpc string`    | The JSON RPC interface  | 0.0.0.0:8545            | NO       |
-| `--private-key string`    | Hex-encoded private key of the account executing the command  |            | YES       |
-| `--tx-timeout duration`    | Timeout for transaction processing  | 2m30s            | NO       |
+| `--addresses strings`   | Account addresses of a possible validators.   |            | YES       |
+| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used.  |             | NO       |
+| `--data-dir string`    | Directory for the Blade data if the local FS is used.  |             | YES       |
+| `--jsonrpc string`    | The JSON RPC interface.  | 0.0.0.0:8545            | NO       |
+| `--private-key string`    | Hex-encoded private key of the account executing the command.  |            | YES       |
+| `--tx-timeout duration`    | Timeout for transaction processing.  | 2m30s            | NO       |
 
 > **Info**<br>
 > Mutually Exclusive Parameters
@@ -452,10 +452,10 @@ Usage: `./blade validator withdraw [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used  |             | NO       |
-| `--data-dir string`    | Directory for the Blade data if the local FS is used  |             | YES       |
-| `--jsonrpc string`    | The JSON RPC interface  | 0.0.0.0:8545            | NO       |
-| `--tx-timeout duration`    | Timeout for transaction processing  | 2m30s            | NO       |
+| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used.  |             | NO       |
+| `--data-dir string`    | Directory for the Blade data if the local FS is used.  |             | YES       |
+| `--jsonrpc string`    | The JSON RPC interface.  | 0.0.0.0:8545            | NO       |
+| `--tx-timeout duration`    | Timeout for transaction processing.  | 2m30s            | NO       |
 
 > **Info**<br>
 > Mutually Exclusive Parameters
@@ -477,10 +477,10 @@ Usage: `./blade validator withdraw-rewards [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used  |             | NO       |
-| `--data-dir string`    | Directory for the Blade data if the local FS is used  |             | YES       |
-| `--jsonrpc string`    | The JSON RPC interface  | 0.0.0.0:8545            | NO       |
-| `--tx-timeout duration`    | Timeout for transaction processing  | 2m30s            | NO       |
+| `--config string`    | Path to the SecretsManager config file, if omitted, the local FS secrets manager is used.  |             | NO       |
+| `--data-dir string`    | Directory for the Blade data if the local FS is used.  |             | YES       |
+| `--jsonrpc string`    | The JSON RPC interface.  | 0.0.0.0:8545            | NO       |
+| `--tx-timeout duration`    | Timeout for transaction processing.  | 2m30s            | NO       |
 
 > **Info**<br>
 > Mutually Exclusive Parameters
@@ -586,11 +586,11 @@ Usage: `./blade genesis predeploy [flags]`
 
 | Parameter | Description                                                      | Default Value | Mandatory |
 | :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
-| `--artifacts-name string`    | Built-in contract artifact name  |             | YES       |
-| `--artifacts-path string`    | Path to the contract artifacts JSON  |             | NO       |
-| `--chain string`    | Genesis file to update  | ./genesis.json            | NO  |
-| `--constructor-args strings`    | Constructor arguments if any  |             | NO       |
-| `--deployer-address string`    | Contract deployer account address   |  0           | YES       |
+| `--artifacts-name string`    | Built-in contract artifact name.  |             | YES       |
+| `--artifacts-path string`    | Path to the contract artifacts JSON.  |             | NO       |
+| `--chain string`    | Genesis file to update.  | ./genesis.json            | NO  |
+| `--constructor-args strings`    | Constructor arguments if any.  |             | NO       |
+| `--deployer-address string`    | Contract deployer account address.   |  0           | YES       |
 | `--predeploye-address string`    | The address to predeploy to. Must be >= 0x0000000000000000000000000000000000001100   |  0x0000000000000000000000000000000000001100   | NO       |
 
 > **Info**<br>
@@ -603,56 +603,141 @@ Usage: `./blade genesis predeploy [flags]`
 ./blade genesis predeploy --artifacts-name RootERC20 --deployer-address 0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed
 ```
 
-</TabItem>
+## Regenesis
+### Description
+Copies trie db for specific block to a separate folder.<br>
+Usage: `./blade regenesis [flags]`<br>
+Usage: `./blade regenesis [command]`<br>
+Available commands:<br>
+* getroot
+* history
 
-<!-- ===================================================================================================================== -->
-<!-- ==================================================== SERVER ========================================================= -->
-<!-- ===================================================================================================================== -->
+<details>
+<summary><b>Flags ↓</b></summary>
 
-<TabItem value="server">
+| Parameter | Description | Default Value | Mandatory |
+| :-------- | :---------- | :------------ | :-------- |
+| `--source-path string` | Directory containing trie data which will be copied. |  | YES |
+| `--stateRoot string` | Hash of state root which will be copied. |  | YES |
+| `--target-path string` | Directory where to copy trie data. |  | YES |
+</details>
 
-## Server Configuration Parameter Reference
+### Example
+```bash
+./blade regenesis --source-path <dir containing old chain trie> --stateRoot <state root which will be copied into target trie> --target-path <directory containing new trie>
+```
 
-| Parameter | Description | Default Value | Mandatory | Example | Reconfigurable at Runtime |
-| :-------- | :---------- | :------------ | :-------- | :------ | :----------------------- |
-| `--grpc-address` string | The address of the GRPC interface. | "127.0.0.1:9632" | NO | Command: server Flag: --grpc-address “0.0.0.0:10000” | NO |
-| `--jsonrpc` string | The address of the JSON RPC interface. | "0.0.0.0:8545" | NO | Command: server Flag: --jsonrpc “0.0.0.0:10002” | NO |
-| `--log-level` string | The log level for the console output. | “INFO” | NO | Command: server Flag: --log-level “DEBUG” | NO |
-| `--chain` string | The genesis file used for starting the chain. The genesis file is generated by running the genesis CLI command. | "./genesis.json" | NO | Command: server Flag: --chain “genesis.json” | NO |
-| `--config` string | The path to the CLI config. Supported extensions are: .json, .hcl, .yaml and .yml. If this flag is set, other flags will be overridden. If some value that will be overridden is not specified in a config file, default value for that parameter is used. | “” | NO | Command: server Flag: --config “config.json” | NO |
-| `--data-dir` string | The data directory used for storing Polygon Edge client data. | “” | YES | Command: server Flag:--data-dir “./test-chain-1” | NO |
-| `--libp2p` string | The address and port for the libp2p service. | “127.0.0.1:1478” | NO | Command: server Flag: --libp2p “0.0.0.0:30301” | NO |
-| `--prometheus` string | The address and port for the prometheus instrumentation service (address:port). If only port is defined (:port) it will bind to 0.0.0.0:port. | “” | NO | Command: server Flag: --prometheus “0.0.0.0:5001” | NO |
-| `--nat` string | The external IP address without port, as can be seen by peers. The string specidied can be in IPv4 dotted decimal ("192.0.2.1"), IPv6 ("2001:db8::68"), or IPv4-mapped IPv6 ("::ffff:192.0.2.1") form. | “” | NO | Command: server Flag:--nat "192.0.2.1" | NO |
-| `--dns` string | The host DNS address which can be used by a remote peer for connection. | “” | NO | Command: server Flag: --dns "www.example.com" | NO |
-| `--block-gas-target` string | The target block gas limit for the chain. If omitted, the value of the parent block is used which will be the value set by the `--block-gas-limit` flag of the genesis command. If this flag is set, the block fill take block gas limit of the parent block and increment it by small delta (parentGasLimit /1024). If the block gas target is reached that the value of it will be set as a gas limit for the current block. | 0x0 | NO | Command: server Flag: --block-gas-target “10000000” | YES, this parameter can be changed by stopping the node and then starting it again with the server command and specifying --block-gas-target flag providing the new value e.g. --block-gas-target “60000000” |
-| `--secrets-config` string | The path to the SecretsManager config file. Used for Hashicorp Vault. If omitted, the local FS secrets manager is used. | “” | NO | Command: server Flag: --secret-config “hashicorp.json” | NO |
-| `--restore` string | The path to the archive blockchain data to restore on initialization. | “” | NO | Command: server Flag: --restore | NO |
-| `--seal` | The flag indicating that the client should seal blocks. | TRUE | NO | Command: server Flag: --seal | NO |
-| `--no-discover` | Prevent the client from discovering other peers. | FALSE | NO | Command: server Flag: --no-discover | NO |
-| `--max-peers` int | The client's max number of peers allowed. | 40 | NO | Command: server Flag: --max-peers “70” | NO |
-| `--max-inbound-peers` int | The client's max number of inbound peers allowed. | 32 | NO | Command: server Flag:--max-inbound-peers “50” | NO |
-| `--max-outbound-peers` int | The client's max number of outbound peers allowed. | 8 | NO | Command: server Flag: --max-outbound-peers “20” | NO |
-| `--price-limit` uint | The minimum gas price limit to enforce for acceptance into the pool. | 0 | NO | Command: server Flag: --price-limit “1” | YES, this parameter can be changed by stopping the node and then starting it again with the server command and specifying --price-limit flag providing the new value e.g. --price-limit “5” |
-| `--max-slots` uint | Maximum slots in the transaction pool. When the maximum capacity is reached, transaction is not stored in the pool. One transaction occupies txSize/32kB number of slots. If e.g. --max-slots is 5, and there are tx1 which has 2kB and tx2 which has 33kB, that means that 3 slots are occupied and there are 2 free slots left. This parameter refers to the enqueued and promoted transactions in the pool. | 4096 | NO | Command: server Flag: --max-slots “100000” | NO |
-| `--max-enqueued` uint | Maximum number of enqueued transactions in the pool per account. | 128 | NO | Command: server Flag: --max-enqueued “200” | NO |
-| `--access-control-allow-origins` stringArray | The CORS(cross origin resource sharing) header indicating whether any JSON-RPC response can be shared with the specified origin. | []string{"*"} | NO | Command: server Flag: --access-control-allow-origins “https://foo.example” | NO |
-| `--json-rpc-batch-request-limit` uint | Max length to be considered when handling json-rpc batch requests, value of 0 disables it. | 20 | NO | Command: server Flag: --json-rpc-batch-request-limit | NO |
-| `--json-rpc-block-range-limit` uint | Max block range to be considered when executing json-rpc requests that consider fromBlock/toBlock values (e.g. eth_getLogs), value of 0 disables it. | 1000 | NO | Command: server Flag: --json-rpc-block-range-limit “2000” | NO |
-| `--log-to` string | Write all logs to the file at specified location instead of writing them to console. | “” | NO | Command: server Flag: --log-to “edge-log.log” | NO |
-| `--relayer` | Start the state sync relayer service. | FALSE | NO | Command: server Flag: --relayer | NO |
-| `--num-block-confirmations` uint | Minimal number of child blocks required for the parent block to be considered final. This parameter is used by the event Tracker when reading logs from the parent chain. | 64 | NO | Command: server Flag: --num-block-confirmations “2” | NO |
-| `--concurrent-requests-debug` uint | Maximal number of concurrent requests for debug endpoints. | 32 | NO | `server --concurrent-requests-debug "50"` | NO |
-| `--websocket-read-limit` uint | Maximum size in bytes for a message read from the peer by websocket. | 8192 | NO | `server --websocket-read-limit "16384"` | NO |
-| `--relayer-poll-interval` duration | Interval (number of seconds) at which relayer's tracker polls for latest block at childchain. | 1s | NO | `server --relayer-poll-interval "2s"` | NO |
-| `--metrics-interval` duration | The interval (in seconds) at which special metrics are generated. A value of zero means the metrics are disabled. | 8s | NO | `server --metrics-interval "10s"` | NO |
+## regenesis getroot
+### Description
+Returns blockchain state root.<br>
+Usage: `./blade regenesis getroot [flags]`
 
-:::info Mutually Exclusive Paramaters
+<details>
+<summary><b>Flags ↓</b></summary>
 
-- `--max-inbound-peers`: The client's maximum number of inbound peers allowed. Default value is 32.
-- `--max-outbound-peers`: The client's maximum number of outbound peers allowed. Default value is 8.
+| Parameter | Description                                                      | Default Value | Mandatory |
+| :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
+| `--block int`    | Block number of trie snapshot.  |    head         | NO       |
+| `--rpc string`   | Blockchain JSON RPC IP address.  |             | YES      |
+</details>
 
-:::
+### Example
+```bash
+./blade regenesis getroot --rpc http://localhost:10002
+```
 
-</TabItem>
-</Tabs>
+## regenesis history
+### Description
+Run history test (compare chain and trie db state roots).<br>
+Usage: `./blade regenesis history [flags]`
+
+<details>
+<summary><b>Flags ↓</b></summary>
+
+| Parameter | Description                                                      | Default Value | Mandatory |
+| :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
+| `--chaindb string`    | Path to chain DB.  |    | YES     |
+| `--from uint`   | Lower bound of regenesis test.  |  0  | NO      |
+| `--to uint`   | Upper bound of regenesis test.  |  head  | NO      |
+| `--triedb string`    | Path to trie DB.  |    | YES     |
+</details>
+
+### Example
+```bash
+./blade regenesis history --chaindb <chaindb path> --triedb <triedb path>
+```
+
+## Server
+### Description
+Default command starting the Blade client, by bootstrapping all modules together.<br>
+Usage: `./blade server [flags]`<br>
+Usage: `./blade server [command]`<br>
+Available commands:<br>
+* export
+
+<details>
+<summary><b>Flags ↓</b></summary>
+
+| Parameter | Description | Default Value | Mandatory |
+| :-------- | :---------- | :------------ | :-------- |
+| `--access-control-allow-origins strings` | CORS header indicating whether any JSON RPC response can be shared with the specified origin. | [*] | NO |
+| `--block-gas-target string` | The target block gas limit for the chain. If omitted, the value of the parent block is used which will be the value set by the `--block-gas-limit` flag of the genesis command. If this flag is set, the block fill take block gas limit of the parent block and increment it by small delta (parentGasLimit /1024). If the block gas target is reached that the value of it will be set as a gas limit for the current block. | 0x0 | NO |
+| `--chain string` | Genesis file used for starting the chain. The genesis file is generated by running the genesis CLI command. | ./genesis.json | NO |
+| `--concurrent-requests-debug uint` | Maximal number of concurrent requests for debug endpoints. | 32 | NO | 
+| `--config string` | The path to the CLI config. Supported extensions are: .json, .hcl, .yaml and .yml. If this flag is set, other flags will be overridden. If some value that will be overridden is not specified in a config file, default value for that parameter is used. |  | NO |
+| `--data-dir string` | The data directory used for storing Blade client data. |  | YES |
+| `--dns string` | The host DNS address which can be used by a remote peer for connection. |  | NO |
+| `--gossip-msg-size int` | Maximum size of gossip message in bytes. | 1048576 | NO |
+| `--grpc-address string` | The address of the GRPC interface. | 127.0.0.1:9632 | NO |
+| `--jsonrpc string` | The address of the JSON RPC interface. | 0.0.0.0:8545 | NO |
+| `--json-rpc-batch-request-limit uint` | Max length to be considered when handling json rpc batch requests, value of 0 disables it. | 20 | NO |
+| `--json-rpc-block-range-limit uint` | Max block range to be considered when executing json-rpc requests that consider fromBlock/toBlock values (e.g. eth_getLogs), value of 0 disables it. | 1000 | NO |
+| `--libp2p string` | The address and port for the libp2p service. | 127.0.0.1:1478 | NO |
+| `--log-level string` | The log level for the console output. | INFO | NO |
+| `--log-to string` | Write all logs to the file at specified location instead of writing them to console. |  | NO |
+| `--max-enqueued uint` | Maximum number of enqueued transactions in the pool per account. | 128 | NO |
+| `--max-inbound-peers int` | The client's max number of inbound peers allowed. | 32 | NO |
+| `--max-outbound-peers int` | The client's max number of outbound peers allowed. | 8 | NO |
+| `--max-peers int` | The client's max number of peers allowed. | 40 | NO |
+| `--max-slots uint` | Maximum slots in the transaction pool. When the maximum capacity is reached, transaction is not stored in the pool. One transaction occupies txSize/32kB number of slots. If e.g. --max-slots is 5, and there are tx1 which has 2kB and tx2 which has 33kB, that means that 3 slots are occupied and there are 2 free slots left. This parameter refers to the enqueued and promoted transactions in the pool. | 4096 | NO |
+| `--metrics-interval duration` | The interval (in seconds) at which special metrics are generated. A value of zero means the metrics are disabled. | 8s | NO |
+| `--nat string` | The external IP address without port, as can be seen by peers. The string specidied can be in IPv4 dotted decimal ("192.0.2.1"), IPv6 ("2001:db8::68"), or IPv4-mapped IPv6 ("::ffff:192.0.2.1") form. |  | NO |
+| `--no-discover` | Prevent the client from discovering other peers. | FALSE | NO |
+| `--num-block-confirmations uint` | Minimal number of child blocks required for the parent block to be considered final. This parameter is used by the event Tracker when reading logs from the parent chain. | 64 | NO |
+| `--num-blocks-reconcile uint` | Defines how many blocks we will sync up from the latest block on tracked chain. If a node that has a tracker, was offline for days, months, a year, it is going to miss a lot of blocks potentially. In the meantime, we expect the rest of nodes to have collected the desired events and did their logic with them, continuing consensus and relayer stuff. In order to not waste too much unnecessary time in syncing all those blocks, with NumOfBlocksToReconcile, we tell the tracker to sync only latestBlock.Number - NumOfBlocksToReconcile number of blocks. | 64 | NO |
+| `--price-limit uint` | The minimum gas price limit to enforce for acceptance into the pool. | 0 | NO |
+| `--prometheus string` | The address and port for the prometheus instrumentation service (address:port). If only port is defined (:port) it will bind to 0.0.0.0:port. |  | NO |
+| `--relayer` | Start the state sync relayer service. | FALSE | NO |
+| `--restore string` | The path to the archive blockchain data to restore on initialization. |  | NO |
+| `--seal` | The flag indicating that the client should seal blocks. | TRUE | NO |
+| `--secrets-config string` | The path to the SecretsManager config file. If omitted, the local FS secrets manager is used. |  | NO |
+| `--sync-batch-size uint` | Defines a batch size of blocks that will be gotten from tracked chain, when tracker is out of sync and needs to sync a number of blocks. (e.g., SyncBatchSize = 10, trackers last processed block is 10, latest block on tracked chain is 100, it will get blocks 11-20, get logs from confirmed blocks of given batch, remove processed confirm logs from memory, and continue to the next batch) .| 128 | NO |
+| `--tls-cert-file string` | Path to TLS cert file, if no file is provided then cert file is loaded from secrets manager. |  | NO |
+| `--tls-key-file string` | Path to TLS key file, if no file is provided then key file is loaded from secrets manager. |  | NO |
+| `--tx-gossip-batch-size uint` | Maximum number of transactions in a single gossip message. | 1 | NO |
+| `--use-tls` | Start JSON RPC endpoint with TLS enabled. | FALSE | NO |
+| `--websocket-read-limit uint` | Maximum size in bytes for a message read from the peer by websocket. | 8192 | NO |
+</details>
+
+### Example
+```bash
+./blade server --data-dir data
+```
+
+## server export
+### Description
+Export default-config.yaml file with default parameters that can be used to run the server.<br>
+Usage: `./blade server export [flags]`
+
+<details>
+<summary><b>Flags ↓</b></summary>
+
+| Parameter | Description                                                      | Default Value | Mandatory |
+| :-------- | :--------------------------------------------------------------- | :------------ | :-------- |
+| `--type string`    | File type of exported config file (yaml or json).  |  yaml  | NO |
+</details>
+
+### Example
+```bash
+./blade server export
+```
