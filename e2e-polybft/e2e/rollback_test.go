@@ -3,7 +3,9 @@ package e2e
 import (
 	"fmt"
 	"math/big"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -65,6 +67,22 @@ import (
 // 3. Deploy the necessary contracts on the external and internal chains.
 // 4. Perform deposits of ERC20, ERC721, and ERC1155 tokens.
 // 5. Wait for the deposits to be processed and verify the rollback events.
+
+func init() {
+	wd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	parent := filepath.Dir(wd)
+	parent = strings.Trim(parent, "e2e-polybft")
+	wd = filepath.Join(parent, "/artifacts/blade")
+	os.Setenv("EDGE_BINARY", wd)
+	os.Setenv("E2E_TESTS", "true")
+	os.Setenv("E2E_LOGS", "true")
+	os.Setenv("E2E_LOG_LEVEL", "debug")
+}
+
 func TestE2E_Rollback_E2I(t *testing.T) {
 	const (
 		transfersCount        = 1
@@ -110,7 +128,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
-		framework.WithThreshold(25),
+		framework.WithBridgeBatchThreshold(25),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(addrs); i++ {
 				tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
@@ -319,6 +337,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithNumBlockConfirmations(0),
 		framework.WithTestRollback(),
+		framework.WithBridgeBatchThreshold(25),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeBlockListAdmin(adminAddr),
