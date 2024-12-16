@@ -173,7 +173,7 @@ func (b *bridgeEventManager) internalChainRollbackHandler(blockNumber *big.Int, 
 	if err := b.createRollbackBatches(blockNumber, b.externalChainID, b.internalChainID, dbTx); err != nil {
 		b.logger.Error("could not create a rollback batches", "err", err)
 
-		return nil
+		return err
 	}
 
 	return nil
@@ -468,6 +468,19 @@ func (b *bridgeEventManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error
 				b.unexecutedBatches = append(b.unexecutedBatches[:i], b.unexecutedBatches[i+1:]...)
 			} else {
 				i++
+			}
+		}
+
+		if event.IsRollback {
+			for i := 0; i < len(b.rollbackBatches); {
+				if b.rollbackBatches[i].SourceChainID.Cmp(event.SourceChainID) == 0 &&
+					b.rollbackBatches[i].DestinationChainID.Cmp(event.DestinationChainID) == 0 &&
+					b.rollbackBatches[i].StartID.Cmp(event.StartID) == 0 &&
+					b.rollbackBatches[i].EndID.Cmp(event.EndID) == 0 {
+					b.rollbackBatches = append(b.rollbackBatches[:i], b.rollbackBatches[i+1:]...)
+				} else {
+					i++
+				}
 			}
 		}
 
@@ -818,7 +831,7 @@ func (b *bridgeEventManager) buildBridgeBatch(
 	}
 
 	pendingBridgeBatch.Threshold = new(big.Int).SetUint64(
-		uint64((math.Ceil(float64(blockNumber)/10) * 10)) + b.config.bridgeCfg.Threshold)
+		uint64((math.Ceil(float64(blockNumber)/10) * 10)) + b.config.bridgeCfg.BridgeBatchThreshold)
 
 	hash, err := pendingBridgeBatch.Hash()
 	if err != nil {
@@ -991,6 +1004,19 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, log *ethgo.Log, db
 				b.unexecutedBatches = append(b.unexecutedBatches[:i], b.unexecutedBatches[i+1:]...)
 			} else {
 				i++
+			}
+		}
+
+		if event.IsRollback {
+			for i := 0; i < len(b.rollbackBatches); {
+				if b.rollbackBatches[i].SourceChainID.Cmp(event.SourceChainID) == 0 &&
+					b.rollbackBatches[i].DestinationChainID.Cmp(event.DestinationChainID) == 0 &&
+					b.rollbackBatches[i].StartID.Cmp(event.StartID) == 0 &&
+					b.rollbackBatches[i].EndID.Cmp(event.EndID) == 0 {
+					b.rollbackBatches = append(b.rollbackBatches[:i], b.rollbackBatches[i+1:]...)
+				} else {
+					i++
+				}
 			}
 		}
 

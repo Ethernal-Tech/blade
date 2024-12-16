@@ -159,8 +159,8 @@ type Bridge struct {
 	InternalMintableERC721PredicateAddr  types.Address `json:"internalMintableERC721PredicateAddress"`
 	InternalMintableERC1155PredicateAddr types.Address `json:"internalMintableERC1155PredicateAddress"`
 
-	// threshold value represent block offset for contract execute
-	Threshold uint64 `json:"threshold"`
+	// threshold value represents block offset for contract execute
+	BridgeBatchThreshold uint64 `json:"bridgeBatchThreshold"`
 
 	// Event tracker
 	JSONRPCEndpoint         string                   `json:"jsonRPCEndpoint"`

@@ -116,7 +116,7 @@ type TestClusterConfig struct {
 	BladeAdmin           string
 	RewardWallet         string
 	PredeployContract    string
-	Threshold            uint64
+	BridgeBatchThreshold uint64
 
 	ContractDeployerAllowListAdmin   []types.Address
 	ContractDeployerAllowListEnabled []types.Address
@@ -480,15 +480,15 @@ func WithTLSCertificate(certFile string, keyFile string) ClusterOption {
 	}
 }
 
-func WithThreshold(threshold uint64) ClusterOption {
-	return func(h *TestClusterConfig) {
-		h.Threshold = threshold
-	}
-}
-
 func WithTestRollback() ClusterOption {
 	return func(h *TestClusterConfig) {
 		h.TestRollback = true
+	}
+}
+
+func WithBridgeBatchThreshold(threshold uint64) ClusterOption {
+	return func(h *TestClusterConfig) {
+		h.BridgeBatchThreshold = threshold
 	}
 }
 
@@ -510,17 +510,17 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 	var err error
 
 	config := &TestClusterConfig{
-		t:               t,
-		WithLogs:        isTrueEnv(envLogsEnabled),
-		WithStdout:      isTrueEnv(envStdoutEnabled),
-		Binary:          resolveBinary(),
-		EpochSize:       10,
-		EpochReward:     1,
-		BlockGasLimit:   1e7, // 10M
-		StakeAmounts:    []*big.Int{},
-		NumberOfBridges: 0,
-		VotingDelay:     10,
-		Threshold:       25,
+		t:                    t,
+		WithLogs:             isTrueEnv(envLogsEnabled),
+		WithStdout:           isTrueEnv(envStdoutEnabled),
+		Binary:               resolveBinary(),
+		EpochSize:            10,
+		EpochReward:          1,
+		BlockGasLimit:        1e7, // 10M
+		StakeAmounts:         []*big.Int{},
+		NumberOfBridges:      0,
+		VotingDelay:          10,
+		BridgeBatchThreshold: 100,
 	}
 
 	if config.ValidatorPrefix == "" {
@@ -772,7 +772,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		require.NoError(t, err)
 
 		// deploy bridge chain contracts
-		err = bridge.deployExternalChainContracts(genesisPath, cluster.Config.Threshold, cluster.Config.TestRollback)
+		err = bridge.deployExternalChainContracts(genesisPath, cluster.Config.BridgeBatchThreshold, cluster.Config.TestRollback)
 		require.NoError(t, err)
 
 		polybftConfig, err := polycfg.LoadPolyBFTConfig(genesisPath)

@@ -11,28 +11,28 @@ import (
 )
 
 const (
-	deployerKeyFlag = "deployer-key"
-	jsonRPCFlag     = "json-rpc"
-	erc20AddrFlag   = "erc20-token"
-	isBootstrapFlag = "bootstrap"
-	externalRPCFlag = "external-json-rpc"
-	internalRPCFlag = "internal-json-rpc"
-	thresholdFlag   = "threshold"
-	isTestRollback  = "test-rollback"
+	deployerKeyFlag          = "deployer-key"
+	jsonRPCFlag              = "json-rpc"
+	erc20AddrFlag            = "erc20-token"
+	isBootstrapFlag          = "bootstrap"
+	externalRPCFlag          = "external-json-rpc"
+	internalRPCFlag          = "internal-json-rpc"
+	isTestRollback           = "test-rollback"
+	bridgeBatchThresholdFlag = "batch-threshold"
 )
 
 type deployParams struct {
-	genesisPath         string
-	deployerKey         string
-	externalRPCAddress  string
-	internalRPCAddress  string
-	rootERC20TokenAddr  string
-	proxyContractsAdmin string
-	txTimeout           time.Duration
-	isTestMode          bool
-	isTestRollback      bool
-	isBootstrap         bool
-	threshold           uint64
+	genesisPath          string
+	deployerKey          string
+	externalRPCAddress   string
+	internalRPCAddress   string
+	rootERC20TokenAddr   string
+	proxyContractsAdmin  string
+	txTimeout            time.Duration
+	isTestMode           bool
+	isTestRollback       bool
+	isBootstrap          bool
+	bridgeBatchThreshold uint64
 }
 
 func (ip *deployParams) validateFlags() error {

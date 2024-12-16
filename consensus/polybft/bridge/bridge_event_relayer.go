@@ -136,8 +136,8 @@ func (ber *bridgeEventRelayerImpl) sendSignedBridgeMessageBatch(event *contracts
 		exists             bool
 	)
 
-	if event.DestinationChainID.Cmp(ber.internalChainID) != 0 && !event.IsRollback ||
-		event.SourceChainID.Cmp(ber.internalChainID) != 0 && event.IsRollback {
+	if event.IsExternalRollbackBatch(ber.internalChainID) ||
+		event.IsInternalRegularBatch(ber.internalChainID) {
 		var chainID uint64
 
 		if event.IsRollback {

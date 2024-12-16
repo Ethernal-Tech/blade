@@ -93,3 +93,11 @@ func (c *CommitValidatorSetBridgeStorageFn) GetValidatorsAsMap() map[types.Addre
 
 	return validatorMap
 }
+
+func (s *SignedBridgeMessageBatch) IsExternalRollbackBatch(chainID *big.Int) bool {
+	return s.SourceChainID.Cmp(chainID) != 0 && s.IsRollback
+}
+
+func (s *SignedBridgeMessageBatch) IsInternalRegularBatch(chainID *big.Int) bool {
+	return s.DestinationChainID.Cmp(chainID) != 0 && !s.IsRollback
+}

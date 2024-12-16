@@ -77,7 +77,7 @@ func newTestBridgeManager(t *testing.T, key *validator.TestValidator, runtime Ru
 		hclog.NewNullLogger(),
 		state,
 		&bridgeEventManagerConfig{
-			bridgeCfg:         &config.Bridge{Threshold: 100},
+			bridgeCfg:         &config.Bridge{BridgeBatchThreshold: 100},
 			topic:             topic,
 			key:               key.Key(),
 			maxNumberOfEvents: maxNumberOfBatchEvents,
@@ -288,7 +288,7 @@ func TestBridgeEventManager_BuildBridgeBatch(t *testing.T) {
 	s := newTestBridgeManager(t, vals.GetValidator("0"), &mockRuntime{isActiveValidator: true}, nil)
 	s.validatorSet = vals.ToValidatorSet()
 
-	// batches is empty
+	// batches are empty
 	batches, err := s.BridgeBatch(1)
 	require.NoError(t, err)
 	require.Len(t, batches, 0)
