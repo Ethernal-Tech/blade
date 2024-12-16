@@ -1,4 +1,6 @@
-In this section, we'll initialize and start a single new Blade node with PolyBFT consensus.
+# Getting Started
+
+In this section we'll initialize and start a single Blade node with PolyBFT consensus.
 
 ## System requirements
 The hardware requirements for running a Blade node depend upon the node configuration and can change over time as upgrades to the network are implemented. Typical requirements are listed below.
