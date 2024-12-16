@@ -1,14 +1,13 @@
 package relayer
 
 import (
-	"fmt"
-
+	bridgerelayer "github.com/0xPolygon/polygon-edge/bridge-relayer"
 	"github.com/spf13/cobra"
 )
 
-var params relayerParams
+var params commandParams
 
-// GetCommand returns new bridge relayer [*cobra.Command].
+// GetCommand returns a new bridge relayer command of type [*cobra.Command].
 func GetCommand() *cobra.Command {
 	relayerCmd := &cobra.Command{
 		Use:   "bridge-relayer",
@@ -22,7 +21,12 @@ func GetCommand() *cobra.Command {
 }
 
 func runCommand(*cobra.Command, []string) {
-	fmt.Println("Bridge relayer is running...")
+	relayer, _ := bridgerelayer.NewBridgeRelayer(params.genesisPath,
+		bridgerelayer.WithExternalChainID(params.externalChainID),
+		bridgerelayer.WithGenesisPath(params.genesisPath),
+	)
+
+	relayer.Start()
 }
 
 func setFlags(cmd *cobra.Command) {
@@ -40,11 +44,27 @@ func setFlags(cmd *cobra.Command) {
 		&params.internalChainRPC,
 		"genesis-path",
 		"g",
-		"",
+		"./genesis.json",
 		"internal chain genesis path",
 	)
 
-	_ = cmd.MarkFlagRequired("genesis-path")
+	cmd.Flags().StringVarP(
+		&params.internalChainRPC,
+		"external-chain-id",
+		"c",
+		"",
+		"external chain id",
+	)
+
+	_ = cmd.MarkFlagRequired("external-chain-id")
+
+	cmd.Flags().StringVarP(
+		&params.internalChainRPC,
+		"poll-interval",
+		"p",
+		"",
+		"poll interval",
+	)
 
 	cmd.Flags().StringVarP(
 		&params.relayerPrivateKey,
@@ -53,6 +73,4 @@ func setFlags(cmd *cobra.Command) {
 		"",
 		"relayer's private key",
 	)
-
-	_ = cmd.MarkFlagRequired("private-key")
 }
