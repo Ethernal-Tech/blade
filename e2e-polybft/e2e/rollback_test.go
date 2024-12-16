@@ -3,9 +3,7 @@ package e2e
 import (
 	"fmt"
 	"math/big"
-	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -25,21 +23,48 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func init() {
-	wd, err := os.Getwd()
-	if err != nil {
-		return
-	}
-
-	parent := filepath.Dir(wd)
-	parent = strings.Trim(parent, "e2e-polybft")
-	wd = filepath.Join(parent, "/artifacts/blade")
-	os.Setenv("EDGE_BINARY", wd)
-	os.Setenv("E2E_TESTS", "true")
-	os.Setenv("E2E_LOGS", "true")
-	os.Setenv("E2E_LOG_LEVEL", "debug")
-}
-
+// TestE2E_Rollback_E2I tests the end-to-end rollback functionality for ERC20, ERC721, and ERC1155 tokens
+// from an external chain to an internal chain. It sets up a test cluster, deploys the necessary contracts,
+// performs deposits, and verifies that the deposits are successfully rollbacked.
+//
+// TestE2E_Rollback_I2E tests the end-to-end rollback functionality for ERC20 and ERC721 tokens
+// from an internal chain to an external chain. It sets up a test cluster, deploys the necessary contracts,
+// performs deposits, and verifies that the deposits are successfully rollbacked.
+//
+// The tests include the following scenarios:
+// - Rollback_ERC20: Tests the rollback of ERC20 token deposits.
+// - Rollback_ERC721: Tests the rollback of ERC721 token deposits.
+// - Rollback_ERC1155: Tests the rollback of ERC1155 token deposits.
+//
+// The tests use the following constants:
+// - transfersCount: Number of transfers to perform.
+// - numBlockConfirmations: Number of block confirmations required.
+// - epochSize: Size of an epoch.
+// - sprintSize: Size of a sprint.
+// - numberOfAttempts: Number of attempts for certain operations.
+// - stateSyncedLogsCount: Number of state synced logs.
+// - numberOfBridges: Number of bridges to use.
+// - numberOfMapTokenEvent: Number of map token events.
+// - bridgeERC1155Amount: Amount of ERC1155 tokens to transfer.
+// - amount: Amount of tokens to transfer.
+//
+// The tests use the following variables:
+// - bridgeERC20Amount: Amount of ERC20 tokens to transfer.
+// - receiversAddrs: List of receiver addresses.
+// - receivers: List of receiver addresses as strings.
+// - amounts: List of amounts to transfer as strings.
+// - receiverKeys: List of receiver private keys as strings.
+// - depositorKeys: List of depositor private keys as strings.
+// - depositors: List of depositor addresses.
+// - funds: List of funds to transfer.
+// - singleToken: Amount of a single token.
+//
+// The tests perform the following steps:
+// 1. Generate receiver and depositor keys and addresses.
+// 2. Set up a test cluster with the specified configuration.
+// 3. Deploy the necessary contracts on the external and internal chains.
+// 4. Perform deposits of ERC20, ERC721, and ERC1155 tokens.
+// 5. Wait for the deposits to be processed and verify the rollback events.
 func TestE2E_Rollback_E2I(t *testing.T) {
 	const (
 		transfersCount        = 1
@@ -62,6 +87,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 	amounts := make([]string, transfersCount)
 	receiverKeys := make([]string, transfersCount)
 
+	// Generating receiver keys and addresses
 	for i := 0; i < transfersCount; i++ {
 		key, err := crypto.GenerateECDSAKey()
 		require.NoError(t, err)
@@ -77,6 +103,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 		t.Logf("Receiver#%d=%s\n", i+1, receivers[i])
 	}
 
+	// Setting up the test cluster with rollback gateway contract
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithTestRewardToken(),
 		framework.WithTestRollback(),
@@ -110,6 +137,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 
 	require.NoError(t, err)
 
+	// Default deployer key
 	deployerKey, err := bridgeHelper.DecodePrivateKey("")
 	require.NoError(t, err)
 
@@ -147,6 +175,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 		finalBlockNum = 10 * sprintSize
 		require.NoError(t, cluster.WaitForBlock(finalBlockNum, 2*time.Minute))
 
+		// Wait for the rollback to be processed
 		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 			for i := range receivers {
 				if !isEventProcessedRollback(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i+1)) {
@@ -156,26 +185,13 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 
 			return true
 		}))
-
-		t.Log("Deposits were successfully rollbacked")
 	})
 
 	t.Run("Rollback_ERC721", func(t *testing.T) {
 		tokenIDs := make([]string, transfersCount)
 
 		for i := 0; i < transfersCount; i++ {
-			key, err := crypto.GenerateECDSAKey()
-			require.NoError(t, err)
-
-			rawKey, err := key.MarshallPrivateKey()
-			require.NoError(t, err)
-
-			receiverKeys[i] = hex.EncodeToString(rawKey)
-			receivers[i] = key.Address().String()
-			receiversAddrs[i] = key.Address()
 			tokenIDs[i] = fmt.Sprintf("%d", i)
-
-			t.Logf("Receiver#%d=%s\n", i+1, receivers[i])
 		}
 
 		deployTx := types.NewTx(&types.LegacyTx{
@@ -205,9 +221,9 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 				false),
 		)
 
-		// wait for a few more sprints
 		require.NoError(t, cluster.WaitForBlock(50, 4*time.Minute))
 
+		// Wait for rollback to be processed
 		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 			for i := range receivers {
 				if !isEventProcessedRollback(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i+1)) {
@@ -217,27 +233,12 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 
 			return true
 		}))
-
-		t.Log("Deposits were successfully rollbacked")
 	})
 
 	t.Run("Rollback_ERC1155", func(t *testing.T) {
 		tokenIDs := make([]string, transfersCount)
-
 		for i := 0; i < transfersCount; i++ {
-			key, err := crypto.GenerateECDSAKey()
-			require.NoError(t, err)
-
-			rawKey, err := key.MarshallPrivateKey()
-			require.NoError(t, err)
-
-			receiverKeys[i] = hex.EncodeToString(rawKey)
-			receivers[i] = key.Address().String()
-			receiversAddrs[i] = key.Address()
-			amounts[i] = fmt.Sprintf("%d", bridgeERC1155Amount)
 			tokenIDs[i] = fmt.Sprintf("%d", i+1)
-
-			t.Logf("Receiver#%d=%s\n", i+1, receivers[i])
 		}
 
 		deployTx := types.NewTx(&types.LegacyTx{
@@ -266,6 +267,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 				false),
 		)
 
+		// Wait for rollback to be processed
 		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 			for i := range receivers {
 				if !isEventProcessedRollback(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i+1)) {
@@ -275,8 +277,6 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 
 			return true
 		}))
-
-		t.Log("Deposits were successfully processed")
 	})
 }
 
@@ -326,6 +326,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 	defer cluster.Stop()
 
 	bridgeOne := 0
+	bridge := cluster.Bridges[bridgeOne]
 
 	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
 	require.NoError(t, err)
@@ -337,7 +338,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 
 	cluster.WaitForReady(t)
 
-	externalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(cluster.Bridges[bridgeOne].JSONRPCAddr()))
+	externalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(bridge.JSONRPCAddr()))
 	require.NoError(t, err)
 
 	chainID, err := externalChainTxRelayer.Client().ChainID()
@@ -352,7 +353,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 		rootToken := contracts.NativeERC20TokenContract
 
 		for i, key := range depositorKeys {
-			err = cluster.Bridges[bridgeOne].Deposit(
+			err = bridge.Deposit(
 				common.ERC20,
 				rootToken,
 				bridgeCfg.InternalMintableERC20PredicateAddr,
@@ -393,7 +394,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 			setAccessListRole(t, cluster, contracts.BlockListBridgeAddr, depositor, addresslist.EnabledRole, admin)
 		}
 
-		err = cluster.Bridges[bridgeOne].Deposit(
+		err = bridge.Deposit(
 			common.ERC721,
 			rootERC721Token,
 			bridgeCfg.InternalMintableERC721PredicateAddr,
@@ -409,7 +410,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 		for i, depositorKey := range depositorKeys {
 			setAccessListRole(t, cluster, contracts.BlockListBridgeAddr, depositors[i], addresslist.NoRole, admin)
 
-			err = cluster.Bridges[bridgeOne].Deposit(
+			err = bridge.Deposit(
 				common.ERC721,
 				rootERC721Token,
 				bridgeCfg.InternalMintableERC721PredicateAddr,
