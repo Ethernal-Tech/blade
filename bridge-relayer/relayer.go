@@ -28,6 +28,8 @@ type BridgeRelayer struct {
 	privateKey          *ecdsa.PrivateKey
 }
 
+type BridgeRelayerOption func(options *options) error
+
 type options struct {
 	externalRPCAddr     *string
 	externalChainID     *uint64
@@ -39,7 +41,69 @@ type options struct {
 	privateKey          *ecdsa.PrivateKey
 }
 
-type BridgeRelayerOption func(options *options) error
+func WithExternalRPCAddr(address string) BridgeRelayerOption {
+	return func(options *options) error {
+		options.externalRPCAddr = &address
+
+		return nil
+	}
+}
+
+func WithExternalChainID(chainID uint64) BridgeRelayerOption {
+	return func(options *options) error {
+		options.externalChainID = &chainID
+
+		return nil
+	}
+}
+
+func WithGenesisPath(path string) BridgeRelayerOption {
+	return func(options *options) error {
+		options.genesisPath = &path
+
+		return nil
+	}
+}
+
+func WithBridgeStorageAddr(address types.Address) BridgeRelayerOption {
+	return func(options *options) error {
+		options.bridgeStorageAddr = &address
+
+		return nil
+	}
+}
+
+func WithInternalGatewayCAddr(address types.Address) BridgeRelayerOption {
+	return func(options *options) error {
+		options.internalGatewayAddr = &address
+
+		return nil
+	}
+}
+
+func WithExternalGatewayAddr(address types.Address) BridgeRelayerOption {
+	return func(options *options) error {
+		options.externalGatewayAddr = &address
+
+		return nil
+	}
+}
+
+func WithPollInterval(interval time.Duration) BridgeRelayerOption {
+	return func(options *options) error {
+		options.pollInterval = &interval
+
+		return nil
+	}
+}
+
+func WithPrivateKey(key ecdsa.PrivateKey) BridgeRelayerOption {
+	return func(options *options) error {
+		options.privateKey = &key
+
+		return nil
+	}
+}
 
 func NewBridgeRelayer(internalRPCAddr string, opts ...BridgeRelayerOption) (*BridgeRelayer, error) {
 	errFunc := func(err error) error {
@@ -103,4 +167,8 @@ func NewBridgeRelayer(internalRPCAddr string, opts ...BridgeRelayerOption) (*Bri
 	relayer.privateKey = privateKey
 
 	return relayer, nil
+}
+
+func (r BridgeRelayer) Start() {
+	// bridge relayer logic ...
 }
