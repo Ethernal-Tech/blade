@@ -3,6 +3,7 @@
 Configuration parameters are crucial for setting up and operating a Blade-powered chain. You can configure these parameters using the server commands. Before running these commands, it is essential to generate keys using the blade secrets command.
 
 For information on the available CLI commands and their configuration flags and descriptions refer to the sections below.
+
 <br>
 
 ## Backup
@@ -182,6 +183,8 @@ Available commands:<br>
 * list
 * status
 
+<br>
+
 ## peers add
 ### Description
 Adds new peers to the peer list, using the peer's libp2p address.<br>
@@ -316,6 +319,8 @@ Available commands:<br>
 * generate
 * init
 * output
+
+<br>
 
 ## secrets generate
 ### Description
@@ -511,6 +516,8 @@ Available commands:<br>
 * status
 * subscribe
 
+<br>
+
 ## txpool status
 ### Description
 Returns the number of transactions in the transaction pool.<br>
@@ -568,6 +575,8 @@ Available commands:<br>
 * whitelist-validators
 * withdraw
 * withdraw-rewards
+
+<br>
 
 ## validator info
 ### Description
