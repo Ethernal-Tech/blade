@@ -142,6 +142,7 @@ type TestClusterConfig struct {
 	RootTrackerPollInterval time.Duration
 
 	ProxyContractsAdmin string
+	TestRollback        bool
 
 	VotingPeriod uint64
 	VotingDelay  uint64
@@ -479,6 +480,12 @@ func WithTLSCertificate(certFile string, keyFile string) ClusterOption {
 	}
 }
 
+func WithTestRollback() ClusterOption {
+	return func(h *TestClusterConfig) {
+		h.TestRollback = true
+	}
+}
+
 func WithBridgeBatchThreshold(threshold uint64) ClusterOption {
 	return func(h *TestClusterConfig) {
 		h.BridgeBatchThreshold = threshold
@@ -765,13 +772,13 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		require.NoError(t, err)
 
 		// deploy bridge chain contracts
-		err = bridge.deployExternalChainContracts(genesisPath, cluster.Config.BridgeBatchThreshold)
+		err = bridge.deployExternalChainContracts(genesisPath, config.BridgeBatchThreshold, config.TestRollback)
 		require.NoError(t, err)
 
 		polybftConfig, err := polycfg.LoadPolyBFTConfig(genesisPath)
 		require.NoError(t, err)
 
-		tokenConfig, err := polycfg.ParseRawTokenConfig(cluster.Config.NativeTokenConfigRaw)
+		tokenConfig, err := polycfg.ParseRawTokenConfig(config.NativeTokenConfigRaw)
 		require.NoError(t, err)
 
 		// fund addresses on the bridge chain

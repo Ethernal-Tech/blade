@@ -305,7 +305,7 @@ func (t *TestBridge) cmdRun(args ...string) error {
 }
 
 // deployExternalChainContracts deploys and initializes external chain contracts
-func (t *TestBridge) deployExternalChainContracts(genesisPath string, threshold uint64) error {
+func (t *TestBridge) deployExternalChainContracts(genesisPath string, threshold uint64, isTestRollback bool) error {
 	args := []string{
 		"bridge",
 		"deploy",
@@ -314,6 +314,10 @@ func (t *TestBridge) deployExternalChainContracts(genesisPath string, threshold 
 		"--test",
 		"--bootstrap",
 		"--batch-threshold", strconv.FormatUint(threshold, 10),
+	}
+
+	if isTestRollback {
+		args = append(args, "--test-rollback")
 	}
 
 	if err := t.cmdRun(args...); err != nil {

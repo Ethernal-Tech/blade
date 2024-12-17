@@ -17,6 +17,7 @@ var (
 
 	// Blade smart contracts
 	Gateway                         *contracts.Artifact
+	TestRollbackGateway             *contracts.Artifact
 	BridgeStorage                   *contracts.Artifact
 	RootERC20Predicate              *contracts.Artifact
 	RootERC721Predicate             *contracts.Artifact
@@ -74,6 +75,11 @@ func init() {
 	var err error
 
 	Gateway, err = contracts.DecodeArtifact([]byte(GatewayArtifact))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	TestRollbackGateway, err = contracts.DecodeArtifact([]byte(TestRollbackGatewayArtifact))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -324,6 +330,7 @@ func init() {
 		"RootERC20":                       RootERC20,
 		"TestSimple":                      TestSimple,
 		"TestRewardToken":                 TestRewardToken,
+		"TestRollbackGateway":             TestRollbackGateway,
 		"ZexCoinERC20":                    ZexCoinERC20,
 		"ZexNFT":                          ZexNFT,
 	}

@@ -118,6 +118,13 @@ func GetCommand() *cobra.Command {
 		"block offset for execution of bridge transaction",
 	)
 
+	cmd.Flags().BoolVar(
+		&params.isTestRollback,
+		isTestRollback,
+		false,
+		"test indicates if it should deploy testing gateway contracts instead of production",
+	)
+
 	cmd.MarkFlagsMutuallyExclusive(helper.TestModeFlag, deployerKeyFlag)
 
 	return cmd
@@ -175,7 +182,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 		}
 	}
 
-	deploymentResultInfo, err := deployContracts(outputter, externalChainClient, externalChainIDBig,
+	deploymentResultInfo, err := deployContracts(outputter, externalChainClient, externalChainIDBig, params.isTestRollback,
 		chainConfig, consensusCfg.InitialValidatorSet, cmd.Context())
 	if err != nil {
 		outputter.SetError(fmt.Errorf("failed to deploy bridge contracts: %w", err))
@@ -222,6 +229,7 @@ func deployContracts(
 	outputter command.OutputFormatter,
 	externalChainClient *jsonrpc.EthClient,
 	externalChainID *big.Int,
+	isTestRollback bool,
 	chainCfg *chain.Chain,
 	initialValidators []*validator.GenesisValidator,
 	cmdCtx context.Context) (*deploymentResultInfo, error) {
@@ -255,12 +263,13 @@ func deployContracts(
 	)
 
 	// setup external contracts
-	if externalContracts, err = initExternalContracts(bridgeConfig, externalChainClient, externalChainID); err != nil {
+	externalContracts, err = initExternalContracts(bridgeConfig, externalChainClient, externalChainID, isTestRollback)
+	if err != nil {
 		return nil, err
 	}
 
 	// setup internal contracts
-	internalContracts = initInternalContracts(chainCfg)
+	internalContracts = initInternalContracts(chainCfg, isTestRollback)
 
 	// pre-allocate internal predicates addresses in genesis if blade is bootstrapping
 	if params.isBootstrap {

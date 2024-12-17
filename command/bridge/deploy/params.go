@@ -17,6 +17,7 @@ const (
 	isBootstrapFlag          = "bootstrap"
 	externalRPCFlag          = "external-json-rpc"
 	internalRPCFlag          = "internal-json-rpc"
+	isTestRollback           = "test-rollback"
 	bridgeBatchThresholdFlag = "batch-threshold"
 )
 
@@ -29,6 +30,7 @@ type deployParams struct {
 	proxyContractsAdmin  string
 	txTimeout            time.Duration
 	isTestMode           bool
+	isTestRollback       bool
 	isBootstrap          bool
 	bridgeBatchThreshold uint64
 }
