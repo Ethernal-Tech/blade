@@ -772,13 +772,13 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		require.NoError(t, err)
 
 		// deploy bridge chain contracts
-		err = bridge.deployExternalChainContracts(genesisPath, cluster.Config.BridgeBatchThreshold, cluster.Config.TestRollback)
+		err = bridge.deployExternalChainContracts(genesisPath, config.BridgeBatchThreshold, config.TestRollback)
 		require.NoError(t, err)
 
 		polybftConfig, err := polycfg.LoadPolyBFTConfig(genesisPath)
 		require.NoError(t, err)
 
-		tokenConfig, err := polycfg.ParseRawTokenConfig(cluster.Config.NativeTokenConfigRaw)
+		tokenConfig, err := polycfg.ParseRawTokenConfig(config.NativeTokenConfigRaw)
 		require.NoError(t, err)
 
 		// fund addresses on the bridge chain

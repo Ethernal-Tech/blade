@@ -452,6 +452,5 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 
 			return true
 		}))
-
 	})
 }

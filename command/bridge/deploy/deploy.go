@@ -263,7 +263,8 @@ func deployContracts(
 	)
 
 	// setup external contracts
-	if externalContracts, err = initExternalContracts(bridgeConfig, externalChainClient, externalChainID, isTestRollback); err != nil {
+	externalContracts, err = initExternalContracts(bridgeConfig, externalChainClient, externalChainID, isTestRollback)
+	if err != nil {
 		return nil, err
 	}
 
