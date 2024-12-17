@@ -3,7 +3,7 @@
 Configuration parameters are crucial for setting up and operating a Blade-powered chain. You can configure these parameters using the server commands. Before running these commands, it is essential to generate keys using the blade secrets command.
 
 For information on the available CLI commands and their configuration flags and descriptions refer to the sections below.
-
+<br>
 
 ## Backup
 ### Description
@@ -25,6 +25,7 @@ Usage: `./blade backup [flags]`
 ```bash
 ./blade backup --out backup-file
 ```
+<br>
 
 ## Genesis
 ### Description
@@ -99,6 +100,7 @@ Available commands:<br>
 ```bash
 ./blade genesis --reward-wallet 0xDEADBEEF --premine 0x0000000000000000000000000000000000000000 --proxy-contracts-admin 0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed --blade-admin 0x61324166B0202DB1E7502924326262274Fa4358F --validators /ip4/127.0.0.1/tcp/1478/p2p/16Uiu2HAmMYyzK7c649Tnn6XdqFLP7fpPB2QWdck1Ee9vj5a7Nhg8:0x61324166B0202DB1E7502924326262274Fa4358F:06d8d9e6af67c28e85ac400b72c2e635e83234f8a380865e050a206554049a222c4792120d84977a6ca669df56ff3a1cf1cfeccddb650e7aacff4ed6c1d4e37b055858209f80117b3c0a6e7a28e456d4caf2270f430f9df2ba37221f23e9bbd313c9ef488e1849cc5c40d18284d019dde5ed86770309b9c24b70ceff6167a6ca
 ```
+<br>
 
 ## genesis predeploy
 ### Description
@@ -126,6 +128,7 @@ Usage: `./blade genesis predeploy [flags]`
 ```bash
 ./blade genesis predeploy --artifacts-name RootERC20 --deployer-address 0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed
 ```
+<br>
 
 ## Mint-erc20
 ### Description
@@ -149,6 +152,7 @@ Usage: `./blade mint-erc20 [flags]`
 ```bash
 ./blade mint-erc20 --addresses 0x85da99c8a7c2c95964c8efd687e95e632fc533d6 0x26F3f1f3F1d75c6d5d5146d1e44cec8831d0283A --amounts 1 2 --erc20-token 0x37e2e1f3F1d75c6d5d6336d1e44cec8831d0272a --private-key hex_encoded_private_key
 ```
+<br>
 
 ## Monitor
 ### Description
@@ -167,6 +171,7 @@ Usage: `./blade monitor [flags]`
 ```bash
 ./blade monitor
 ```
+<br>
 
 ## Peers
 ### Description
@@ -195,6 +200,7 @@ Usage: `./blade peers add [flags]`
 ```bash
 ./blade peers add --addr /ip4/192.168.200.201/tcp/1478/p2p/16Uiu2HAmGEMQmFqe2U4ag35BWiXniZ6orJVgaxdtSyFwXhFqT4Ko
 ```
+<br>
 
 ## peers list
 ### Description
@@ -213,6 +219,7 @@ Usage: `./blade peers list [flags]`
 ```bash
 ./blade peers list
 ```
+<br>
 
 ## peers status
 ### Description
@@ -232,6 +239,7 @@ Usage: `./blade peers status [flags]`
 ```bash
 ./blade peers status --peer-id 16Uiu2HAmGEMQmFqe2U4ag35BWiXniZ6orJVgaxdtSyFwXhFqT4Ko
 ```
+<br>
 
 ## Regenesis
 ### Description
@@ -256,6 +264,7 @@ Available commands:<br>
 ```bash
 ./blade regenesis --source-path <dir containing old chain trie> --stateRoot <state root which will be copied into target trie> --target-path <directory containing new trie>
 ```
+<br>
 
 ## regenesis getroot
 ### Description
@@ -275,6 +284,7 @@ Usage: `./blade regenesis getroot [flags]`
 ```bash
 ./blade regenesis getroot --rpc http://localhost:10002
 ```
+<br>
 
 ## regenesis history
 ### Description
@@ -296,6 +306,7 @@ Usage: `./blade regenesis history [flags]`
 ```bash
 ./blade regenesis history --chaindb <chaindb path> --triedb <triedb path>
 ```
+<br>
 
 ## Secrets
 ### Description
@@ -330,6 +341,7 @@ Usage: `./blade secrets generate [flags]`
 ```bash
 ./blade secrets generate --name blade-test --type alibaba-ssm --server-url oos.eu-central-1.aliyuncs.com --extra 'region=eu-central-1,ssm-parameter-path=/devnet'
 ```
+<br>
 
 ## secrets init
 ### Description
@@ -364,6 +376,7 @@ Usage: `./blade secrets init [flags]`
 ```bash
 ./blade secrets init --data-dir data --insecure
 ```
+<br>
 
 ## secrets output
 ### Description
@@ -392,6 +405,7 @@ Usage: `./blade secrets output [flags]`
 ```bash
 ./blade secrets output --data-dir data
 ```
+<br>
 
 ## Server
 ### Description
@@ -449,6 +463,7 @@ Available commands:<br>
 ```bash
 ./blade server --data-dir data
 ```
+<br>
 
 ## server export
 ### Description
@@ -467,6 +482,7 @@ Usage: `./blade server export [flags]`
 ```bash
 ./blade server export
 ```
+<br>
 
 ## Status
 ### Description
@@ -485,6 +501,7 @@ Usage: `./blade status [flags]`
 ```bash
 ./blade status
 ```
+<br>
 
 ## TxPool
 ### Description
@@ -511,6 +528,7 @@ Usage: `./blade txpool status [flags]`
 ```bash
 ./blade txpool status
 ```
+<br>
 
 ## txpool subscribe
 ### Description
@@ -536,6 +554,7 @@ Usage: `./blade txpool subscribe [flags]`
 ```bash
 ./blade txpool subscribe --added --demoted  --dropped --enqueued --promoted --pruned-enqueued --pruned-promoted
 ```
+<br>
 
 ## Validator
 ### Description
@@ -574,6 +593,7 @@ Usage: `./blade validator info [flags]`
 ```bash
 ./blade validator info --data-dir data
 ```
+<br>
 
 ## validator register-validator
 ### Description
@@ -601,6 +621,7 @@ Usage: `./blade validator register-validator [flags]`
 ```bash
 ./blade validator register-validator --data-dir data
 ```
+<br>
 
 ## validator stake
 ### Description
@@ -628,6 +649,7 @@ Usage: `./blade validator stake [flags]`
 ```bash
 ./blade validator stake --amount 10 --data-dir data
 ```
+<br>
 
 ## validator unstake
 ### Description
@@ -654,6 +676,7 @@ Usage: `./blade validator unstake [flags]`
 ```bash
 ./blade validator unstake --amount 10 --data-dir data
 ```
+<br>
 
 ## validator whitelist-validators
 ### Description
@@ -681,6 +704,7 @@ Usage: `./blade validator whitelist-validators [flags]`
 ```bash
 ./blade validator whitelist-validators --addresses 0x85da99c8a7c2c95964c8efd687e95e632fc533d6 --data-dir data --private-key <private key>
 ```
+<br>
 
 ## validator withdraw
 ### Description
@@ -706,6 +730,7 @@ Usage: `./blade validator withdraw [flags]`
 ```bash
 ./blade validator withdraw --data-dir data
 ```
+<br>
 
 ## validator withdraw-rewards
 ### Description
@@ -731,6 +756,7 @@ Usage: `./blade validator withdraw-rewards [flags]`
 ```bash
 ./blade validator withdraw-rewards --data-dir data
 ```
+<br>
 
 ## Version
 ### Description

@@ -26,6 +26,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_call
 
@@ -68,6 +69,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_chainId
 
@@ -97,6 +99,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_createAccessList
 
@@ -149,6 +152,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_estimateGas
 
@@ -176,7 +180,7 @@ Properties 'to' or 'data' must be provided, while all others are optional.
 
 ### Returns
 
-*  <b>  QUANTITY </b> - the amount of gas used.
+* <b> QUANTITY </b> - the amount of gas used.
 
 ### Example
 
@@ -194,6 +198,7 @@ curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"et
 }
 ````
 </details>
+<br>
 
 ## eth_feeHistory
 
@@ -257,6 +262,7 @@ curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"et
 }
 ````
 </details>
+<br>
 
 ## eth_gasPrice
 
@@ -288,6 +294,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_getBalance
 
@@ -318,6 +325,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_getBlockByHash
 
@@ -392,6 +400,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_getBlockByNumber
 
@@ -466,6 +475,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_getBlockReceipts
 
@@ -576,6 +586,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_getBlockTransactionCountByHash
 
@@ -605,6 +616,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_getBlockTransactionCountByNumber
 
@@ -634,6 +646,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_getCode
 
@@ -664,6 +677,7 @@ curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"et
 }
 ````
 </details>
+<br>
 
 ## eth_getFilterChanges
 
@@ -733,6 +747,7 @@ Example for filter created with eth_newFilter
 }
 ````
 </details>
+<br>
 
 ## eth_getFilterLogs
 
@@ -805,6 +820,7 @@ curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"et
 }
 ````
 </details>
+<br>
 
 ## eth_getHeaderByHash
 
@@ -872,6 +888,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_getHeaderByNumber
 
@@ -939,6 +956,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_getLogs
 
@@ -1011,6 +1029,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_getStorageAt
 
@@ -1042,6 +1061,7 @@ curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"et
 }
 ````
 </details>
+<br>
 
 ## eth_getTransactionByBlockHashAndIndex
 
@@ -1106,6 +1126,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_getTransactionByBlockNumberAndIndex
 
@@ -1170,6 +1191,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_getTransactionByHash
 
@@ -1233,6 +1255,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_getTransactionCount
 
@@ -1263,6 +1286,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_getTransactionReceipt
 
@@ -1372,6 +1396,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_maxPriorityFeePerGas
 
@@ -1401,6 +1426,7 @@ curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"et
 }
 ````
 </details>
+<br>
 
 ## eth_newBlockFilter
 
@@ -1431,6 +1457,7 @@ curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"et
 }
 ````
 </details>
+<br>
 
 ## eth_newFilter
 
@@ -1466,6 +1493,7 @@ curl  https://rpc-endpoint.io:8545 -X --data '{"jsonrpc":"2.0","method":"eth_new
 }
 ````
 </details>
+<br>
 
 ## eth_sendRawTransaction
 
@@ -1495,6 +1523,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_syncing
 
@@ -1529,6 +1558,7 @@ curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth
 }
 ````
 </details>
+<br>
 
 ## eth_uninstallFilter
 
@@ -1559,6 +1589,7 @@ curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"et
 }
 ````
 </details>
+<br>
 
 ## eth_unsubscribe
 
