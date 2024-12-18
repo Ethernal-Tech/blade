@@ -9,6 +9,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/command/accounts"
 	"github.com/0xPolygon/polygon-edge/command/backup"
 	"github.com/0xPolygon/polygon-edge/command/bridge"
+	bridgerelayer "github.com/0xPolygon/polygon-edge/command/bridge-relayer"
 	"github.com/0xPolygon/polygon-edge/command/genesis"
 	"github.com/0xPolygon/polygon-edge/command/helper"
 	"github.com/0xPolygon/polygon-edge/command/loadtest"
@@ -55,6 +56,7 @@ func (rc *RootCommand) registerSubCommands() {
 		backup.GetCommand(),
 		genesis.GetCommand(),
 		server.GetCommand(),
+		bridgerelayer.GetCommand(),
 		polybftsecrets.GetCommand(),
 		bridge.GetCommand(),
 		regenesis.GetCommand(),

@@ -130,6 +130,7 @@ type TestClusterConfig struct {
 	BridgeAllowListEnabled           []types.Address
 	BridgeBlockListAdmin             []types.Address
 	BridgeBlockListEnabled           []types.Address
+	RelayerAddress                   types.Address
 
 	NumBlockConfirmations uint64
 
@@ -485,6 +486,12 @@ func WithBridgeBatchThreshold(threshold uint64) ClusterOption {
 	}
 }
 
+func WithRelayerAddress(relayerAddress types.Address) ClusterOption {
+	return func(h *TestClusterConfig) {
+		h.RelayerAddress = relayerAddress
+	}
+}
+
 func isTrueEnv(e string) bool {
 	return strings.ToLower(os.Getenv(e)) == "true"
 }
@@ -514,6 +521,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		NumberOfBridges:      0,
 		VotingDelay:          10,
 		BridgeBatchThreshold: 100,
+		RelayerAddress:       types.ZeroAddress,
 	}
 
 	if config.ValidatorPrefix == "" {
@@ -775,7 +783,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		require.NoError(t, err)
 
 		// fund addresses on the bridge chain
-		err = bridge.fundAddressesOnRoot(polybftConfig)
+		err = bridge.fundAddressesOnRoot(polybftConfig, cluster.Config.RelayerAddress)
 		require.NoError(t, err)
 
 		// add premine if token is non-mintable
