@@ -12,7 +12,7 @@ Recommended instance for running Blade is c6a.2xlarge.
 Recommended instance for running Blade is ecs.c6a.2xlarge.
 
 ### Other/Custom requirements
-In general it is recommended to run Blade on machines with 16GB RAM and 8 CPUs to achieve maximal performances. If low traffic is expected most of the time it is also acceptable to go with lower number of CPUs, for instance 4.
+In general it is recommended to run Blade on machines with 16 GB RAM and 8 CPUs to achieve maximal performances. If low traffic is expected most of the time it is also acceptable to go with lower number of CPUs, for instance 4 and 8 GB RAM.
 
 ## Install Blade
 <details>
