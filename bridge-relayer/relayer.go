@@ -2,30 +2,33 @@ package bridgerelayer
 
 import (
 	"crypto/ecdsa"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/chain"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/config"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/crypto"
+	"github.com/0xPolygon/polygon-edge/txrelayer"
+	"github.com/btcsuite/btcd/btcec/v2"
 
-	"github.com/0xPolygon/polygon-edge/jsonrpc"
 	"github.com/0xPolygon/polygon-edge/types"
 )
 
 type BridgeRelayer struct {
 	internalRPCAddr     string
-	internalClient      *jsonrpc.EthClient
+	internalClient      txrelayer.TxRelayer
 	externalRPCAddr     string
-	externalClient      *jsonrpc.EthClient
+	externalClient      txrelayer.TxRelayer
 	externalChainID     *big.Int
 	bridgeStorageAddr   types.Address
 	internalGatewayAddr types.Address
 	externalGatewayAddr types.Address
 	pollInterval        time.Duration
-	privateKey          *ecdsa.PrivateKey
+	privateKey          *crypto.ECDSAKey
 }
 
 type BridgeRelayerOption func(options *options) error
@@ -38,7 +41,7 @@ type options struct {
 	internalGatewayAddr *types.Address
 	externalGatewayAddr *types.Address
 	pollInterval        *time.Duration
-	privateKey          *ecdsa.PrivateKey
+	privateKey          *string
 }
 
 func WithExternalRPCAddr(address string) BridgeRelayerOption {
@@ -97,7 +100,7 @@ func WithPollInterval(interval time.Duration) BridgeRelayerOption {
 	}
 }
 
-func WithPrivateKey(key ecdsa.PrivateKey) BridgeRelayerOption {
+func WithPrivateKey(key string) BridgeRelayerOption {
 	return func(options *options) error {
 		options.privateKey = &key
 
@@ -112,13 +115,13 @@ func NewBridgeRelayer(internalRPCAddr string, opts ...BridgeRelayerOption) (*Bri
 
 	relayer := &BridgeRelayer{}
 
-	client, err := jsonrpc.NewEthClient(internalRPCAddr)
+	txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(internalRPCAddr))
 	if err != nil {
 		return nil, errFunc(err)
 	}
 
 	relayer.internalRPCAddr = internalRPCAddr
-	relayer.internalClient = client
+	relayer.internalClient = txRelayer
 
 	sopts := &options{}
 
@@ -142,13 +145,13 @@ func NewBridgeRelayer(internalRPCAddr string, opts ...BridgeRelayerOption) (*Bri
 
 	bridgeConfig := consensusConfig.Bridge[*sopts.externalChainID]
 
-	client, err = jsonrpc.NewEthClient(bridgeConfig.JSONRPCEndpoint)
+	txRelayer, err = txrelayer.NewTxRelayer(txrelayer.WithIPAddress(bridgeConfig.JSONRPCEndpoint))
 	if err != nil {
 		return nil, errFunc(err)
 	}
 
-	relayer.externalRPCAddr = *sopts.externalRPCAddr
-	relayer.externalClient = client
+	relayer.externalRPCAddr = bridgeConfig.JSONRPCEndpoint
+	relayer.externalClient = txRelayer
 
 	relayer.externalChainID = big.NewInt(int64(*sopts.externalChainID))
 
@@ -157,18 +160,105 @@ func NewBridgeRelayer(internalRPCAddr string, opts ...BridgeRelayerOption) (*Bri
 	relayer.internalGatewayAddr = bridgeConfig.InternalGatewayAddr
 	relayer.externalGatewayAddr = bridgeConfig.ExternalGatewayAddr
 
-	relayer.pollInterval = time.Second * 10
+	relayer.pollInterval = time.Second * 5
 
-	privateKey, err := crypto.GenerateECDSAPrivateKey()
+	privBytes, err := hex.DecodeString(*sopts.privateKey)
 	if err != nil {
 		return nil, errFunc(err)
 	}
 
-	relayer.privateKey = privateKey
+	x, y := btcec.S256().ScalarBaseMult(privBytes)
+
+	privateKey := &ecdsa.PrivateKey{
+		D: new(big.Int).SetBytes(privBytes),
+		PublicKey: ecdsa.PublicKey{
+			Curve: btcec.S256(),
+			X:     x,
+			Y:     y,
+		},
+	}
+
+	relayer.privateKey = crypto.NewECDSAKey(privateKey)
 
 	return relayer, nil
 }
 
-func (r BridgeRelayer) Start() {
-	// bridge relayer logic ...
+func (r *BridgeRelayer) Start() {
+	var lastBridged = big.NewInt(-1)
+
+	t := time.NewTicker(r.pollInterval)
+
+	for {
+		select {
+		case <-t.C:
+			batches, err := GetBridgeBatchesFromNumber(big.NewInt(0).Add(lastBridged, big.NewInt(1)), r.internalClient)
+			if err != nil {
+				fmt.Println("err:", err)
+
+				continue
+			} else if len(batches) == 0 {
+				fmt.Println("no new batches found")
+
+				continue
+			}
+
+			for i, batch := range batches {
+				fmt.Println("new batch found", batch.StartID.String(), "-", batch.EndID.String())
+
+				var (
+					sourceRelayer      txrelayer.TxRelayer
+					sourceGateway      types.Address
+					destinationRelayer txrelayer.TxRelayer
+					destinationGateway types.Address
+				)
+
+				if batch.SourceChainID.Cmp(r.externalChainID) == 0 {
+					sourceGateway = r.externalGatewayAddr
+					sourceRelayer = r.externalClient
+
+					destinationGateway = r.internalGatewayAddr
+					destinationRelayer = r.internalClient
+				} else {
+					sourceGateway = r.internalGatewayAddr
+					sourceRelayer = r.internalClient
+
+					destinationGateway = r.externalGatewayAddr
+					destinationRelayer = r.externalClient
+				}
+
+				messages, err := GetBridgeMessagesInRange(batches[i].StartID, batches[i].EndID, sourceRelayer, sourceGateway)
+				if err != nil {
+					fmt.Println("err:", err)
+
+					continue
+				}
+
+				input, err := (&contractsapi.ReceiveBatchGatewayFn{
+					BatchMessages:     messages,
+					SignedBridgeBatch: &batches[i],
+				}).EncodeAbi()
+				if err != nil {
+					fmt.Println("err:", err)
+
+					continue
+				}
+
+				tx := types.NewTx(types.NewLegacyTx(
+					types.WithFrom(r.privateKey.Address()),
+					types.WithTo(&destinationGateway),
+					types.WithInput(input),
+				))
+
+				_, err = destinationRelayer.SendTransaction(tx, r.privateKey)
+				if err != nil {
+					fmt.Println("err:", err)
+
+					continue
+				}
+
+				lastBridged.Add(lastBridged, big.NewInt(1))
+				fmt.Println("batch with", batch.StartID.String(), "-", batch.EndID.String(), "successfully transported")
+			}
+		}
+	}
 }

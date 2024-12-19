@@ -13,11 +13,11 @@ type commandParams struct {
 
 	// externalChainID represents the unique identifier of the external blockchain
 	// network to which the bridge relayer will connect and relay transactions.
-	externalChainID uint64
+	externalChainID int
 
 	// pollInterval specifies the interval (in seconds) at which the relayer checks
 	// for new cross-chain transactions to process.
-	pollInterval uint64
+	pollInterval int
 
 	// relayerPrivateKey contains the cryptographic private key utilized by the
 	// relayer to sign and send transactions.

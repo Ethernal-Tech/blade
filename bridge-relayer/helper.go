@@ -112,7 +112,6 @@ func GetBridgeBatchesFromNumber(batchID *big.Int,
 
 func GetBridgeMessagesInRange(startID, endID *big.Int, txrelayer txrelayer.TxRelayer,
 	gatewayContract types.Address) ([]*contractsapi.BridgeMessage, error) {
-
 	funcName := "getMessagesInRange"
 
 	getCommittedBatchFn := contractsapi.Gateway.Abi.GetMethod(funcName)
