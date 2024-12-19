@@ -9,9 +9,11 @@ import (
 	"github.com/0xPolygon/polygon-edge/helper/hex"
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
+	"github.com/Ethernal-Tech/ethgo"
 )
 
-func GetBridgeBatchesFromNumber(batchID *big.Int, internalRelayer txrelayer.TxRelayer) ([]contractsapi.SignedBridgeMessageBatch, error) {
+func GetBridgeBatchesFromNumber(batchID *big.Int,
+	internalRelayer txrelayer.TxRelayer) ([]contractsapi.SignedBridgeMessageBatch, error) {
 	funcName := "getCommittedBatches"
 
 	getCommittedBatchFn := contractsapi.BridgeStorage.Abi.GetMethod(funcName)
@@ -39,56 +41,78 @@ func GetBridgeBatchesFromNumber(batchID *big.Int, internalRelayer txrelayer.TxRe
 		return nil, err
 	}
 
-	decodedSlice, ok := decoded.([]interface{})
+	decodedSlice, ok := decoded.(map[string]interface{})["0"].([]map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("could not convert decoded output to slice")
 	}
 
-	var signedBridgeBatches []contractsapi.SignedBridgeMessageBatch
+	signedBridgeBatches := make([]contractsapi.SignedBridgeMessageBatch, len(decodedSlice))
 
-	for _, v := range decodedSlice {
-
-		decodedOutputsMap, ok := v.(map[string]interface{})
+	for i, v := range decodedSlice {
+		decodeRootHash, ok := v["rootHash"].([32]uint8)
 		if !ok {
-			return nil, fmt.Errorf("could not convert decoded outputs to map")
+			return nil, fmt.Errorf("invalid format of the root hash")
 		}
 
-		innerMap, ok := decodedOutputsMap["0"].(map[string]interface{})
+		decodedStartID, ok := v["startId"].(*big.Int)
 		if !ok {
-			return nil, fmt.Errorf("could not convert decoded outputs map to inner map")
+			return nil, fmt.Errorf("invalid format of the start ID")
 		}
 
-		bridgeBatch := contractsapi.SignedBridgeMessageBatch{
-			RootHash:           innerMap["rootHash"].(types.Hash),
-			StartID:            innerMap["startId"].(*big.Int),
-			EndID:              innerMap["endId"].(*big.Int),
-			SourceChainID:      innerMap["sourceChainId"].(*big.Int),
-			DestinationChainID: innerMap["destinationChainId"].(*big.Int),
-			Bitmap:             innerMap["bitmap"].([]byte),
-			Threshold:          innerMap["threshold"].(*big.Int),
-			IsRollback:         innerMap["isRollback"].(bool),
+		decodedEndID, ok := v["endId"].(*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the end ID")
 		}
 
-		decodedSignature, ok := innerMap["signature"].([]interface{})
-		if !ok || len(decodedSignature) != 2 {
-			return nil, fmt.Errorf("invalid format for signature")
+		decodedSourceChainID, ok := v["sourceChainId"].(*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the source chain ID")
 		}
 
-		for i, v := range decodedSignature {
-			if bigIntVal, ok := v.(*big.Int); ok {
-				bridgeBatch.Signature[i] = bigIntVal
-			} else {
-				return nil, fmt.Errorf("failed to cast signature[%d] to *big.Int", i)
-			}
+		decodedDestinationChainID, ok := v["destinationChainId"].(*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the destination chain ID")
 		}
 
-		signedBridgeBatches = append(signedBridgeBatches, bridgeBatch)
+		decodedBitmap, ok := v["bitmap"].([]byte)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the bitmap")
+		}
+
+		decodedThreshold, ok := v["threshold"].(*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the threshold")
+		}
+
+		decodedIsRollback, ok := v["isRollback"].(bool)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the rollback flag")
+		}
+
+		decodedSignature, ok := v["signature"].([2]*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the signature")
+		}
+
+		signedBridgeBatches[i] = contractsapi.SignedBridgeMessageBatch{
+			RootHash:           decodeRootHash,
+			StartID:            decodedStartID,
+			EndID:              decodedEndID,
+			SourceChainID:      decodedSourceChainID,
+			DestinationChainID: decodedDestinationChainID,
+			Signature:          decodedSignature,
+			Bitmap:             decodedBitmap,
+			Threshold:          decodedThreshold,
+			IsRollback:         decodedIsRollback,
+		}
 	}
 
 	return signedBridgeBatches, nil
 }
 
-func GetBridgeMessagesInRange(startID, endID *big.Int, txrelayer txrelayer.TxRelayer, gatewayContract types.Address) ([]contractsapi.BridgeMessage, error) {
+func GetBridgeMessagesInRange(startID, endID *big.Int, txrelayer txrelayer.TxRelayer,
+	gatewayContract types.Address) ([]*contractsapi.BridgeMessage, error) {
+
 	funcName := "getMessagesInRange"
 
 	getCommittedBatchFn := contractsapi.Gateway.Abi.GetMethod(funcName)
@@ -116,35 +140,52 @@ func GetBridgeMessagesInRange(startID, endID *big.Int, txrelayer txrelayer.TxRel
 		return nil, err
 	}
 
-	decodedSlice, ok := decoded.([]interface{})
+	decodedSlice, ok := decoded.(map[string]interface{})["0"].([]map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("could not convert decoded output to slice")
 	}
 
-	var bridgeMessages []contractsapi.BridgeMessage
+	bridgeMessages := make([]*contractsapi.BridgeMessage, len(decodedSlice))
 
-	for _, v := range decodedSlice {
-
-		decodedOutputsMap, ok := v.(map[string]interface{})
+	for i, v := range decodedSlice {
+		decodedID, ok := v["id"].(*big.Int)
 		if !ok {
-			return nil, fmt.Errorf("could not convert decoded outputs to map")
+			return nil, fmt.Errorf("invalid format of the root hash")
 		}
 
-		innerMap, ok := decodedOutputsMap["0"].(map[string]interface{})
+		decodedSourceChainID, ok := v["sourceChainId"].(*big.Int)
 		if !ok {
-			return nil, fmt.Errorf("could not convert decoded outputs map to inner map")
+			return nil, fmt.Errorf("invalid format of the source chain ID")
 		}
 
-		bridgeBatch := contractsapi.BridgeMessage{
-			ID:                 innerMap["id"].(*big.Int),
-			SourceChainID:      innerMap["sourceChainId"].(*big.Int),
-			DestinationChainID: innerMap["destinationChainId"].(*big.Int),
-			Sender:             innerMap["sender"].(types.Address),
-			Receiver:           innerMap["receiver"].(types.Address),
-			Payload:            innerMap["payload"].([]byte),
+		decodedDestinationChainID, ok := v["destinationChainId"].(*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the destination chain ID")
 		}
 
-		bridgeMessages = append(bridgeMessages, bridgeBatch)
+		decodedSender, ok := v["sender"].(ethgo.Address)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the sender")
+		}
+
+		decodedReceiver, ok := v["receiver"].(ethgo.Address)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the receiver")
+		}
+
+		decodedPayload, ok := v["payload"].([]byte)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the payload")
+		}
+
+		bridgeMessages[i] = &contractsapi.BridgeMessage{
+			ID:                 decodedID,
+			SourceChainID:      decodedSourceChainID,
+			DestinationChainID: decodedDestinationChainID,
+			Sender:             types.Address(decodedSender),
+			Receiver:           types.Address(decodedReceiver),
+			Payload:            decodedPayload,
+		}
 	}
 
 	return bridgeMessages, nil
