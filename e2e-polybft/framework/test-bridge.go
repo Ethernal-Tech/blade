@@ -324,7 +324,7 @@ func (t *TestBridge) deployExternalChainContracts(genesisPath string, threshold 
 }
 
 // fundAddressesOnRoot sends predefined amount of tokens to external chain addresses
-func (t *TestBridge) fundAddressesOnRoot(polybftConfig polycfg.PolyBFT) error {
+func (t *TestBridge) fundAddressesOnRoot(polybftConfig polycfg.PolyBFT, relayerAddress types.Address) error {
 	validatorSecrets, err := genesis.GetValidatorKeyFiles(t.clusterConfig.TmpDir, t.clusterConfig.ValidatorPrefix)
 	if err != nil {
 		return fmt.Errorf("could not get validator secrets on initial external chain funding of genesis validators: %w", err)
@@ -361,6 +361,11 @@ func (t *TestBridge) fundAddressesOnRoot(polybftConfig polycfg.PolyBFT) error {
 		}
 
 		args = append(args, "--addresses", premineInfo.Address.String())
+		args = append(args, "--amounts", command.DefaultPremineBalance.String()) // this is more than enough tokens
+	}
+
+	if relayerAddress != types.ZeroAddress {
+		args = append(args, "--addresses", relayerAddress.String())
 		args = append(args, "--amounts", command.DefaultPremineBalance.String()) // this is more than enough tokens
 	}
 
