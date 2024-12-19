@@ -712,7 +712,7 @@ func (r *BaseLoadTestRunner) sendTransactions(createTxnFn func(*account, *feeDat
 		fmt.Println("Sending transactions took", time.Since(start))
 	}()
 
-	allTxnHashes := make([]types.Hash, 0)
+	allTxnHashes := make([]types.Hash, 0, totalTxs)
 
 	g, ctx := errgroup.WithContext(context.Background())
 
