@@ -59,7 +59,6 @@ type NodeType int
 const (
 	None      NodeType = 0
 	Validator NodeType = 1
-	Relayer   NodeType = 2
 )
 
 func (nt NodeType) IsSet(value NodeType) bool {
@@ -130,7 +129,7 @@ type TestClusterConfig struct {
 	BridgeAllowListEnabled           []types.Address
 	BridgeBlockListAdmin             []types.Address
 	BridgeBlockListEnabled           []types.Address
-	RelayerAddress                   types.Address
+	RelayerPrivateKey                *crypto.ECDSAKey
 
 	NumBlockConfirmations uint64
 
@@ -232,10 +231,11 @@ func (c *TestClusterConfig) getStakeAmount(validatorIndex int) *big.Int {
 }
 
 type TestCluster struct {
-	Config      *TestClusterConfig
-	Servers     []*TestServer
-	Bridges     []*TestBridge
-	initialPort int64
+	Config         *TestClusterConfig
+	Servers        []*TestServer
+	Bridges        []*TestBridge
+	BridgeRelayers []*TestRelayer
+	initialPort    int64
 
 	once         sync.Once
 	failCh       chan struct{}
@@ -486,9 +486,9 @@ func WithBridgeBatchThreshold(threshold uint64) ClusterOption {
 	}
 }
 
-func WithRelayerAddress(relayerAddress types.Address) ClusterOption {
+func WithRelayerPrivateKey(relayerPrivateKey *crypto.ECDSAKey) ClusterOption {
 	return func(h *TestClusterConfig) {
-		h.RelayerAddress = relayerAddress
+		h.RelayerPrivateKey = relayerPrivateKey
 	}
 }
 
@@ -521,7 +521,6 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		NumberOfBridges:      0,
 		VotingDelay:          10,
 		BridgeBatchThreshold: 100,
-		RelayerAddress:       types.ZeroAddress,
 	}
 
 	if config.ValidatorPrefix == "" {
@@ -547,12 +546,13 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 	require.NoError(t, err)
 
 	cluster := &TestCluster{
-		Servers:     []*TestServer{},
-		Config:      config,
-		initialPort: 30300,
-		failCh:      make(chan struct{}),
-		once:        sync.Once{},
-		Bridges:     make([]*TestBridge, config.NumberOfBridges),
+		Servers:        []*TestServer{},
+		Config:         config,
+		initialPort:    30300,
+		failCh:         make(chan struct{}),
+		once:           sync.Once{},
+		Bridges:        make([]*TestBridge, config.NumberOfBridges),
+		BridgeRelayers: make([]*TestRelayer, config.NumberOfBridges),
 	}
 
 	// in case no validators are specified in opts, all nodes will be validators
@@ -783,7 +783,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		require.NoError(t, err)
 
 		// fund addresses on the bridge chain
-		err = bridge.fundAddressesOnRoot(polybftConfig, cluster.Config.RelayerAddress)
+		err = bridge.fundAddressesOnRoot(polybftConfig, cluster.Config.RelayerPrivateKey.Address())
 		require.NoError(t, err)
 
 		// add premine if token is non-mintable
@@ -799,6 +799,13 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 			require.NoError(t, err)
 		}
 
+		marshalledPrivateKey, err := cluster.Config.RelayerPrivateKey.MarshallPrivateKey()
+		require.NoError(t, err)
+
+		bridgeRelayer := NewTestBridgeRelayer(t, cluster.Config, i+1, 100, cluster.Config.Dir("genesis.json"), hex.EncodeToString(marshalledPrivateKey))
+
+		cluster.BridgeRelayers[i] = bridgeRelayer
+
 		bridgeJSONRPCs[i] = bridge.JSONRPCAddr()
 
 		cluster.Bridges[i] = bridge
@@ -806,9 +813,6 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 
 	for i := 1; i <= int(cluster.Config.ValidatorSetSize); i++ {
 		nodeType := Validator
-		if i == 1 {
-			nodeType.Append(Relayer)
-		}
 
 		dir := cluster.Config.ValidatorPrefix + strconv.Itoa(i)
 		cluster.InitTestServer(t, dir, bridgeJSONRPCs, nodeType)
@@ -842,7 +846,6 @@ func (c *TestCluster) InitTestServer(t *testing.T,
 		config.Chain = c.Config.Dir("genesis.json")
 		config.P2PPort = c.getOpenPort()
 		config.LogLevel = logLevel
-		config.Relayer = nodeType.IsSet(Relayer)
 		config.NumBlockConfirmations = c.Config.NumBlockConfirmations
 		config.BridgeJSONRPCs = bridgeJSONRPCs
 		config.UseTLS = c.Config.UseTLS

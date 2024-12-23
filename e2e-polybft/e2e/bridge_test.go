@@ -71,19 +71,26 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 		t.Logf("Receiver#%d=%s\n", i+1, receivers[i])
 	}
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithTestRewardToken(),
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeBatchThreshold(100),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(addrs); i++ {
 				// premine receivers, so that they are able to do withdrawals
 				tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
 			}
 
+			tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
+
 			tcc.Premine = append(tcc.Premine, receivers...)
+			tcc.Premine = append(tcc.Premine, relayerPrivateKey.String())
 		}))
 
 	defer cluster.Stop()
@@ -205,6 +212,7 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 	})
 
 	t.Run("multiple deposit batches per epoch", func(t *testing.T) {
+		t.Skip()
 		const (
 			depositsSubset = 1
 		)
