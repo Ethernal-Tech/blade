@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/url"
+	"os"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -22,22 +24,76 @@ import (
 	"github.com/0xPolygon/polygon-edge/types"
 )
 
+// BridgeRelayer represents a relayer instance responsible for managing
+// the token transfer process between an internal (Blade) and an EVM-based
+// external blockchain network. It operates bidirectionaly and exclusively
+// for one internal-external chain relation.
 type BridgeRelayer struct {
-	internalRPCAddr     string
-	internalClient      txrelayer.TxRelayer
-	externalRPCAddr     string
-	externalClient      txrelayer.TxRelayer
-	externalChainID     *big.Int
-	bridgeStorageAddr   types.Address
+	// internalChainRPC denotes the RPC endpoint of the internal blockchain
+	// network (Blade).
+	internalRPCAddr string
+
+	// internalClient is a transaction relayer instance used for interacting
+	// with the internal blockchain network (Blade). It manages transaction
+	// submissions and queries, facilitating communication with the internal
+	// network.
+	internalClient txrelayer.TxRelayer
+
+	// externalRPCAddr denotes the RPC endpoint of the external EVM-based
+	// blockchain network.
+	externalRPCAddr string
+
+	// externalClient is a transaction relayer instance used for interacting
+	// with the external EVM-based blockchain network. It manages transaction
+	// submissions and queries, facilitating communication with the external
+	// network.
+	externalClient txrelayer.TxRelayer
+
+	// externalChainID represents the unique ID of the external network.
+	externalChainID *big.Int
+
+	// bridgeStorageAddr contains the address of the Bridge Storage contract.
+	bridgeStorageAddr types.Address
+
+	// internalGatewayAddr contains the address of the Gateway contract on
+	// the internal blockchain network.
 	internalGatewayAddr types.Address
+
+	// externalGatewayAddr contains the address of the Gateway contract on
+	// the external blockchain network.
 	externalGatewayAddr types.Address
-	pollInterval        time.Duration
-	privateKey          *crypto.ECDSAKey
-	db                  *bolt.DB
+
+	// pollInterval specifies the frequency at which the relayer polls for
+	// new token-transfer events and processes them if any are found.
+	pollInterval time.Duration
+
+	// privateKey denotes the relayer's private key used to sign transactions.
+	// The address derived from it represents the one to which the relayer
+	// will receive the reward for successfully completed transfers.
+	privateKey *crypto.ECDSAKey
+
+	// db is a BoltDB instance used for (persistent) local storage.
+	db *bolt.DB
 }
 
-type BridgeRelayerOption func(options *options) error
+type BridgeRelayerOption func(*options) error
 
+// options encapsulates all the configuration settings that can be used when
+// creating a new bridge relayer. All fields are pointers, thus it is easy to
+// make a difference between client-provided and default values. If a field
+// is non-nil, it indicates that the client provided a value; otherwise, the
+// default value should be used.
+//
+// An alternative would be to use non-pointer fields with prepopulated default
+// values, but this approach is less suitable in our case due to the complexity
+// of some defaults. For example, determining the RPC address of an external
+// chain would require fetching (from the internal chain or local storage) and
+// parsing genesis data, which can be resource-intensive. Out approach ensures
+// that unnecessary computations are avoided when client-provided values are
+// available.
+//
+// Additionally, a hybrid approach could mix pointer and non-pointer fields.
+// However, for consistency, we keep all fields as pointers in our design.
 type options struct {
 	externalRPCAddr     *string
 	externalChainID     *uint64
@@ -50,73 +106,143 @@ type options struct {
 	dbPath              *string
 }
 
+// WithExternalRPCAddr configures the relayer to use the specified RPC address
+// for communication with an external blockchain network. The address must be
+// a valid URL with scheme and host.
 func WithExternalRPCAddr(address string) BridgeRelayerOption {
-	return func(options *options) error {
-		options.externalRPCAddr = &address
+	return func(o *options) error {
+		if address == "" {
+			return fmt.Errorf("external RPC address cannot be empty")
+		}
+
+		if _, err := url.Parse(address); err != nil {
+			return fmt.Errorf("invalid external RPC address format: %w", err)
+		}
+
+		o.externalRPCAddr = &address
 
 		return nil
 	}
 }
 
+// WithExternalChainID configures the relayer to use the specified chain ID
+// for an external blockchain network. The chain ID must be a positive integer
+// and is used to identify the network (e.g., 1 for Ethereum mainnet).
 func WithExternalChainID(chainID uint64) BridgeRelayerOption {
-	return func(options *options) error {
-		options.externalChainID = &chainID
+	return func(o *options) error {
+		if chainID <= 0 {
+			return fmt.Errorf("external chain ID must be a positive number")
+		}
+
+		o.externalChainID = &chainID
 
 		return nil
 	}
 }
 
+// WithGenesisPath configures the relayer to use the specified path to read the
+// genesis of the internal chain from local storage and obtain all the necessary
+// information. Path must be specified as a relative to the executable's location.
+// The genesis file must exist and be readable at the specified path.
 func WithGenesisPath(path string) BridgeRelayerOption {
-	return func(options *options) error {
-		options.genesisPath = &path
+	return func(o *options) error {
+		if path == "" {
+			return fmt.Errorf("genesis file path cannot be empty")
+		}
+
+		fileInfo, err := os.Stat(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("genesis file not found at path: %s", path)
+			}
+
+			return fmt.Errorf("error accessing genesis file: %w", err)
+		}
+
+		if fileInfo.IsDir() {
+			return fmt.Errorf("specified path is a directory, expected a file: %s", path)
+		}
+
+		file, err := os.Open(path)
+		if err != nil {
+			return fmt.Errorf("genesis file is not readable: %w", err)
+		}
+
+		file.Close()
+
+		o.genesisPath = &path
 
 		return nil
 	}
 }
 
+// WithBridgeStorageAddr configures the relayer to use the specified address
+// as an address of the Bridge Storage smart contract.
 func WithBridgeStorageAddr(address types.Address) BridgeRelayerOption {
-	return func(options *options) error {
-		options.bridgeStorageAddr = &address
+	return func(o *options) error {
+		o.bridgeStorageAddr = &address
 
 		return nil
 	}
 }
 
+// WithInternalGatewayCAddr configures the relayer to use the specified address
+// as an address of the Gateway smart contract on the internal (Blade) chain.
 func WithInternalGatewayCAddr(address types.Address) BridgeRelayerOption {
-	return func(options *options) error {
-		options.internalGatewayAddr = &address
+	return func(o *options) error {
+		o.internalGatewayAddr = &address
 
 		return nil
 	}
 }
 
+// WithExternalGatewayAddr configures the relayer to use the specified address
+// as an address of the Gateway smart contract on the external chain.
 func WithExternalGatewayAddr(address types.Address) BridgeRelayerOption {
-	return func(options *options) error {
-		options.externalGatewayAddr = &address
+	return func(o *options) error {
+		o.externalGatewayAddr = &address
 
 		return nil
 	}
 }
 
+// WithPollInterval configures the relayer to use the specified time interval
+// as the frequency at which the relayer polls for new token-transfer events
+// and processes them if any are found. The interval must be between 1 second
+// and 10 minutes to prevent both excessive polling and unreasonably delays.
 func WithPollInterval(interval time.Duration) BridgeRelayerOption {
-	return func(options *options) error {
-		options.pollInterval = &interval
+	return func(o *options) error {
+		const (
+			minInterval = 1 * time.Second
+			maxInterval = 10 * time.Minute
+		)
+
+		if interval < minInterval {
+			return fmt.Errorf("poll interval too short, it must be at least 1 second")
+		}
+
+		if interval > maxInterval {
+			return fmt.Errorf("poll interval too long, it must be less than 10 minutes")
+		}
+
+		o.pollInterval = &interval
 
 		return nil
 	}
 }
 
-func WithPrivateKey(key string) BridgeRelayerOption {
-	return func(options *options) error {
-		options.privateKey = &key
+// WithDBPath configures the relayer to use the Bolt DB at the specified path
+// as persistent storage for token cross-chain transfer information. In case
+// Bolt DB already exists, it will be used; otherwise, a new database at the
+// specified path will be created. Path must be specified as a relative to the
+// executable's location.
+func WithDBPath(path string) BridgeRelayerOption {
+	return func(o *options) error {
+		if path == "" {
+			return fmt.Errorf("database path cannot be empty")
+		}
 
-		return nil
-	}
-}
-
-func WithDbPath(path string) BridgeRelayerOption {
-	return func(options *options) error {
-		options.dbPath = &path
+		o.dbPath = &path
 
 		return nil
 	}
@@ -244,6 +370,7 @@ func (r *BridgeRelayer) Start() {
 				return errors.New("cannot set lastBridge correctly")
 			}
 		}
+
 		return nil
 	})
 
@@ -275,7 +402,8 @@ func (r *BridgeRelayer) Start() {
 			}
 
 			for i, batch := range batches {
-				fmt.Println("[INFO]", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))), "id-ed batch was found with the messages:", batch.StartID.String(), "-", batch.EndID.String())
+				fmt.Println("[INFO]", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))),
+					"id-ed batch was found with the messages:", batch.StartID.String(), "-", batch.EndID.String())
 
 				var (
 					sourceRelayer      txrelayer.TxRelayer
@@ -323,9 +451,11 @@ func (r *BridgeRelayer) Start() {
 
 				_, err = destinationRelayer.SendTransaction(tx, r.privateKey)
 				if err != nil {
-					fmt.Println("[FAIL]", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))), "id-ed batch has already been processed or cannot be processed")
+					fmt.Println("[FAIL]", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))),
+						"id-ed batch has already been processed or cannot be processed")
 				} else {
-					fmt.Println("[INFO]", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))), "id-ed batch has been successfully processed/transfered")
+					fmt.Println("[INFO]", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))),
+						"id-ed batch has been successfully processed/transferred")
 				}
 
 				lastBridged.Add(lastBridged, big.NewInt(1))
