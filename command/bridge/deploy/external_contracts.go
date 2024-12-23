@@ -17,7 +17,8 @@ import (
 
 // initExternalContracts initializes the external contracts
 func initExternalContracts(bridgeCfg *polycfg.Bridge,
-	externalChainClient *jsonrpc.EthClient, externalChainID *big.Int, isExternalGatewayPredeployed bool) ([]*contract, error) {
+	externalChainClient *jsonrpc.EthClient, externalChainID *big.Int,
+	isExternalGatewayPredeployed bool) ([]*contract, error) {
 	externalContracts := make([]*contract, 0)
 
 	// deploy root ERC20 token only if non-mintable native token flavor is used on a child chain

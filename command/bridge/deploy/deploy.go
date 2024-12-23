@@ -190,7 +190,8 @@ func runCommand(cmd *cobra.Command, _ []string) {
 	}
 
 	deploymentResultInfo, err := deployContracts(outputter, externalChainClient, externalChainIDBig,
-		chainConfig, consensusCfg.InitialValidatorSet, cmd.Context(), params.internalGatewayAddress, params.externalGatewayAddress)
+		chainConfig, consensusCfg.InitialValidatorSet, cmd.Context(),
+		params.internalGatewayAddress, params.externalGatewayAddress)
 	if err != nil {
 		outputter.SetError(fmt.Errorf("failed to deploy bridge contracts: %w", err))
 		outputter.SetCommandResult(command.Results(deploymentResultInfo.CommandResults))
@@ -281,7 +282,8 @@ func deployContracts(
 	}
 
 	// setup external contracts
-	externalContracts, err = initExternalContracts(bridgeConfig, externalChainClient, externalChainID, isExternalGatewayPredeployed)
+	externalContracts, err = initExternalContracts(bridgeConfig, externalChainClient,
+		externalChainID, isExternalGatewayPredeployed)
 	if err != nil {
 		return nil, err
 	}

@@ -328,7 +328,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeBlockListAdmin(adminAddr),
 		framework.WithRollback(true),
-		framework.WithPremine(append(depositors, adminAddr)...)) //nolint:makezero
+		framework.WithPremine(append(depositors, adminAddr)...)) // nolint:makezero
 	defer cluster.Stop()
 
 	bridgeOne := 0
@@ -343,7 +343,6 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 	require.NoError(t, validatorSrv.ExternalChainFundFor(depositors, funds, uint64(bridgeOne)))
 
 	cluster.WaitForReady(t)
-	// require.NoError(t, cluster.WaitForBlock(2*sprintSize+1, 3*time.Minute))
 
 	externalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(bridge.JSONRPCAddr()))
 	require.NoError(t, err)

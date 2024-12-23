@@ -777,11 +777,11 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 
 			err = cluster.cmdRun(args...)
 			require.NoError(t, err)
-
 		}
 	}
 
 	bridgeJSONRPCs := make([]string, config.NumberOfBridges)
+
 	var gatewayContractAddress string
 
 	for i := uint64(0); i < cluster.Config.NumberOfBridges; i++ {
@@ -790,6 +790,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		require.NoError(t, err)
 
 		var isExternal bool
+
 		if config.RollbackMode == I2ERollback {
 			txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(bridge.JSONRPCAddr()))
 			require.NoError(t, err)
@@ -816,7 +817,8 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		}
 
 		// deploy bridge chain contracts
-		err = bridge.deployExternalChainContracts(genesisPath, config.BridgeBatchThreshold, gatewayContractAddress, isExternal)
+		err = bridge.deployExternalChainContracts(genesisPath, config.BridgeBatchThreshold,
+			gatewayContractAddress, isExternal)
 		require.NoError(t, err)
 
 		polybftConfig, err := polycfg.LoadPolyBFTConfig(genesisPath)
@@ -1249,7 +1251,8 @@ func CopyDir(source, destination string) error {
 	})
 }
 
-func initializeGatewayRollbackContract(t *testing.T, address types.Address, cluster *TestCluster, txRelayer *txrelayer.TxRelayer) {
+func initializeGatewayRollbackContract(t *testing.T, address types.Address,
+	cluster *TestCluster, txRelayer *txrelayer.TxRelayer) {
 	validators, err := genesis.ReadValidatorsByPrefix(
 		cluster.Config.TmpDir, cluster.Config.ValidatorPrefix, nil, true)
 	require.NoError(t, err)
@@ -1268,7 +1271,8 @@ func initializeGatewayRollbackContract(t *testing.T, address types.Address, clus
 		return nil
 	}
 
-	var validatorSet []*contractsapi.Validator
+	validatorSet := make([]*contractsapi.Validator, len(validators))
+
 	for _, val := range validators {
 		blsKey, err := val.UnmarshalBLSPublicKey()
 		require.NoError(t, err)
