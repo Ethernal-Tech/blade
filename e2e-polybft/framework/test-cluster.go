@@ -1253,6 +1253,7 @@ func CopyDir(source, destination string) error {
 
 func initializeGatewayRollbackContract(t *testing.T, address types.Address,
 	cluster *TestCluster, txRelayer *txrelayer.TxRelayer) {
+	t.Helper()
 	validators, err := genesis.ReadValidatorsByPrefix(
 		cluster.Config.TmpDir, cluster.Config.ValidatorPrefix, nil, true)
 	require.NoError(t, err)
@@ -1273,15 +1274,15 @@ func initializeGatewayRollbackContract(t *testing.T, address types.Address,
 
 	validatorSet := make([]*contractsapi.Validator, len(validators))
 
-	for _, val := range validators {
+	for i, val := range validators {
 		blsKey, err := val.UnmarshalBLSPublicKey()
 		require.NoError(t, err)
 
-		validatorSet = append(validatorSet, &contractsapi.Validator{
+		validatorSet[i] = &contractsapi.Validator{
 			Address:     val.Address,
 			BlsKey:      blsKey.ToBigInt(),
 			VotingPower: val.Stake,
-		})
+		}
 	}
 
 	inputParams := &contractsapi.InitializeGatewayFn{
