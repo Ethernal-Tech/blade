@@ -23,10 +23,9 @@ func GetCommand() *cobra.Command {
 }
 
 func runCommand(*cobra.Command, []string) {
-	relayer, err := bridgerelayer.NewBridgeRelayer(params.internalChainRPC,
+	relayer, err := bridgerelayer.NewBridgeRelayer(params.internalChainRPC, params.relayerPrivateKey,
 		bridgerelayer.WithExternalChainID(uint64(params.externalChainID)),
 		bridgerelayer.WithGenesisPath(params.genesisPath),
-		bridgerelayer.WithPrivateKey(params.relayerPrivateKey),
 	)
 
 	if err != nil {

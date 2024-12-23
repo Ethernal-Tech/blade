@@ -3,9 +3,13 @@ package bridgerelayer
 import (
 	"crypto/ecdsa"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
+
+	bolt "go.etcd.io/bbolt"
 
 	"github.com/0xPolygon/polygon-edge/chain"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/config"
@@ -29,6 +33,7 @@ type BridgeRelayer struct {
 	externalGatewayAddr types.Address
 	pollInterval        time.Duration
 	privateKey          *crypto.ECDSAKey
+	db                  *bolt.DB
 }
 
 type BridgeRelayerOption func(options *options) error
@@ -42,6 +47,7 @@ type options struct {
 	externalGatewayAddr *types.Address
 	pollInterval        *time.Duration
 	privateKey          *string
+	dbPath              *string
 }
 
 func WithExternalRPCAddr(address string) BridgeRelayerOption {
@@ -108,7 +114,15 @@ func WithPrivateKey(key string) BridgeRelayerOption {
 	}
 }
 
-func NewBridgeRelayer(internalRPCAddr string, opts ...BridgeRelayerOption) (*BridgeRelayer, error) {
+func WithDbPath(path string) BridgeRelayerOption {
+	return func(options *options) error {
+		options.dbPath = &path
+
+		return nil
+	}
+}
+
+func NewBridgeRelayer(internalRPCAddr string, privateKey string, opts ...BridgeRelayerOption) (*BridgeRelayer, error) {
 	errFunc := func(err error) error {
 		return fmt.Errorf("cannot create a new bridge relayer: %w", err)
 	}
@@ -162,15 +176,15 @@ func NewBridgeRelayer(internalRPCAddr string, opts ...BridgeRelayerOption) (*Bri
 
 	relayer.pollInterval = time.Second * 5
 
-	privBytes, err := hex.DecodeString(*sopts.privateKey)
+	pkBytes, err := hex.DecodeString(privateKey)
 	if err != nil {
 		return nil, errFunc(err)
 	}
 
-	x, y := btcec.S256().ScalarBaseMult(privBytes)
+	x, y := btcec.S256().ScalarBaseMult(pkBytes)
 
-	privateKey := &ecdsa.PrivateKey{
-		D: new(big.Int).SetBytes(privBytes),
+	pk := &ecdsa.PrivateKey{
+		D: new(big.Int).SetBytes(pkBytes),
 		PublicKey: ecdsa.PublicKey{
 			Curve: btcec.S256(),
 			X:     x,
@@ -178,7 +192,30 @@ func NewBridgeRelayer(internalRPCAddr string, opts ...BridgeRelayerOption) (*Bri
 		},
 	}
 
-	relayer.privateKey = crypto.NewECDSAKey(privateKey)
+	relayer.privateKey = crypto.NewECDSAKey(pk)
+
+	if sopts.dbPath == nil {
+		relayer.db, err = bolt.Open("bridge-relayer.db", 0600, nil)
+	} else {
+		relayer.db, err = bolt.Open(*sopts.dbPath, 0600, nil)
+	}
+
+	if err != nil {
+		return nil, errFunc(err)
+	}
+
+	err = relayer.db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("lastBridgedBucket"))
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, errFunc(err)
+	}
 
 	return relayer, nil
 }
@@ -186,24 +223,59 @@ func NewBridgeRelayer(internalRPCAddr string, opts ...BridgeRelayerOption) (*Bri
 func (r *BridgeRelayer) Start() {
 	var lastBridged = big.NewInt(-1)
 
+	key := []byte{'l', 'a', 's', 't'}
+
+	err := r.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte("lastBridgedBucket"))
+
+		if bucket == nil {
+			return errors.New("cannot find a bucket with the `lastBridgedBucket` name")
+		}
+
+		value := bucket.Get(key)
+
+		if value != nil {
+			var temp string
+			if err := json.Unmarshal(value, &temp); err != nil {
+				return err
+			}
+
+			if _, ok := lastBridged.SetString(temp, 10); !ok {
+				return errors.New("cannot set lastBridge correctly")
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		fmt.Println(err)
+
+		return
+	}
+
 	t := time.NewTicker(r.pollInterval)
+
+	fmt.Println("[START] Starting the bridge relayer with the start batch id", lastBridged.String())
 
 	for {
 		select {
 		case <-t.C:
+			fmt.Println("[INFO] Trying to get a batches with the id higher than", lastBridged.String())
 			batches, err := GetBridgeBatchesFromNumber(big.NewInt(0).Add(lastBridged, big.NewInt(1)), r.internalClient)
 			if err != nil {
 				fmt.Println("err:", err)
 
 				continue
 			} else if len(batches) == 0 {
-				fmt.Println("no new batches found")
+				fmt.Println("[FAIL] Cannot find a new batches")
 
 				continue
+			} else {
+				fmt.Println("[INFO] Found", len(batches), "new batches")
 			}
 
 			for i, batch := range batches {
-				fmt.Println("new batch found", batch.StartID.String(), "-", batch.EndID.String())
+				fmt.Println("[INFO]", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))), "id-ed batch was found with the messages:", batch.StartID.String(), "-", batch.EndID.String())
 
 				var (
 					sourceRelayer      txrelayer.TxRelayer
@@ -251,13 +323,38 @@ func (r *BridgeRelayer) Start() {
 
 				_, err = destinationRelayer.SendTransaction(tx, r.privateKey)
 				if err != nil {
-					fmt.Println("err:", err)
-
-					continue
+					fmt.Println("[FAIL]", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))), "id-ed batch has already been processed or cannot be processed")
+				} else {
+					fmt.Println("[INFO]", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))), "id-ed batch has been successfully processed/transfered")
 				}
 
 				lastBridged.Add(lastBridged, big.NewInt(1))
-				fmt.Println("batch with", batch.StartID.String(), "-", batch.EndID.String(), "successfully transported")
+
+				err = r.db.Update(func(tx *bolt.Tx) error {
+					bucket := tx.Bucket([]byte("lastBridgedBucket"))
+
+					if bucket == nil {
+						return errors.New("cannot find a bucket with the `lastBridgedBucket` name")
+					}
+
+					if value, err := json.Marshal(lastBridged.String()); err != nil {
+						return err
+					} else {
+						if err = bucket.Put(key, value); err != nil {
+							return err
+						}
+					}
+
+					return nil
+				})
+
+				if err != nil {
+					fmt.Println(err)
+
+					return
+				}
+
+				fmt.Println("[INFO]", lastBridged.String(), "batch id has been successfully stored into bolt DB")
 			}
 		}
 	}
