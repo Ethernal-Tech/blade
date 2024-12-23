@@ -125,6 +125,13 @@ func GetCommand() *cobra.Command {
 		"predefined internal gateway address to be used instead of deploying a new one",
 	)
 
+	cmd.Flags().StringVar(
+		&params.externalGatewayAddress,
+		externalGatewayAddress,
+		"",
+		"predefined external gateway address to be used instead of deploying a new one",
+	)
+
 	cmd.MarkFlagsMutuallyExclusive(helper.TestModeFlag, deployerKeyFlag)
 
 	return cmd
@@ -183,7 +190,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 	}
 
 	deploymentResultInfo, err := deployContracts(outputter, externalChainClient, externalChainIDBig,
-		chainConfig, consensusCfg.InitialValidatorSet, cmd.Context(), params.internalGatewayAddress)
+		chainConfig, consensusCfg.InitialValidatorSet, cmd.Context(), params.internalGatewayAddress, params.externalGatewayAddress)
 	if err != nil {
 		outputter.SetError(fmt.Errorf("failed to deploy bridge contracts: %w", err))
 		outputter.SetCommandResult(command.Results(deploymentResultInfo.CommandResults))
@@ -232,7 +239,8 @@ func deployContracts(
 	chainCfg *chain.Chain,
 	initialValidators []*validator.GenesisValidator,
 	cmdCtx context.Context,
-	internalGatewayAddress string) (*deploymentResultInfo, error) {
+	internalGatewayAddress string,
+	externalGatewayAddress string) (*deploymentResultInfo, error) {
 	externalTxRelayer, err := txrelayer.NewTxRelayer(
 		txrelayer.WithClient(externalChainClient),
 		txrelayer.WithWriter(outputter),
@@ -267,8 +275,13 @@ func deployContracts(
 		bridgeConfig.InternalGatewayAddr = types.StringToAddress(internalGatewayAddress)
 	}
 
+	isExternalGatewayPredeployed := externalGatewayAddress != ""
+	if isExternalGatewayPredeployed {
+		bridgeConfig.ExternalGatewayAddr = types.StringToAddress(externalGatewayAddress)
+	}
+
 	// setup external contracts
-	externalContracts, err = initExternalContracts(bridgeConfig, externalChainClient, externalChainID)
+	externalContracts, err = initExternalContracts(bridgeConfig, externalChainClient, externalChainID, isExternalGatewayPredeployed)
 	if err != nil {
 		return nil, err
 	}

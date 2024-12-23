@@ -18,6 +18,7 @@ const (
 	externalRPCFlag          = "external-json-rpc"
 	internalRPCFlag          = "internal-json-rpc"
 	internalGatewayAddress   = "internal-gateway-address"
+	externalGatewayAddress   = "external-gateway-address"
 	bridgeBatchThresholdFlag = "batch-threshold"
 )
 
@@ -31,6 +32,7 @@ type deployParams struct {
 	txTimeout              time.Duration
 	isTestMode             bool
 	internalGatewayAddress string
+	externalGatewayAddress string
 	isBootstrap            bool
 	bridgeBatchThreshold   uint64
 }

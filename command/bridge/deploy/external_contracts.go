@@ -17,7 +17,7 @@ import (
 
 // initExternalContracts initializes the external contracts
 func initExternalContracts(bridgeCfg *polycfg.Bridge,
-	externalChainClient *jsonrpc.EthClient, externalChainID *big.Int) ([]*contract, error) {
+	externalChainClient *jsonrpc.EthClient, externalChainID *big.Int, isExternalGatewayPredeployed bool) ([]*contract, error) {
 	externalContracts := make([]*contract, 0)
 
 	// deploy root ERC20 token only if non-mintable native token flavor is used on a child chain
@@ -90,17 +90,18 @@ func initExternalContracts(bridgeCfg *polycfg.Bridge,
 			gatewayName, key)
 	}
 
-	// Gateway contract
-	externalContracts = append(externalContracts, &contract{
-		name:     getContractName(false, gatewayName),
-		hasProxy: true,
-		artifact: contractsapi.Gateway,
-		addressPopulatorFn: func(bc *polycfg.Bridge, dcr []*deployContractResult) {
-			bc.ExternalGatewayAddr = dcr[1].Address
-		},
-		initializeFn: initGatewayFn,
-	})
-
+	if !isExternalGatewayPredeployed {
+		// Gateway contract
+		externalContracts = append(externalContracts, &contract{
+			name:     getContractName(false, gatewayName),
+			hasProxy: true,
+			artifact: contractsapi.Gateway,
+			addressPopulatorFn: func(bc *polycfg.Bridge, dcr []*deployContractResult) {
+				bc.ExternalGatewayAddr = dcr[1].Address
+			},
+			initializeFn: initGatewayFn,
+		})
+	}
 	// External ERC20Predicate contract
 	externalContracts = append(externalContracts, &contract{
 		name:     getContractName(false, erc20PredicateName),

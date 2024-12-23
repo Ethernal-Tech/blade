@@ -294,12 +294,11 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 	)
 
 	var (
-		gatewayAddress = types.StringToAddress("0x2222")
-		depositorKeys  = make([]string, transfersCount)
-		depositors     = make([]types.Address, transfersCount)
-		amounts        = make([]string, transfersCount)
-		funds          = make([]*big.Int, transfersCount)
-		singleToken    = ethgo.Ether(1)
+		depositorKeys = make([]string, transfersCount)
+		depositors    = make([]types.Address, transfersCount)
+		amounts       = make([]string, transfersCount)
+		funds         = make([]*big.Int, transfersCount)
+		singleToken   = ethgo.Ether(1)
 	)
 
 	admin, err := crypto.GenerateECDSAKey()
@@ -328,8 +327,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeBlockListAdmin(adminAddr),
-		framework.WithRollback(),
-		framework.WithPredeploy(fmt.Sprintf("%s:TestRollbackGateway", gatewayAddress)),
+		framework.WithRollback(true),
 		framework.WithPremine(append(depositors, adminAddr)...)) //nolint:makezero
 	defer cluster.Stop()
 
