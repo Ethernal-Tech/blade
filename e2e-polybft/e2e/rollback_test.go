@@ -3,9 +3,7 @@ package e2e
 import (
 	"fmt"
 	"math/big"
-	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -68,21 +66,6 @@ import (
 // 4. Perform deposits of ERC20, ERC721, and ERC1155 tokens.
 // 5. Wait for the deposits to be processed and verify the rollback events.
 
-func init() {
-	wd, err := os.Getwd()
-	if err != nil {
-		return
-	}
-
-	parent := filepath.Dir(wd)
-	parent = strings.Trim(parent, "e2e-polybft")
-	wd = filepath.Join(parent, "/artifacts/blade")
-	os.Setenv("EDGE_BINARY", wd)
-	os.Setenv("E2E_TESTS", "true")
-	os.Setenv("E2E_LOGS", "true")
-	os.Setenv("E2E_LOG_LEVEL", "debug")
-}
-
 func TestE2E_Rollback_E2I(t *testing.T) {
 	const (
 		transfersCount        = 1
@@ -121,14 +104,16 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 		t.Logf("Receiver#%d=%s\n", i+1, receivers[i])
 	}
 
+	gatewayAddr := types.StringToAddress("0x2222")
 	// Setting up the test cluster with rollback gateway contract
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithTestRewardToken(),
-		framework.WithTestRollback(),
+		framework.WithRollback(),
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeBatchThreshold(25),
+		framework.WithPredeploy(fmt.Sprintf("%s:TestRollbackGateway", gatewayAddr)),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(addrs); i++ {
 				tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
@@ -308,11 +293,14 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 		numberOfBridges  = 1
 	)
 
-	depositorKeys := make([]string, transfersCount)
-	depositors := make([]types.Address, transfersCount)
-	amounts := make([]string, transfersCount)
-	funds := make([]*big.Int, transfersCount)
-	singleToken := ethgo.Ether(1)
+	var (
+		gatewayAddress = types.StringToAddress("0x2222")
+		depositorKeys  = make([]string, transfersCount)
+		depositors     = make([]types.Address, transfersCount)
+		amounts        = make([]string, transfersCount)
+		funds          = make([]*big.Int, transfersCount)
+		singleToken    = ethgo.Ether(1)
+	)
 
 	admin, err := crypto.GenerateECDSAKey()
 	require.NoError(t, err)
@@ -336,11 +324,12 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithNumBlockConfirmations(0),
-		framework.WithTestRollback(),
 		framework.WithBridgeBatchThreshold(25),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeBlockListAdmin(adminAddr),
+		framework.WithRollback(),
+		framework.WithPredeploy(fmt.Sprintf("%s:TestRollbackGateway", gatewayAddress)),
 		framework.WithPremine(append(depositors, adminAddr)...)) //nolint:makezero
 	defer cluster.Stop()
 
@@ -356,6 +345,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 	require.NoError(t, validatorSrv.ExternalChainFundFor(depositors, funds, uint64(bridgeOne)))
 
 	cluster.WaitForReady(t)
+	// require.NoError(t, cluster.WaitForBlock(2*sprintSize+1, 3*time.Minute))
 
 	externalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(bridge.JSONRPCAddr()))
 	require.NoError(t, err)

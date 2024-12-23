@@ -20,7 +20,7 @@ import (
 var bigZero = big.NewInt(0)
 
 // initInternalContracts initializes the internal contracts
-func initInternalContracts(chainCfg *chain.Chain, isTestRollback bool) []*contract {
+func initInternalContracts(chainCfg *chain.Chain, isInternalGatewayPredeployed bool) []*contract {
 	useBridgeAllowList := chainCfg.Params.IsBridgeAllowListEnabled()
 	useBridgeBlockList := chainCfg.Params.IsBridgeBlockListEnabled()
 
@@ -46,17 +46,7 @@ func initInternalContracts(chainCfg *chain.Chain, isTestRollback bool) []*contra
 			gatewayName, key)
 	}
 
-	if isTestRollback {
-		internalContracts = append(internalContracts, &contract{
-			name:     getContractName(true, testRollbackGatewayName),
-			hasProxy: true,
-			artifact: contractsapi.TestRollbackGateway,
-			addressPopulatorFn: func(bc *polycfg.Bridge, dcr []*deployContractResult) {
-				bc.InternalGatewayAddr = dcr[1].Address
-			},
-			initializeFn: initGatewayFn,
-		})
-	} else {
+	if !isInternalGatewayPredeployed {
 		// Gateway contract
 		internalContracts = append(internalContracts, &contract{
 			name:     getContractName(true, gatewayName),
@@ -68,6 +58,7 @@ func initInternalContracts(chainCfg *chain.Chain, isTestRollback bool) []*contra
 			initializeFn: initGatewayFn,
 		})
 	}
+
 	// InternalERC20Predicate contract
 	contractArtifact := contractsapi.ChildERC20Predicate
 	if useBridgeAllowList || useBridgeBlockList {

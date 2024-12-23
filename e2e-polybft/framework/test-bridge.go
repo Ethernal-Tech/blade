@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"path"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -305,7 +306,7 @@ func (t *TestBridge) cmdRun(args ...string) error {
 }
 
 // deployExternalChainContracts deploys and initializes external chain contracts
-func (t *TestBridge) deployExternalChainContracts(genesisPath string, threshold uint64, isTestRollback bool) error {
+func (t *TestBridge) deployExternalChainContracts(genesisPath string, threshold uint64, predeployContract string) error {
 	args := []string{
 		"bridge",
 		"deploy",
@@ -316,8 +317,15 @@ func (t *TestBridge) deployExternalChainContracts(genesisPath string, threshold 
 		"--batch-threshold", strconv.FormatUint(threshold, 10),
 	}
 
-	if isTestRollback {
-		args = append(args, "--test-rollback")
+	if predeployContract != "" {
+		parts := strings.Split(predeployContract, ":")
+		if len(parts) != 2 {
+			return errors.New("invalid predeploy contract format")
+		}
+
+		if parts[1] == "TestRollbackGateway" {
+			args = append(args, "--internal-gateway-address", parts[0])
+		}
 	}
 
 	if err := t.cmdRun(args...); err != nil {

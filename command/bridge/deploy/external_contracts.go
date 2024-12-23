@@ -17,7 +17,7 @@ import (
 
 // initExternalContracts initializes the external contracts
 func initExternalContracts(bridgeCfg *polycfg.Bridge,
-	externalChainClient *jsonrpc.EthClient, externalChainID *big.Int, isTestRollback bool) ([]*contract, error) {
+	externalChainClient *jsonrpc.EthClient, externalChainID *big.Int) ([]*contract, error) {
 	externalContracts := make([]*contract, 0)
 
 	// deploy root ERC20 token only if non-mintable native token flavor is used on a child chain
@@ -90,28 +90,16 @@ func initExternalContracts(bridgeCfg *polycfg.Bridge,
 			gatewayName, key)
 	}
 
-	if isTestRollback {
-		externalContracts = append(externalContracts, &contract{
-			name:     getContractName(false, testRollbackGatewayName),
-			hasProxy: true,
-			artifact: contractsapi.TestRollbackGateway,
-			addressPopulatorFn: func(bc *polycfg.Bridge, dcr []*deployContractResult) {
-				bc.ExternalGatewayAddr = dcr[1].Address
-			},
-			initializeFn: initGatewayFn,
-		})
-	} else {
-		// Gateway contract
-		externalContracts = append(externalContracts, &contract{
-			name:     getContractName(false, gatewayName),
-			hasProxy: true,
-			artifact: contractsapi.Gateway,
-			addressPopulatorFn: func(bc *polycfg.Bridge, dcr []*deployContractResult) {
-				bc.ExternalGatewayAddr = dcr[1].Address
-			},
-			initializeFn: initGatewayFn,
-		})
-	}
+	// Gateway contract
+	externalContracts = append(externalContracts, &contract{
+		name:     getContractName(false, gatewayName),
+		hasProxy: true,
+		artifact: contractsapi.Gateway,
+		addressPopulatorFn: func(bc *polycfg.Bridge, dcr []*deployContractResult) {
+			bc.ExternalGatewayAddr = dcr[1].Address
+		},
+		initializeFn: initGatewayFn,
+	})
 
 	// External ERC20Predicate contract
 	externalContracts = append(externalContracts, &contract{

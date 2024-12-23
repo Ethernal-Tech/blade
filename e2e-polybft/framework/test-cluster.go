@@ -18,9 +18,11 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/command"
+	"github.com/0xPolygon/polygon-edge/command/bridge/helper"
 	"github.com/0xPolygon/polygon-edge/command/genesis"
 	polycfg "github.com/0xPolygon/polygon-edge/consensus/polybft/config"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
+	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/helper/common"
 	"github.com/0xPolygon/polygon-edge/jsonrpc"
@@ -138,11 +140,11 @@ type TestClusterConfig struct {
 
 	IsPropertyTest  bool
 	TestRewardToken string
+	IsTestRollback  bool
 
 	RootTrackerPollInterval time.Duration
 
 	ProxyContractsAdmin string
-	TestRollback        bool
 
 	VotingPeriod uint64
 	VotingDelay  uint64
@@ -480,9 +482,9 @@ func WithTLSCertificate(certFile string, keyFile string) ClusterOption {
 	}
 }
 
-func WithTestRollback() ClusterOption {
+func WithRollback() ClusterOption {
 	return func(h *TestClusterConfig) {
-		h.TestRollback = true
+		h.IsTestRollback = true
 	}
 }
 
@@ -741,27 +743,31 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		if config.PredeployContract != "" {
 			parts := strings.Split(config.PredeployContract, ":")
 			require.Equal(t, 2, len(parts))
-			args = append(args, "--stake-token", parts[0])
-		}
 
+			if parts[1] == "RootERC20" {
+				args = append(args, "--stake-token", parts[0])
+			}
+		}
 		// run genesis command with all the arguments
 		err = cluster.cmdRun(args...)
 		require.NoError(t, err)
-	}
 
-	if config.PredeployContract != "" {
-		parts := strings.Split(config.PredeployContract, ":")
-		require.Equal(t, 2, len(parts))
-		// run predeploy genesis population
-		args := []string{
-			"genesis", "predeploy",
-			"--predeploy-address", parts[0],
-			"--artifacts-name", parts[1],
-			"--chain", genesisPath,
-			"--deployer-address", config.BladeAdmin}
+		if config.PredeployContract != "" {
+			parts := strings.Split(config.PredeployContract, ":")
+			require.Equal(t, 2, len(parts))
 
-		err = cluster.cmdRun(args...)
-		require.NoError(t, err)
+			// run predeploy genesis population
+			args := []string{
+				"genesis", "predeploy",
+				"--predeploy-address", parts[0],
+				"--artifacts-name", parts[1],
+				"--chain", genesisPath,
+				"--deployer-address", bladeAdmin}
+
+			err = cluster.cmdRun(args...)
+			require.NoError(t, err)
+
+		}
 	}
 
 	bridgeJSONRPCs := make([]string, config.NumberOfBridges)
@@ -772,7 +778,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		require.NoError(t, err)
 
 		// deploy bridge chain contracts
-		err = bridge.deployExternalChainContracts(genesisPath, config.BridgeBatchThreshold, config.TestRollback)
+		err = bridge.deployExternalChainContracts(genesisPath, config.BridgeBatchThreshold, config.PredeployContract)
 		require.NoError(t, err)
 
 		polybftConfig, err := polycfg.LoadPolyBFTConfig(genesisPath)
@@ -816,6 +822,57 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 	for i := 1; i <= cluster.Config.NonValidatorCount; i++ {
 		dir := nonValidatorPrefix + strconv.Itoa(i)
 		cluster.InitTestServer(t, dir, bridgeJSONRPCs, None)
+	}
+
+	// Initialize Gateway contract with BLS, BN256G2 and validators
+	if config.IsTestRollback {
+		parts := strings.Split(config.PredeployContract, ":")
+		validators, err := genesis.ReadValidatorsByPrefix(
+			cluster.Config.TmpDir, cluster.Config.ValidatorPrefix, nil, true)
+		require.NoError(t, err)
+
+		initContract := func(txRelayer txrelayer.TxRelayer,
+			initInputFn contractsapi.ABIEncoder, contractAddr types.Address,
+			contractName string, deployerKey crypto.Key) error {
+			input, err := initInputFn.EncodeAbi()
+			require.NoError(t, err)
+
+			receipt, err := helper.SendTransaction(txRelayer, contractAddr,
+				input, contractName, deployerKey)
+			require.NoError(t, err)
+			require.Equal(t, uint64(types.ReceiptSuccess), receipt.Status)
+
+			return nil
+		}
+
+		txRelayer, err := txrelayer.NewTxRelayer(
+			txrelayer.WithClient(cluster.Servers[0].JSONRPC()),
+		)
+		require.NoError(t, err)
+
+		var validatorSet []*contractsapi.Validator
+		for _, val := range validators {
+			blsKey, err := val.UnmarshalBLSPublicKey()
+			require.NoError(t, err)
+
+			validatorSet = append(validatorSet, &contractsapi.Validator{
+				Address:     val.Address,
+				BlsKey:      blsKey.ToBigInt(),
+				VotingPower: val.Stake,
+			})
+		}
+
+		inputParams := &contractsapi.InitializeGatewayFn{
+			NewBls:     contracts.BLSContract,
+			NewBn256G2: contracts.BLS256Contract,
+			Validators: validatorSet,
+		}
+
+		key, err := helper.DecodePrivateKey("")
+		require.NoError(t, err)
+
+		err = initContract(txRelayer, inputParams, types.StringToAddress(parts[0]), parts[1], key)
+		require.NoError(t, err)
 	}
 
 	return cluster

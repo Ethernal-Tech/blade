@@ -118,11 +118,11 @@ func GetCommand() *cobra.Command {
 		"block offset for execution of bridge transaction",
 	)
 
-	cmd.Flags().BoolVar(
-		&params.isTestRollback,
-		isTestRollback,
-		false,
-		"test indicates if it should deploy testing gateway contracts instead of production",
+	cmd.Flags().StringVar(
+		&params.internalGatewayAddress,
+		internalGatewayAddress,
+		"",
+		"predefined internal gateway address to be used instead of deploying a new one",
 	)
 
 	cmd.MarkFlagsMutuallyExclusive(helper.TestModeFlag, deployerKeyFlag)
@@ -182,8 +182,8 @@ func runCommand(cmd *cobra.Command, _ []string) {
 		}
 	}
 
-	deploymentResultInfo, err := deployContracts(outputter, externalChainClient, externalChainIDBig, params.isTestRollback,
-		chainConfig, consensusCfg.InitialValidatorSet, cmd.Context())
+	deploymentResultInfo, err := deployContracts(outputter, externalChainClient, externalChainIDBig,
+		chainConfig, consensusCfg.InitialValidatorSet, cmd.Context(), params.internalGatewayAddress)
 	if err != nil {
 		outputter.SetError(fmt.Errorf("failed to deploy bridge contracts: %w", err))
 		outputter.SetCommandResult(command.Results(deploymentResultInfo.CommandResults))
@@ -229,10 +229,10 @@ func deployContracts(
 	outputter command.OutputFormatter,
 	externalChainClient *jsonrpc.EthClient,
 	externalChainID *big.Int,
-	isTestRollback bool,
 	chainCfg *chain.Chain,
 	initialValidators []*validator.GenesisValidator,
-	cmdCtx context.Context) (*deploymentResultInfo, error) {
+	cmdCtx context.Context,
+	internalGatewayAddress string) (*deploymentResultInfo, error) {
 	externalTxRelayer, err := txrelayer.NewTxRelayer(
 		txrelayer.WithClient(externalChainClient),
 		txrelayer.WithWriter(outputter),
@@ -262,14 +262,19 @@ func deployContracts(
 		internalContracts []*contract
 	)
 
+	isInternalGatewayPredeployed := internalGatewayAddress != ""
+	if isInternalGatewayPredeployed {
+		bridgeConfig.InternalGatewayAddr = types.StringToAddress(internalGatewayAddress)
+	}
+
 	// setup external contracts
-	externalContracts, err = initExternalContracts(bridgeConfig, externalChainClient, externalChainID, isTestRollback)
+	externalContracts, err = initExternalContracts(bridgeConfig, externalChainClient, externalChainID)
 	if err != nil {
 		return nil, err
 	}
 
 	// setup internal contracts
-	internalContracts = initInternalContracts(chainCfg, isTestRollback)
+	internalContracts = initInternalContracts(chainCfg, isInternalGatewayPredeployed)
 
 	// pre-allocate internal predicates addresses in genesis if blade is bootstrapping
 	if params.isBootstrap {
