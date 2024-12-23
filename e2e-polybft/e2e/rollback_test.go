@@ -328,7 +328,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeBlockListAdmin(adminAddr),
 		framework.WithRollback(true),
-		framework.WithPremine(append(depositors, adminAddr)...)) //nolint:makezero
+		framework.WithPremine(append(depositors, adminAddr)...))
 	defer cluster.Stop()
 
 	bridgeOne := 0

@@ -1254,6 +1254,7 @@ func CopyDir(source, destination string) error {
 func initializeGatewayRollbackContract(t *testing.T, address types.Address,
 	cluster *TestCluster, txRelayer *txrelayer.TxRelayer) {
 	t.Helper()
+
 	validators, err := genesis.ReadValidatorsByPrefix(
 		cluster.Config.TmpDir, cluster.Config.ValidatorPrefix, nil, true)
 	require.NoError(t, err)
