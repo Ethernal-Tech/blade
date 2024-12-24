@@ -489,13 +489,9 @@ func WithTLSCertificate(certFile string, keyFile string) ClusterOption {
 	}
 }
 
-func WithRollback(i2e ...bool) ClusterOption {
+func WithRollback(rollbackMode RollbackMode) ClusterOption {
 	return func(h *TestClusterConfig) {
-		if len(i2e) > 0 && i2e[0] {
-			h.RollbackMode = I2ERollback
-		} else {
-			h.RollbackMode = E2IRollback
-		}
+		h.RollbackMode = rollbackMode
 	}
 }
 

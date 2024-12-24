@@ -108,7 +108,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 	// Setting up the test cluster with rollback gateway contract
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithTestRewardToken(),
-		framework.WithRollback(),
+		framework.WithRollback(framework.E2IRollback),
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
@@ -327,7 +327,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeBlockListAdmin(adminAddr),
-		framework.WithRollback(true),
+		framework.WithRollback(framework.I2ERollback),
 		framework.WithPremine(append(depositors, adminAddr)...))
 	defer cluster.Stop()
 

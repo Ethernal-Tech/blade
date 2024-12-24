@@ -190,8 +190,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 	}
 
 	deploymentResultInfo, err := deployContracts(outputter, externalChainClient, externalChainIDBig,
-		chainConfig, consensusCfg.InitialValidatorSet, cmd.Context(),
-		params.internalGatewayAddress, params.externalGatewayAddress)
+		chainConfig, consensusCfg.InitialValidatorSet, cmd.Context())
 	if err != nil {
 		outputter.SetError(fmt.Errorf("failed to deploy bridge contracts: %w", err))
 		outputter.SetCommandResult(command.Results(deploymentResultInfo.CommandResults))
@@ -239,9 +238,7 @@ func deployContracts(
 	externalChainID *big.Int,
 	chainCfg *chain.Chain,
 	initialValidators []*validator.GenesisValidator,
-	cmdCtx context.Context,
-	internalGatewayAddress string,
-	externalGatewayAddress string) (*deploymentResultInfo, error) {
+	cmdCtx context.Context) (*deploymentResultInfo, error) {
 	externalTxRelayer, err := txrelayer.NewTxRelayer(
 		txrelayer.WithClient(externalChainClient),
 		txrelayer.WithWriter(outputter),
@@ -271,14 +268,14 @@ func deployContracts(
 		internalContracts []*contract
 	)
 
-	isInternalGatewayPredeployed := internalGatewayAddress != ""
+	isInternalGatewayPredeployed := params.internalGatewayAddress != ""
 	if isInternalGatewayPredeployed {
-		bridgeConfig.InternalGatewayAddr = types.StringToAddress(internalGatewayAddress)
+		bridgeConfig.InternalGatewayAddr = types.StringToAddress(params.internalGatewayAddress)
 	}
 
-	isExternalGatewayPredeployed := externalGatewayAddress != ""
+	isExternalGatewayPredeployed := params.externalGatewayAddress != ""
 	if isExternalGatewayPredeployed {
-		bridgeConfig.ExternalGatewayAddr = types.StringToAddress(externalGatewayAddress)
+		bridgeConfig.ExternalGatewayAddr = types.StringToAddress(params.externalGatewayAddress)
 	}
 
 	// setup external contracts
