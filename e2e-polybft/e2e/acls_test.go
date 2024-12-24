@@ -355,6 +355,7 @@ func TestE2E_AddressLists_Bridge(t *testing.T) {
 	admin, _ := crypto.GenerateECDSAKey()
 	target, _ := crypto.GenerateECDSAKey()
 	other, _ := crypto.GenerateECDSAKey()
+	realyerKey, _ := crypto.GenerateECDSAKey()
 
 	adminAddr := admin.Address()
 	targetAddr := target.Address()
@@ -367,6 +368,7 @@ func TestE2E_AddressLists_Bridge(t *testing.T) {
 		framework.WithBridgeAllowListEnabled(otherAddr),
 		framework.WithBridgeBlockListAdmin(adminAddr),
 		framework.WithBridgeBlockListEnabled(otherAddr),
+		framework.WithRelayerPrivateKey(realyerKey),
 	)
 	defer cluster.Stop()
 

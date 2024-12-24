@@ -446,8 +446,6 @@ func (r *BridgeRelayer) Start() {
 			}
 
 			for i, batch := range batches {
-				fmt.Println("[INFO]", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))),
-					"id-ed batch was found with the messages:", batch.StartID.String(), "-", batch.EndID.String())
 				r.logger.Info("Found batch with id", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))), "events start-id",
 					batch.StartID.String(), "events end-id",
 					batch.EndID.String(), "is rollback batch", batch.IsRollback)
@@ -508,11 +506,11 @@ func (r *BridgeRelayer) Start() {
 
 				_, err = destinationRelayer.SendTransaction(tx, r.privateKey)
 				if err != nil {
-					fmt.Println("[FAIL]", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))),
-						"id-ed batch has already been processed or cannot be processed")
+					r.logger.Error("id-ed batch has already been processed or cannot be procesed", "err", err)
 				} else {
-					fmt.Println("[INFO]", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))),
-						"id-ed batch has been successfully processed/transferred")
+					r.logger.Info("id-ed batch",
+						"has been successfully processed/transferred",
+						big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))))
 				}
 
 				lastBridged.Add(lastBridged, big.NewInt(1))
@@ -541,7 +539,7 @@ func (r *BridgeRelayer) Start() {
 					return
 				}
 
-				fmt.Println("[INFO]", lastBridged.String(), "batch id has been successfully stored into bolt DB")
+				r.logger.Info("batch id has been successfully stored into bolt DB", "bridge id", lastBridged.String())
 			}
 		}
 	}
