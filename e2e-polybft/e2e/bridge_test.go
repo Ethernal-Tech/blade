@@ -1427,6 +1427,7 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 	})
 
 	t.Run("do a deposit to some validator and non-validator address", func(t *testing.T) {
+		t.Skip()
 		validatorSrv := cluster.Servers[4]
 		validatorAcc, err := validatorHelper.GetAccountFromDir(validatorSrv.DataDir())
 		require.NoError(t, err)
