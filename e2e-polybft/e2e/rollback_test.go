@@ -3,7 +3,9 @@ package e2e
 import (
 	"fmt"
 	"math/big"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -66,9 +68,24 @@ import (
 // 4. Perform deposits of ERC20, ERC721, and ERC1155 tokens.
 // 5. Wait for the deposits to be processed and verify the rollback events.
 
+func init() {
+	wd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	parent := filepath.Dir(wd)
+	parent = strings.Trim(parent, "e2e-polybft")
+	wd = filepath.Join(parent, "/artifacts/blade")
+	os.Setenv("EDGE_BINARY", wd)
+	os.Setenv("E2E_TESTS", "true")
+	os.Setenv("E2E_LOGS", "true")
+	os.Setenv("E2E_LOG_LEVEL", "debug")
+}
+
 func TestE2E_Rollback_E2I(t *testing.T) {
 	const (
-		transfersCount        = 1
+		transfersCount        = 4
 		numBlockConfirmations = 2
 		epochSize             = 40
 		sprintSize            = uint64(5)
@@ -156,7 +173,6 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 		require.Equal(t, uint64(types.ReceiptSuccess), receipt.Status)
 
 		rootERC20Token := types.Address(receipt.ContractAddress)
-		t.Log("External chain token address:", rootERC20Token)
 
 		finalBlockNum := 1 * sprintSize
 		require.NoError(t, cluster.WaitForBlock(finalBlockNum, 2*time.Minute))
