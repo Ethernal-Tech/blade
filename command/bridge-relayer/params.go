@@ -24,4 +24,13 @@ type commandParams struct {
 	// SECURITY WARNING: This key must be kept strictly confidential and never
 	// exposed or committed to any public service or version control system.
 	relayerPrivateKey string
+
+	// this parameter enables JSON-formatted logs by setting its value to true.
+	jsonFormatOuttputter bool
+
+	// determine the verbosity of log messages.
+	logLevel string
+
+	// path to log file.
+	logFilePath string
 }

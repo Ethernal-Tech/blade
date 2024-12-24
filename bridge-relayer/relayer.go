@@ -20,6 +20,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/hashicorp/go-hclog"
 
 	"github.com/0xPolygon/polygon-edge/types"
 )
@@ -74,6 +75,10 @@ type BridgeRelayer struct {
 
 	// db is a BoltDB instance used for (persistent) local storage.
 	db *bolt.DB
+
+	// he logger is an instance of the hclog logging library.
+	// used to handle application logging.
+	logger hclog.Logger
 }
 
 type BridgeRelayerOption func(*options) error
@@ -104,6 +109,9 @@ type options struct {
 	pollInterval        *time.Duration
 	privateKey          *string
 	dbPath              *string
+	logLevel            hclog.Level
+	jsonLogFormat       bool
+	logDir              string
 }
 
 // WithExternalRPCAddr configures the relayer to use the specified RPC address
@@ -248,6 +256,30 @@ func WithDBPath(path string) BridgeRelayerOption {
 	}
 }
 
+func WithLogLevel(level hclog.Level) BridgeRelayerOption {
+	return func(options *options) error {
+		options.logLevel = level
+
+		return nil
+	}
+}
+
+func WithLogJsonFormat(jsonFormat bool) BridgeRelayerOption {
+	return func(options *options) error {
+		options.jsonLogFormat = jsonFormat
+
+		return nil
+	}
+}
+
+func WithLogDir(logDir string) BridgeRelayerOption {
+	return func(options *options) error {
+		options.logDir = logDir
+
+		return nil
+	}
+}
+
 func NewBridgeRelayer(internalRPCAddr string, privateKey string, opts ...BridgeRelayerOption) (*BridgeRelayer, error) {
 	errFunc := func(err error) error {
 		return fmt.Errorf("cannot create a new bridge relayer: %w", err)
@@ -263,7 +295,12 @@ func NewBridgeRelayer(internalRPCAddr string, privateKey string, opts ...BridgeR
 	relayer.internalRPCAddr = internalRPCAddr
 	relayer.internalClient = txRelayer
 
-	sopts := &options{}
+	//default options
+	sopts := &options{
+		logDir:        "",
+		logLevel:      hclog.Info,
+		jsonLogFormat: false,
+	}
 
 	for _, option := range opts {
 		err := option(sopts)
@@ -317,6 +354,13 @@ func NewBridgeRelayer(internalRPCAddr string, privateKey string, opts ...BridgeR
 			Y:     y,
 		},
 	}
+
+	logger, err := newLoggerFromConfig(sopts)
+	if err != nil {
+		return nil, err
+	}
+
+	relayer.logger = logger
 
 	relayer.privateKey = crypto.NewECDSAKey(pk)
 
@@ -382,28 +426,31 @@ func (r *BridgeRelayer) Start() {
 
 	t := time.NewTicker(r.pollInterval)
 
-	fmt.Println("[START] Starting the bridge relayer with the start batch id", lastBridged.String())
+	r.logger.Info("Starting the bridge relayer", "start batch id", lastBridged.String())
 
 	for {
 		select {
 		case <-t.C:
-			fmt.Println("[INFO] Trying to get a batches with the id higher than", lastBridged.String())
+			r.logger.Info("Trying to get a batches", "the id higher than", lastBridged.String())
 			batches, err := GetBridgeBatchesFromNumber(big.NewInt(0).Add(lastBridged, big.NewInt(1)), r.internalClient)
 			if err != nil {
-				fmt.Println("err:", err)
+				r.logger.Error("failed to get batches from BridgeStorage contract", "err", err)
 
 				continue
 			} else if len(batches) == 0 {
-				fmt.Println("[FAIL] Cannot find a new batches")
+				r.logger.Info("Cannot find a new batches")
 
 				continue
 			} else {
-				fmt.Println("[INFO] Found", len(batches), "new batches")
+				r.logger.Info("Found", len(batches), "new batches")
 			}
 
 			for i, batch := range batches {
 				fmt.Println("[INFO]", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))),
 					"id-ed batch was found with the messages:", batch.StartID.String(), "-", batch.EndID.String())
+				r.logger.Info("Found batch with id", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))), "events start-id",
+					batch.StartID.String(), "events end-id",
+					batch.EndID.String(), "is rollback batch", batch.IsRollback)
 
 				var (
 					sourceRelayer      txrelayer.TxRelayer
@@ -418,17 +465,27 @@ func (r *BridgeRelayer) Start() {
 
 					destinationGateway = r.internalGatewayAddr
 					destinationRelayer = r.internalClient
+
+					if batch.IsRollback {
+						destinationGateway = r.externalGatewayAddr
+						destinationRelayer = r.externalClient
+					}
 				} else {
 					sourceGateway = r.internalGatewayAddr
 					sourceRelayer = r.internalClient
 
 					destinationGateway = r.externalGatewayAddr
 					destinationRelayer = r.externalClient
+
+					if batch.IsRollback {
+						destinationGateway = r.internalGatewayAddr
+						destinationRelayer = r.internalClient
+					}
 				}
 
 				messages, err := GetBridgeMessagesInRange(batches[i].StartID, batches[i].EndID, sourceRelayer, sourceGateway)
 				if err != nil {
-					fmt.Println("err:", err)
+					r.logger.Error("failed to get messages from source gateway contract", "err", err)
 
 					continue
 				}
@@ -438,7 +495,7 @@ func (r *BridgeRelayer) Start() {
 					SignedBridgeBatch: &batches[i],
 				}).EncodeAbi()
 				if err != nil {
-					fmt.Println("err:", err)
+					r.logger.Error("failed to encode abi", "err", err)
 
 					continue
 				}
@@ -488,4 +545,45 @@ func (r *BridgeRelayer) Start() {
 			}
 		}
 	}
+}
+
+// newFileLogger returns logger instance that writes all logs to a specified file.
+// If log file can't be created, it returns an error
+func newFileLogger(options *options) (hclog.Logger, error) {
+	logFileWriter, err := os.Create(options.logDir)
+	if err != nil {
+		return nil, fmt.Errorf("could not create log file, %w", err)
+	}
+
+	return hclog.New(&hclog.LoggerOptions{
+		Name:       "bridge-relayer",
+		Level:      options.logLevel,
+		Output:     logFileWriter,
+		JSONFormat: options.jsonLogFormat,
+	}), nil
+}
+
+// newCLILogger returns minimal logger instance that sends all logs to standard output
+func newCLILogger(options *options) hclog.Logger {
+	return hclog.New(&hclog.LoggerOptions{
+		Name:       "bridge-relayer",
+		Level:      options.logLevel,
+		JSONFormat: options.jsonLogFormat,
+	})
+}
+
+// newLoggerFromConfig creates a new logger which logs to a specified file.
+// If log file is not set it outputs to standard output ( console ).
+// If log file is specified, and it can't be created the server command will error out
+func newLoggerFromConfig(options *options) (hclog.Logger, error) {
+	if options.logDir != "" {
+		fileLoggerInstance, err := newFileLogger(options)
+		if err != nil {
+			return nil, err
+		}
+
+		return fileLoggerInstance, nil
+	}
+
+	return newCLILogger(options), nil
 }

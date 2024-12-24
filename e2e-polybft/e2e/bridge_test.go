@@ -212,7 +212,6 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 	})
 
 	t.Run("multiple deposit batches per epoch", func(t *testing.T) {
-		t.Skip()
 		const (
 			depositsSubset = 1
 		)
@@ -345,10 +344,14 @@ func TestE2E_Bridge_ERC721Transfer(t *testing.T) {
 		t.Logf("Receiver#%d=%s\n", i+1, receivers[i])
 	}
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithEpochSize(epochSize),
 		framework.WithPremine(receiversAddrs...),
 		framework.WithBridges(numberOfBridges),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(addrs); i++ {
 				tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
@@ -524,11 +527,15 @@ func TestE2E_Bridge_ERC1155Transfer(t *testing.T) {
 		t.Logf("Receiver#%d=%s\n", i+1, receivers[i])
 	}
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithNumBlockConfirmations(0),
 		framework.WithEpochSize(epochSize),
 		framework.WithPremine(receiversAddrs...),
 		framework.WithBridges(numberOfBridges),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(addrs); i++ {
 				tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
@@ -731,12 +738,16 @@ func TestE2E_Bridge_InternalChainTokensTransfer(t *testing.T) {
 		t.Logf("Depositor#%d=%s\n", i+1, depositors[i])
 	}
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	// setup cluster
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithNumBlockConfirmations(0),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeBlockListAdmin(adminAddr),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithPremine(append(depositors, adminAddr)...)) //nolint:makezero
 	defer cluster.Stop()
 
@@ -1025,6 +1036,9 @@ func TestE2E_Bridge_Transfers_AccessLists(t *testing.T) {
 	admin, _ := crypto.GenerateECDSAKey()
 	adminAddr := admin.Address()
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithNumBlockConfirmations(0),
 		framework.WithEpochSize(epochSize),
@@ -1033,6 +1047,7 @@ func TestE2E_Bridge_Transfers_AccessLists(t *testing.T) {
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeAllowListAdmin(adminAddr),
 		framework.WithBridgeBlockListAdmin(adminAddr),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithSecretsCallback(func(a []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(a); i++ {
 				receivers[i] = a[i].String()
@@ -1242,6 +1257,9 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 	rewardWalletKeyRaw, err := rewardWalletKey.MarshallPrivateKey()
 	require.NoError(t, err)
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	// start cluster with default, non-mintable native erc20 root token
 	// with london fork enabled
 	cluster := framework.NewTestCluster(t, 5,
@@ -1250,6 +1268,7 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
 		framework.WithNativeTokenConfig(nativeTokenNonMintableConfig),
 		framework.WithBridgeBatchThreshold(25),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		// this enables London (EIP-1559) fork
 		framework.WithBurnContract(&polycfg.BurnContractInfo{
 			BlockNumber: 0,
@@ -1514,11 +1533,15 @@ func TestE2E_Bridge_L1OriginatedNativeToken_ERC20StakingToken(t *testing.T) {
 	minter, err := crypto.GenerateECDSAKey()
 	require.NoError(t, err)
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithNumBlockConfirmations(0),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithBladeAdmin(minter.Address().String()),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(addrs); i++ {
 				tcc.StakeAmounts = append(tcc.StakeAmounts, initialStake)

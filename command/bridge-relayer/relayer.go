@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	bridgerelayer "github.com/0xPolygon/polygon-edge/bridge-relayer"
+	"github.com/0xPolygon/polygon-edge/command/server/config"
+	"github.com/hashicorp/go-hclog"
 	"github.com/spf13/cobra"
 )
 
@@ -26,6 +28,8 @@ func runCommand(*cobra.Command, []string) {
 	relayer, err := bridgerelayer.NewBridgeRelayer(params.internalChainRPC, params.relayerPrivateKey,
 		bridgerelayer.WithExternalChainID(uint64(params.externalChainID)),
 		bridgerelayer.WithGenesisPath(params.genesisPath),
+		bridgerelayer.WithLogLevel(hclog.LevelFromString(params.logLevel)),
+		bridgerelayer.WithLogJsonFormat(params.jsonFormatOuttputter),
 	)
 
 	if err != nil {
@@ -38,6 +42,8 @@ func runCommand(*cobra.Command, []string) {
 }
 
 func setFlags(cmd *cobra.Command) {
+	defaultConfig := config.DefaultConfig()
+
 	cmd.Flags().StringVarP(
 		&params.internalChainRPC,
 		"internal-chain-rpc",
@@ -80,6 +86,29 @@ func setFlags(cmd *cobra.Command) {
 		"k",
 		"",
 		"relayer's private key",
+	)
+
+	cmd.Flags().BoolVarP(
+		&params.jsonFormatOuttputter,
+		"json",
+		"j",
+		defaultConfig.JSONLogFormat,
+		"logger json format",
+	)
+
+	cmd.Flags().StringVarP(
+		&params.logLevel,
+		"log-level",
+		"l",
+		defaultConfig.LogLevel,
+		"logger level",
+	)
+
+	cmd.Flags().StringVar(
+		&params.logFilePath,
+		"log-path",
+		defaultConfig.LogFilePath,
+		"write all logs to the file at specified location instead of writing them to console",
 	)
 
 	_ = cmd.MarkFlagRequired("private-key")

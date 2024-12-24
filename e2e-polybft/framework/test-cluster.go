@@ -799,13 +799,6 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 			require.NoError(t, err)
 		}
 
-		marshalledPrivateKey, err := cluster.Config.RelayerPrivateKey.MarshallPrivateKey()
-		require.NoError(t, err)
-
-		bridgeRelayer := NewTestBridgeRelayer(t, cluster.Config, i+1, 100, cluster.Config.Dir("genesis.json"), hex.EncodeToString(marshalledPrivateKey))
-
-		cluster.BridgeRelayers[i] = bridgeRelayer
-
 		bridgeJSONRPCs[i] = bridge.JSONRPCAddr()
 
 		cluster.Bridges[i] = bridge
@@ -821,6 +814,17 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 	for i := 1; i <= cluster.Config.NonValidatorCount; i++ {
 		dir := nonValidatorPrefix + strconv.Itoa(i)
 		cluster.InitTestServer(t, dir, bridgeJSONRPCs, None)
+	}
+
+	for i := uint64(0); i < cluster.Config.NumberOfBridges; i++ {
+		bridgeRelayer := NewTestBridgeRelayer(t,
+			cluster.Config,
+			i+1,
+			cluster.Config.Dir("genesis.json"),
+			cluster.Config.RelayerPrivateKey,
+			cluster.Servers[0].JSONRPCAddr())
+
+		cluster.BridgeRelayers[i] = bridgeRelayer
 	}
 
 	return cluster
