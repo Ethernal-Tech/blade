@@ -181,7 +181,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 		// Wait for the rollback to be processed
 		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 			for i := range receivers {
-				if !isEventProcessedRollback(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i+1)) {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i+1), true) {
 					return false
 				}
 			}
@@ -229,7 +229,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 		// Wait for rollback to be processed
 		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 			for i := range receivers {
-				if !isEventProcessedRollback(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i+1)) {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i+1), true) {
 					return false
 				}
 			}
@@ -273,7 +273,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 		// Wait for rollback to be processed
 		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 			for i := range receivers {
-				if !isEventProcessedRollback(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i+1)) {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i+1), true) {
 					return false
 				}
 			}
@@ -375,7 +375,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 
 		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
 			for i := uint64(1); i <= transfersCount+1; i++ {
-				if !isEventProcessedRollback(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i) {
+				if !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i, true) {
 					return false
 				}
 			}
@@ -432,7 +432,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 
 		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
 			for i := uint64(1); i <= transfersCount+1; i++ {
-				if !isEventProcessedRollback(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i) {
+				if !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i, true) {
 					return false
 				}
 			}
