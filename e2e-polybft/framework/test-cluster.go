@@ -783,8 +783,14 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		require.NoError(t, err)
 
 		// fund addresses on the bridge chain
-		err = bridge.fundAddressesOnRoot(polybftConfig, cluster.Config.RelayerPrivateKey.Address())
+		err = bridge.fundAddressesOnExternal(polybftConfig)
 		require.NoError(t, err)
+
+		if cluster.Config.RelayerPrivateKey != nil &&
+			cluster.Config.RelayerPrivateKey.Address() != types.ZeroAddress {
+			err = bridge.fundRelayerAddressOnExternal(cluster.Config.RelayerPrivateKey.Address())
+			require.NoError(t, err)
+		}
 
 		// add premine if token is non-mintable
 		if i == 0 {

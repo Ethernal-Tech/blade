@@ -13,6 +13,7 @@ import (
 func TestE2E_BurnContract_Deployed(t *testing.T) {
 	contractKey, _ := crypto.GenerateECDSAKey()
 	destinationKey, _ := crypto.GenerateECDSAKey()
+	relayerKey, _ := crypto.GenerateECDSAKey()
 
 	contractAddr := contractKey.Address()
 	destinationAddr := destinationKey.Address()
@@ -21,6 +22,7 @@ func TestE2E_BurnContract_Deployed(t *testing.T) {
 		framework.WithBridges(1),
 		framework.WithNativeTokenConfig(nativeTokenNonMintableConfig),
 		framework.WithTestRewardToken(),
+		framework.WithRelayerPrivateKey(relayerKey),
 		framework.WithBurnContract(&polycfg.BurnContractInfo{
 			Address:            contractAddr,
 			DestinationAddress: destinationAddr,
