@@ -49,6 +49,7 @@ func (t *TestRelayer) Start() {
 		"--internal-chain-rpc", t.validatorJSONRPC,
 		"--external-chain-id", strconv.FormatUint(t.externalChainID, 10),
 		"--poll-interval", strconv.Itoa(5),
+		"--database-path", t.t.TempDir() + "bridge-relayer.db",
 	}
 
 	stdout := t.clusterConfig.GetStdout("bridge-relayer")

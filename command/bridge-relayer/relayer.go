@@ -30,6 +30,7 @@ func runCommand(*cobra.Command, []string) {
 		bridgerelayer.WithGenesisPath(params.genesisPath),
 		bridgerelayer.WithLogLevel(hclog.LevelFromString(params.logLevel)),
 		bridgerelayer.WithLogJsonFormat(params.jsonFormatOuttputter),
+		bridgerelayer.WithDBPath(params.boltDbPath),
 	)
 
 	if err != nil {
@@ -109,6 +110,13 @@ func setFlags(cmd *cobra.Command) {
 		"log-path",
 		defaultConfig.LogFilePath,
 		"write all logs to the file at specified location instead of writing them to console",
+	)
+
+	cmd.Flags().StringVar(
+		&params.boltDbPath,
+		"database-path",
+		"",
+		"path to bolt database",
 	)
 
 	_ = cmd.MarkFlagRequired("private-key")

@@ -33,4 +33,7 @@ type commandParams struct {
 
 	// path to log file.
 	logFilePath string
+
+	// path to bolt db
+	boltDbPath string
 }
