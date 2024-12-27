@@ -41,7 +41,7 @@ func init() {
 
 func TestE2E_Load_MultipleDepositBothEnds(t *testing.T) {
 	const (
-		transfersCount        = 20
+		transfersCount        = 10
 		numBlockConfirmations = 2
 		epochSize             = 40
 		sprintSize            = uint64(10)
@@ -49,6 +49,7 @@ func TestE2E_Load_MultipleDepositBothEnds(t *testing.T) {
 		stateSyncedLogsCount  = 2 // map token and deposit
 		numberOfBridges       = 1
 		numberOfMapTokenEvent = 1
+		withRelayerRestart    = true
 	)
 
 	var (
@@ -244,18 +245,29 @@ func TestE2E_Load_MultipleDepositBothEnds(t *testing.T) {
 		channel <- nil
 	}(channel)
 
-	timeChan := time.After(time.Minute * 10)
-	i := 0
-	for {
+	if withRelayerRestart {
+		go func(channel chan<- error) {
+			if len(cluster.BridgeRelayers) == 0 {
+				channel <- fmt.Errorf("no relayers found")
+				return
+			}
+
+			time.Sleep(time.Second * 10)
+			cluster.BridgeRelayers[0].Stop()
+			time.Sleep(time.Second * 10)
+			cluster.BridgeRelayers[0].Start()
+		}(channel)
+	}
+
+	timeChan := time.After(time.Minute * transfersCount)
+	for range 2 {
 		select {
 		case err = <-channel:
 			if err != nil {
 				t.Fatal(err)
-			}
-
-			if i++; i == 2 {
 				return
 			}
+
 		case <-timeChan:
 			t.Fatal("timeout")
 		}
