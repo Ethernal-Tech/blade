@@ -305,7 +305,8 @@ func (t *TestBridge) cmdRun(args ...string) error {
 }
 
 // deployExternalChainContracts deploys and initializes external chain contracts
-func (t *TestBridge) deployExternalChainContracts(genesisPath string, threshold uint64) error {
+func (t *TestBridge) deployExternalChainContracts(genesisPath string, threshold uint64,
+	predeployAddress string, isExternal bool) error {
 	args := []string{
 		"bridge",
 		"deploy",
@@ -314,6 +315,14 @@ func (t *TestBridge) deployExternalChainContracts(genesisPath string, threshold 
 		"--test",
 		"--bootstrap",
 		"--batch-threshold", strconv.FormatUint(threshold, 10),
+	}
+
+	if predeployAddress != "" {
+		if isExternal {
+			args = append(args, "--external-gateway-address", predeployAddress)
+		} else {
+			args = append(args, "--internal-gateway-address", predeployAddress)
+		}
 	}
 
 	if err := t.cmdRun(args...); err != nil {

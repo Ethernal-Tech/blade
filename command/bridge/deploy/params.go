@@ -17,20 +17,24 @@ const (
 	isBootstrapFlag          = "bootstrap"
 	externalRPCFlag          = "external-json-rpc"
 	internalRPCFlag          = "internal-json-rpc"
+	internalGatewayAddress   = "internal-gateway-address"
+	externalGatewayAddress   = "external-gateway-address"
 	bridgeBatchThresholdFlag = "batch-threshold"
 )
 
 type deployParams struct {
-	genesisPath          string
-	deployerKey          string
-	externalRPCAddress   string
-	internalRPCAddress   string
-	rootERC20TokenAddr   string
-	proxyContractsAdmin  string
-	txTimeout            time.Duration
-	isTestMode           bool
-	isBootstrap          bool
-	bridgeBatchThreshold uint64
+	genesisPath            string
+	deployerKey            string
+	externalRPCAddress     string
+	internalRPCAddress     string
+	rootERC20TokenAddr     string
+	proxyContractsAdmin    string
+	txTimeout              time.Duration
+	isTestMode             bool
+	internalGatewayAddress string
+	externalGatewayAddress string
+	isBootstrap            bool
+	bridgeBatchThreshold   uint64
 }
 
 func (ip *deployParams) validateFlags() error {
