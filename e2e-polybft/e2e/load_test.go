@@ -273,3 +273,144 @@ func TestE2E_Load_MultipleDepositBothEnds(t *testing.T) {
 		}
 	}
 }
+
+func TestE2E_Load_DepositTestWithAddingTokensLater(t *testing.T) {
+	const (
+		transfersCount = uint64(2)
+		amount         = 100
+		// make epoch size long enough, so that all exit events are processed within the same epoch
+		epochSize        = 30
+		sprintSize       = uint64(5)
+		numberOfAttempts = 4
+		numberOfBridges  = 1
+	)
+
+	// init private keys and amounts
+	depositorKeys := make([]string, transfersCount)
+	depositors := make([]types.Address, transfersCount)
+	amounts := make([]string, transfersCount)
+	funds := make([]*big.Int, transfersCount)
+	singleToken := ethgo.Ether(1)
+
+	admin, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
+	adminAddr := admin.Address()
+
+	for i := uint64(0); i < transfersCount; i++ {
+		key, err := crypto.GenerateECDSAKey()
+		require.NoError(t, err)
+
+		rawKey, err := key.MarshallPrivateKey()
+		require.NoError(t, err)
+
+		depositorKeys[i] = hex.EncodeToString(rawKey)
+		depositors[i] = key.Address()
+		funds[i] = singleToken
+		amounts[i] = fmt.Sprintf("%d", amount)
+
+		t.Logf("Depositor#%d=%s\n", i+1, depositors[i])
+	}
+
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
+	// setup cluster
+	cluster := framework.NewTestCluster(t, 5,
+		framework.WithNumBlockConfirmations(0),
+		framework.WithEpochSize(epochSize),
+		framework.WithBridges(numberOfBridges),
+		framework.WithBridgeBlockListAdmin(adminAddr),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
+		framework.WithPremine(append(depositors, adminAddr)...)) //nolint:makezero
+	defer cluster.Stop()
+
+	bridgeOne := 0
+
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	require.NoError(t, err)
+
+	validatorSrv := cluster.Servers[0]
+	childEthEndpoint := validatorSrv.JSONRPC()
+
+	cluster.WaitForReady(t)
+
+	externalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(cluster.Bridges[bridgeOne].JSONRPCAddr()))
+	require.NoError(t, err)
+
+	chainID, err := externalChainTxRelayer.Client().ChainID()
+	require.NoError(t, err)
+
+	bridgeCfg := polybftCfg.Bridge[chainID.Uint64()]
+
+	internalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(childEthEndpoint))
+	require.NoError(t, err)
+
+	// rootToken represents deposit token (basically native mintable token from the Supernets)
+	rootToken := contracts.NativeERC20TokenContract
+
+	// allow list each depositor and make sure deposit is successfully executed
+	for i, key := range depositorKeys {
+		// make sure deposit is successfully executed
+		err = cluster.Bridges[bridgeOne].Deposit(
+			common.ERC20,
+			rootToken,
+			bridgeCfg.InternalMintableERC20PredicateAddr,
+			key,
+			depositors[i].String(),
+			amounts[i],
+			"",
+			validatorSrv.JSONRPCAddr(),
+			"",
+			true)
+		require.NoError(t, err)
+	}
+
+	time.Sleep(time.Second * 10)
+	// fund accounts on external
+	require.NoError(t, validatorSrv.ExternalChainFundFor(depositors, funds, uint64(bridgeOne)))
+	time.Sleep(time.Second * 10)
+
+	for i, key := range depositorKeys {
+		// make sure deposit is successfully executed
+		err = cluster.Bridges[bridgeOne].Deposit(
+			common.ERC20,
+			rootToken,
+			bridgeCfg.InternalMintableERC20PredicateAddr,
+			key,
+			depositors[i].String(),
+			amounts[i],
+			"",
+			validatorSrv.JSONRPCAddr(),
+			"",
+			true)
+		require.NoError(t, err)
+	}
+
+	// first exit event is mapping child token on a rootchain
+	require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
+		for i := uint64(1); i <= transfersCount+1; i++ {
+			if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i+uint64(len(depositorKeys)), false) {
+				return false
+			}
+		}
+
+		return true
+	}))
+
+	// retrieve child mintable token address from both chains and make sure they are the same
+	l1ChildToken := getChildToken(t, contractsapi.ChildERC20Predicate.Abi, bridgeCfg.ExternalMintableERC20PredicateAddr,
+		rootToken, externalChainTxRelayer)
+	l2ChildToken := getChildToken(t, contractsapi.RootERC20Predicate.Abi, bridgeCfg.InternalMintableERC20PredicateAddr,
+		rootToken, internalChainTxRelayer)
+
+	t.Log("L1 child token", l1ChildToken)
+	t.Log("L2 child token", l2ChildToken)
+	require.Equal(t, l1ChildToken, l2ChildToken)
+
+	// check that balances on external chain have increased by deposited amounts
+	for _, depositor := range depositors {
+		balance := erc20BalanceOf(t, depositor, l1ChildToken, externalChainTxRelayer)
+		require.Equal(t, big.NewInt(amount*2), balance)
+	}
+}
