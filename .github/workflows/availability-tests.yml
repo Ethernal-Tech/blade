@@ -70,6 +70,8 @@ jobs:
       - name: Get latest block number
         id: latest_block_number
         run: |
+          set -e
+          curl $rpc_url --max-time 30 > /dev/null 2>&1
           current_block_number=$(cast to-dec `cast rpc --rpc-url $rpc_url eth_blockNumber | sed 's/"//g'`)
           sleep 15
           latest_block_number=$(cast to-dec `cast rpc --rpc-url $rpc_url eth_blockNumber | sed 's/"//g'`)
