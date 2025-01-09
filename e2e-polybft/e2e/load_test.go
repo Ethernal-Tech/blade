@@ -3,23 +3,46 @@ package e2e
 import (
 	"fmt"
 	"math/big"
+	"os"
 	"path"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/command/bridge/common"
 	bridgeHelper "github.com/0xPolygon/polygon-edge/command/bridge/helper"
+	"github.com/0xPolygon/polygon-edge/command/genesis"
+	validatorHelper "github.com/0xPolygon/polygon-edge/command/validator/helper"
 	polycfg "github.com/0xPolygon/polygon-edge/consensus/polybft/config"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
+	polytypes "github.com/0xPolygon/polygon-edge/consensus/polybft/types"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/validator"
 	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/e2e-polybft/framework"
 	"github.com/0xPolygon/polygon-edge/helper/hex"
+	"github.com/0xPolygon/polygon-edge/jsonrpc"
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/Ethernal-Tech/ethgo"
 	"github.com/stretchr/testify/require"
 )
+
+func init() {
+	wd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	parent := filepath.Dir(wd)
+	parent = strings.Trim(parent, "e2e-polybft")
+	wd = filepath.Join(parent, "/artifacts/blade")
+	os.Setenv("EDGE_BINARY", wd)
+	os.Setenv("E2E_TESTS", "true")
+	os.Setenv("E2E_LOGS", "true")
+	os.Setenv("E2E_LOG_LEVEL", "debug")
+}
 
 func TestE2E_Load_MultipleDepositBothEnds(t *testing.T) {
 	const (
@@ -394,5 +417,256 @@ func TestE2E_Load_DepositTestWithAddingTokensLater(t *testing.T) {
 	for _, depositor := range depositors {
 		balance := erc20BalanceOf(t, depositor, l1ChildToken, externalChainTxRelayer)
 		require.Equal(t, big.NewInt(amount*2), balance)
+	}
+}
+
+func TestE2E_Load_ValidatorChangeSet(t *testing.T) {
+	const (
+		transfersCount        = 2
+		numBlockConfirmations = 2
+		epochSize             = 40
+		sprintSize            = uint64(10)
+		numberOfAttempts      = 7
+		stateSyncedLogsCount  = 2 // map token and deposit
+		numberOfBridges       = 1
+		numberOfMapTokenEvent = 1
+		votingPowerChanges    = 2
+	)
+
+	var (
+		bridgeAmount        = ethgo.Ether(2)
+		bridgeMessageResult contractsapi.BridgeMessageResultEvent
+	)
+
+	accountAddrs := make([]types.Address, transfersCount)
+	accounts := make([]string, transfersCount)
+	amounts := make([]string, transfersCount)
+	accountKeys := make([]string, transfersCount)
+
+	for i := 0; i < transfersCount; i++ {
+		key, err := crypto.GenerateECDSAKey()
+		require.NoError(t, err)
+
+		rawKey, err := key.MarshallPrivateKey()
+		require.NoError(t, err)
+
+		accountKeys[i] = hex.EncodeToString(rawKey)
+		accountAddrs[i] = key.Address()
+		accounts[i] = key.Address().String()
+		amounts[i] = fmt.Sprintf("%d", bridgeAmount)
+
+		t.Logf("Receiver#%d=%s\n", i+1, accounts[i])
+	}
+
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
+	cluster := framework.NewTestCluster(t, 5,
+		framework.WithTestRewardToken(),
+		framework.WithNumBlockConfirmations(numBlockConfirmations),
+		framework.WithEpochSize(epochSize),
+		framework.WithEpochReward(1000000),
+		framework.WithBridges(numberOfBridges),
+		framework.WithBridgeBatchThreshold(100),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
+		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
+			for i := 0; i < len(addrs); i++ {
+				// premine receivers, so that they are able to do withdrawals
+				tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
+			}
+
+			tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
+
+			tcc.Premine = append(tcc.Premine, accounts...)
+			tcc.Premine = append(tcc.Premine, relayerPrivateKey.String())
+		}))
+
+	defer cluster.Stop()
+
+	bridgeOne := 0
+
+	cluster.WaitForReady(t)
+
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	require.NoError(t, err)
+
+	validatorSrv := cluster.Servers[0]
+
+	validatorEndpoint := validatorSrv.JSONRPC()
+
+	externalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(cluster.Bridges[0].JSONRPCAddr()))
+	require.NoError(t, err)
+
+	chainID, err := externalChainTxRelayer.Client().ChainID()
+	require.NoError(t, err)
+
+	bridgeCfg := polybftCfg.Bridge[chainID.Uint64()]
+
+	txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(validatorEndpoint))
+	require.NoError(t, err)
+
+	deployerKey, err := bridgeHelper.DecodePrivateKey("")
+	require.NoError(t, err)
+
+	deployTx := types.NewTx(types.NewLegacyTx(
+		types.WithTo(nil),
+		types.WithInput(contractsapi.RootERC20.Bytecode),
+	))
+
+	receipt, err := externalChainTxRelayer.SendTransaction(deployTx, deployerKey)
+	require.NoError(t, err)
+	require.NotNil(t, receipt)
+	require.Equal(t, uint64(types.ReceiptSuccess), receipt.Status)
+
+	rootERC20Token := types.Address(receipt.ContractAddress)
+
+	finalBlockNum := 1 * sprintSize
+	require.NoError(t, cluster.WaitForBlock(finalBlockNum, 2*time.Minute))
+
+	bridge := cluster.Bridges[bridgeOne]
+
+	deposit := func() {
+		for i := range accounts {
+			err = bridge.Deposit(
+				common.ERC20,
+				rootERC20Token,
+				bridgeCfg.ExternalERC20PredicateAddr,
+				bridgeHelper.TestAccountPrivKey,
+				accounts[i],
+				amounts[i],
+				"",
+				bridge.JSONRPCAddr(),
+				bridgeHelper.TestAccountPrivKey,
+				false,
+			)
+			require.NoError(t, err)
+
+			t.Log("deposit made for account=", accounts[i], "external to internal")
+		}
+
+		finalBlockNum = 10 * sprintSize
+		err = cluster.WaitForBlock(finalBlockNum, 5*time.Minute)
+		require.NoError(t, err)
+
+		logs, err := getFilteredLogs(bridgeMessageResult.Sig(), 0, finalBlockNum, validatorEndpoint)
+		require.NoError(t, err)
+
+		assertBridgeEventResultSuccess(t, logs, transfersCount+1)
+
+		childERC20Token := getChildToken(t, contractsapi.RootERC20Predicate.Abi,
+			bridgeCfg.ExternalERC20PredicateAddr, rootERC20Token, externalChainTxRelayer)
+
+		for _, receiver := range accounts {
+			balance := erc20BalanceOf(t, types.StringToAddress(receiver), childERC20Token, txRelayer)
+			t.Log("balance=", balance, "receiver=", receiver)
+			require.True(t, balance.Cmp(bridgeAmount) == 0)
+		}
+	}
+
+	deposit()
+
+	changeVotingPowerForValidators(t, cluster, votingPowerChanges, txRelayer, epochSize)
+
+	deposit()
+}
+
+func changeVotingPowerForValidators(t *testing.T, cluster *framework.TestCluster, votingPowerChanges int, txRelayer txrelayer.TxRelayer, epochSize uint64) {
+	validatorSecretFiles, err := genesis.GetValidatorKeyFiles(cluster.Config.TmpDir, cluster.Config.ValidatorPrefix)
+	require.NoError(t, err)
+	votingPowerChangeValidators := make([]types.Address, votingPowerChanges)
+
+	for i := 0; i < votingPowerChanges; i++ {
+		validator, err := validatorHelper.GetAccountFromDir(path.Join(cluster.Config.TmpDir, validatorSecretFiles[i]))
+		require.NoError(t, err)
+
+		votingPowerChangeValidators[i] = validator.Ecdsa.Address()
+	}
+
+	// validatorsMap holds only changed validators
+	validatorsMap := make(map[types.Address]*validator.ValidatorInfo, votingPowerChanges)
+	bigZero := big.NewInt(0)
+
+	queryValidators := func(handler func(idx int, validatorInfo *validator.ValidatorInfo)) {
+		for i, validatorAddr := range votingPowerChangeValidators {
+			// query validator info
+			validatorInfo, err := validatorHelper.GetValidatorInfo(
+				validatorAddr,
+				txRelayer)
+			require.NoError(t, err)
+
+			handler(i, validatorInfo)
+		}
+	}
+
+	queryValidators(func(idx int, validator *validator.ValidatorInfo) {
+		t.Logf("[Validator#%d] Voting power (original)=%d, rewards=%d\n",
+			idx+1, validator.Stake, validator.WithdrawableRewards)
+
+		validatorsMap[validator.Address] = validator
+		validatorSrv := cluster.Servers[idx]
+
+		// validator should have some withdrawable rewards by now
+		require.True(t, validator.WithdrawableRewards.Cmp(bigZero) > 0)
+
+		// withdraw pending rewards
+		require.NoError(t, validatorSrv.WithdrawRewards())
+
+		// stake withdrawable rewards (since rewards are in native erc20 token in this test)
+		require.NoError(t, validatorSrv.Stake(types.ZeroAddress, validator.WithdrawableRewards))
+	})
+
+	queryValidators(func(idx int, validator *validator.ValidatorInfo) {
+		t.Logf("[Validator#%d] Voting power (after stake)=%d\n", idx+1, validator.Stake)
+
+		previousValidatorInfo := validatorsMap[validator.Address]
+		stakedAmount := new(big.Int).Add(previousValidatorInfo.WithdrawableRewards, previousValidatorInfo.Stake)
+
+		// assert that total stake has increased by staked amount
+		require.Equal(t, stakedAmount, validator.Stake)
+
+		validatorsMap[validator.Address] = validator
+	})
+
+	epochEndingBlock := uint64(2 * epochSize)
+
+	// start checking for delta from this epoch ending block
+	epochEndingBlock += epochSize
+
+	didVotingPowerChangeInConsensus := false
+	numOfEpochsToCheckChange := 2
+
+	// we will check for couple of epoch ending blocks to see Voting Power change
+	for i := 0; i < numOfEpochsToCheckChange; i++ {
+		require.NoError(t, cluster.WaitForBlock(epochEndingBlock, time.Minute))
+
+		latestBlock, err := cluster.Servers[0].JSONRPC().GetBlockByNumber(jsonrpc.BlockNumber(epochEndingBlock), false)
+		require.NoError(t, err)
+
+		epochEndingBlock += epochSize
+
+		currentExtra, err := polytypes.GetIbftExtra(latestBlock.Header.ExtraData)
+		require.NoError(t, err)
+
+		if currentExtra.Validators == nil || currentExtra.Validators.IsEmpty() {
+			continue
+		}
+
+		for addr, validator := range validatorsMap {
+			if !currentExtra.Validators.Updated.ContainsAddress(addr) {
+				continue
+			}
+
+			if currentExtra.Validators.Updated.GetValidatorMetadata(addr).VotingPower.Cmp(validator.Stake) != 0 {
+				continue
+			}
+		}
+
+		didVotingPowerChangeInConsensus = true
+
+		break
+	}
+
+	if !didVotingPowerChangeInConsensus {
+		t.Errorf("voting power did not change in consensus for %d epochs", numOfEpochsToCheckChange)
 	}
 }
