@@ -445,101 +445,87 @@ func (r *BridgeRelayer) Start() {
 				r.logger.Info("Found", len(batches), "new batches")
 			}
 
-			for i, batch := range batches {
-				r.logger.Info("Found batch with id", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))), "events start-id",
-					batch.StartID.String(), "events end-id",
-					batch.EndID.String(), "is rollback batch", batch.IsRollback)
+			for _, batch := range batches {
+				if batch.ValidatorSetBatchID.Cmp(big.NewInt(0)) == 0 {
+					r.logger.Info("Found batch with id", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))), "events start-id",
+						batch.StartID.String(), "events end-id",
+						batch.EndID.String(), "is rollback batch", batch.IsRollback)
 
-				var (
-					sourceRelayer      txrelayer.TxRelayer
-					sourceGateway      types.Address
-					destinationRelayer txrelayer.TxRelayer
-					destinationGateway types.Address
-				)
-
-				if batch.SourceChainID.Cmp(r.externalChainID) == 0 {
-					sourceGateway = r.externalGatewayAddr
-					sourceRelayer = r.externalClient
-
-					destinationGateway = r.internalGatewayAddr
-					destinationRelayer = r.internalClient
-
-					if batch.IsRollback {
-						destinationGateway = r.externalGatewayAddr
-						destinationRelayer = r.externalClient
+					if err := r.sendSignedBridgeMessageBatch(&batch); err != nil {
+						r.logger.Info("bridge batch didn't send successfully")
 					}
-				} else {
-					sourceGateway = r.internalGatewayAddr
-					sourceRelayer = r.internalClient
 
-					destinationGateway = r.externalGatewayAddr
-					destinationRelayer = r.externalClient
-
-					if batch.IsRollback {
-						destinationGateway = r.internalGatewayAddr
-						destinationRelayer = r.internalClient
-					}
-				}
-
-				messages, err := GetBridgeMessagesInRange(batches[i].StartID, batches[i].EndID, sourceRelayer, sourceGateway)
-				if err != nil {
-					r.logger.Error("failed to get messages from source gateway contract", "err", err)
-
-					continue
-				}
-
-				input, err := (&contractsapi.ReceiveBatchGatewayFn{
-					BatchMessages:     messages,
-					SignedBridgeBatch: &batches[i],
-				}).EncodeAbi()
-				if err != nil {
-					r.logger.Error("failed to encode abi", "err", err)
-
-					continue
-				}
-
-				tx := types.NewTx(types.NewLegacyTx(
-					types.WithFrom(r.privateKey.Address()),
-					types.WithTo(&destinationGateway),
-					types.WithInput(input),
-				))
-
-				_, err = destinationRelayer.SendTransaction(tx, r.privateKey)
-				if err != nil {
-					r.logger.Error("id-ed batch has already been processed or cannot be procesed", "err", err)
-				} else {
 					r.logger.Info("id-ed batch",
 						"has been successfully processed/transferred",
 						big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))))
-				}
 
-				lastBridged.Add(lastBridged, big.NewInt(1))
+					lastBridged.Add(lastBridged, big.NewInt(1))
 
-				err = r.db.Update(func(tx *bolt.Tx) error {
-					bucket := tx.Bucket([]byte("lastBridgedBucket"))
+					err = r.db.Update(func(tx *bolt.Tx) error {
+						bucket := tx.Bucket([]byte("lastBridgedBucket"))
 
-					if bucket == nil {
-						return errors.New("cannot find a bucket with the `lastBridgedBucket` name")
-					}
-
-					if value, err := json.Marshal(lastBridged.String()); err != nil {
-						return err
-					} else {
-						if err = bucket.Put(key, value); err != nil {
-							return err
+						if bucket == nil {
+							return errors.New("cannot find a bucket with the `lastBridgedBucket` name")
 						}
+
+						if value, err := json.Marshal(lastBridged.String()); err != nil {
+							return err
+						} else {
+							if err = bucket.Put(key, value); err != nil {
+								return err
+							}
+						}
+
+						return nil
+					})
+
+					if err != nil {
+						fmt.Println(err)
+
+						return
 					}
 
-					return nil
-				})
+					r.logger.Info("batch id has been successfully stored into bolt DB", "bridge id", lastBridged.String())
+				} else {
+					r.logger.Info("Trying to get a commit validator set", "the id higher than", lastBridged.String())
+					newValidatorSet, err := GetBridgeValidatorSet(batch.ValidatorSetBatchID, r.internalClient)
+					if err != nil {
+						r.logger.Error("failed to get validator set from BridgeStorage contract", "err", err)
+					}
 
-				if err != nil {
-					fmt.Println(err)
+					if err := r.sendCommitValidatorSet(newValidatorSet); err != nil {
+						r.logger.Error("failed to send validator set on gateway", "err", err)
+					}
 
-					return
+					lastBridged.Add(lastBridged, big.NewInt(1))
+
+					err = r.db.Update(func(tx *bolt.Tx) error {
+						bucket := tx.Bucket([]byte("lastBridgedBucket"))
+
+						if bucket == nil {
+							return errors.New("cannot find a bucket with the `lastBridgedBucket` name")
+						}
+
+						if value, err := json.Marshal(lastBridged.String()); err != nil {
+							return err
+						} else {
+							if err = bucket.Put(key, value); err != nil {
+								return err
+							}
+						}
+
+						return nil
+					})
+
+					if err != nil {
+						r.logger.Error("")
+
+						return
+					}
+
+					r.logger.Info("batch id has been successfully stored into bolt DB", "bridge id", lastBridged.String())
 				}
 
-				r.logger.Info("batch id has been successfully stored into bolt DB", "bridge id", lastBridged.String())
 			}
 		}
 	}
@@ -584,4 +570,112 @@ func newLoggerFromConfig(options *options) (hclog.Logger, error) {
 	}
 
 	return newCLILogger(options), nil
+}
+
+func (r *BridgeRelayer) sendSignedBridgeMessageBatch(batch *contractsapi.SignedBridgeMessageBatch) error {
+	var (
+		sourceRelayer      txrelayer.TxRelayer
+		sourceGateway      types.Address
+		destinationRelayer txrelayer.TxRelayer
+		destinationGateway types.Address
+	)
+
+	if batch.SourceChainID.Cmp(r.externalChainID) == 0 {
+		sourceGateway = r.externalGatewayAddr
+		sourceRelayer = r.externalClient
+
+		destinationGateway = r.internalGatewayAddr
+		destinationRelayer = r.internalClient
+
+		if batch.IsRollback {
+			destinationGateway = r.externalGatewayAddr
+			destinationRelayer = r.externalClient
+		}
+	} else {
+		sourceGateway = r.internalGatewayAddr
+		sourceRelayer = r.internalClient
+
+		destinationGateway = r.externalGatewayAddr
+		destinationRelayer = r.externalClient
+
+		if batch.IsRollback {
+			destinationGateway = r.internalGatewayAddr
+			destinationRelayer = r.internalClient
+		}
+	}
+
+	messages, err := GetBridgeMessagesInRange(batch.StartID, batch.EndID, sourceRelayer, sourceGateway)
+	if err != nil {
+		return fmt.Errorf("failed to get messages from source gateway contract, err: %w", err)
+	}
+
+	input, err := (&contractsapi.ReceiveBatchGatewayFn{
+		BatchMessages:     messages,
+		SignedBridgeBatch: batch,
+	}).EncodeAbi()
+	if err != nil {
+		return fmt.Errorf("failed to encode abi, err: %w", err)
+	}
+
+	tx := types.NewTx(types.NewLegacyTx(
+		types.WithFrom(r.privateKey.Address()),
+		types.WithTo(&destinationGateway),
+		types.WithInput(input),
+	))
+
+	_, err = destinationRelayer.SendTransaction(tx, r.privateKey)
+	if err != nil {
+		return fmt.Errorf("id-ed batch has already been processed or cannot be procesed, err: %w", err)
+	}
+
+	return nil
+}
+
+func (r *BridgeRelayer) sendCommitValidatorSet(newValidatorSet *contractsapi.SignedValidatorSet) error {
+	input, err := (&contractsapi.CommitValidatorSetBridgeStorageFn{
+		NewValidatorSet: newValidatorSet.NewValidatorSet,
+		Signature:       newValidatorSet.Signature,
+		Bitmap:          newValidatorSet.Bitmap,
+	}).EncodeAbi()
+	if err != nil {
+		return err
+	}
+
+	txn := types.NewTx(types.NewLegacyTx(
+		types.WithFrom(r.privateKey.Address()),
+		types.WithTo(&r.externalGatewayAddr),
+		types.WithInput(input),
+	))
+
+	receipt, err := r.externalClient.SendTransaction(txn, r.privateKey)
+	if err != nil {
+		return fmt.Errorf("failed to send commit validator set transaction to external chain, err: %w", err)
+	}
+
+	r.logger.Debug("sent commit validator set transaction to external chain",
+		"gatewayAddr", r.externalGatewayAddr,
+		"status", types.ReceiptStatus(receipt.Status),
+		"txHash", receipt.TransactionHash,
+		"blockNumber", receipt.BlockNumber,
+	)
+
+	txn = types.NewTx(types.NewLegacyTx(
+		types.WithFrom(r.privateKey.Address()),
+		types.WithTo(&r.internalGatewayAddr),
+		types.WithInput(input),
+	))
+
+	receipt, err = r.internalClient.SendTransaction(txn, r.privateKey)
+	if err != nil {
+		return err
+	}
+
+	r.logger.Debug("sent commit validator set transaction to internal chain",
+		"gatewayAddr", r.internalGatewayAddr,
+		"status", types.ReceiptStatus(receipt.Status),
+		"txHash", receipt.TransactionHash,
+		"blockNumber", receipt.BlockNumber,
+	)
+
+	return nil
 }

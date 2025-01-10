@@ -89,6 +89,8 @@ func setFlags(cmd *cobra.Command) {
 		"relayer's private key",
 	)
 
+	_ = cmd.MarkFlagRequired("private-key")
+
 	cmd.Flags().BoolVarP(
 		&params.jsonFormatOuttputter,
 		"json",
@@ -118,6 +120,4 @@ func setFlags(cmd *cobra.Command) {
 		"",
 		"path to bolt database",
 	)
-
-	_ = cmd.MarkFlagRequired("private-key")
 }

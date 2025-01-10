@@ -786,11 +786,10 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		err = bridge.fundAddressesOnExternal(polybftConfig)
 		require.NoError(t, err)
 
-		if cluster.Config.RelayerPrivateKey != nil {
-			if cluster.Config.RelayerPrivateKey.Address() != types.ZeroAddress {
-				err = bridge.fundRelayerAddressOnExternal(cluster.Config.RelayerPrivateKey.Address())
-				require.NoError(t, err)
-			}
+		if cluster.Config.RelayerPrivateKey != nil && cluster.Config.RelayerPrivateKey.Address() != types.ZeroAddress {
+			err = bridge.fundRelayerAddressOnExternal(cluster.Config.RelayerPrivateKey.Address())
+			require.NoError(t, err)
+
 		}
 
 		// add premine if token is non-mintable
@@ -897,6 +896,10 @@ func (c *TestCluster) Stop() {
 		if srv.isRunning() {
 			srv.Stop()
 		}
+	}
+
+	for _, relayer := range c.BridgeRelayers {
+		relayer.stop()
 	}
 }
 

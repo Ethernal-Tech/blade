@@ -95,15 +95,16 @@ func GetBridgeBatchesFromNumber(batchID *big.Int,
 		}
 
 		signedBridgeBatches[i] = contractsapi.SignedBridgeMessageBatch{
-			RootHash:           decodeRootHash,
-			StartID:            decodedStartID,
-			EndID:              decodedEndID,
-			SourceChainID:      decodedSourceChainID,
-			DestinationChainID: decodedDestinationChainID,
-			Signature:          decodedSignature,
-			Bitmap:             decodedBitmap,
-			Threshold:          decodedThreshold,
-			IsRollback:         decodedIsRollback,
+			RootHash:            decodeRootHash,
+			StartID:             decodedStartID,
+			EndID:               decodedEndID,
+			SourceChainID:       decodedSourceChainID,
+			DestinationChainID:  decodedDestinationChainID,
+			Signature:           decodedSignature,
+			Bitmap:              decodedBitmap,
+			Threshold:           decodedThreshold,
+			IsRollback:          decodedIsRollback,
+			ValidatorSetBatchID: big.NewInt(0),
 		}
 	}
 
@@ -188,4 +189,35 @@ func GetBridgeMessagesInRange(startID, endID *big.Int, txrelayer txrelayer.TxRel
 	}
 
 	return bridgeMessages, nil
+}
+
+func GetBridgeValidatorSet(commitValidatorSetid *big.Int, txrelayer txrelayer.TxRelayer) (*contractsapi.SignedValidatorSet, error) {
+	funcName := "getCommittedValidatorSet"
+	validatorSet := &contractsapi.SignedValidatorSet{}
+
+	getCommittedBatchFn := contractsapi.BridgeStorage.Abi.GetMethod(funcName)
+	if getCommittedBatchFn == nil {
+		return nil, fmt.Errorf("failed to resolve %s function", funcName)
+	}
+
+	encode, err := getCommittedBatchFn.Encode([]interface{}{commitValidatorSetid})
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := txrelayer.Call(types.ZeroAddress, contracts.BridgeStorageContract, encode)
+	if err != nil {
+		return nil, err
+	}
+
+	byteResponse, err := hex.DecodeHex(response)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode hex response, %w", err)
+	}
+
+	if err := validatorSet.DecodeAbi(byteResponse[types.StorageSlotSize:]); err != nil {
+		return nil, err
+	}
+
+	return validatorSet, nil
 }
