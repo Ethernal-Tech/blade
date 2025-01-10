@@ -23,6 +23,8 @@ func NewTestBridgeRelayer(
 	genesisPath string,
 	key *crypto.ECDSAKey,
 	validatorJSONRPC string) *TestRelayer {
+	t.Helper()
+
 	relayer := &TestRelayer{
 		t:             t,
 		clusterConfig: clusterConfig,

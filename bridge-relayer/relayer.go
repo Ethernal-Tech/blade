@@ -432,6 +432,7 @@ func (r *BridgeRelayer) Start() {
 		select {
 		case <-t.C:
 			r.logger.Info("Trying to get a batches", "the id higher than", lastBridged.String())
+
 			batches, err := GetBridgeBatchesFromNumber(big.NewInt(0).Add(lastBridged, big.NewInt(1)), r.internalClient)
 			if err != nil {
 				r.logger.Error("failed to get batches from BridgeStorage contract", "err", err)
