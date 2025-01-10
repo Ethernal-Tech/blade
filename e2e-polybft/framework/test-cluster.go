@@ -18,9 +18,11 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/command"
+	"github.com/0xPolygon/polygon-edge/command/bridge/helper"
 	"github.com/0xPolygon/polygon-edge/command/genesis"
 	polycfg "github.com/0xPolygon/polygon-edge/consensus/polybft/config"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
+	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/helper/common"
 	"github.com/0xPolygon/polygon-edge/jsonrpc"
@@ -55,10 +57,17 @@ const (
 )
 
 type NodeType int
+type RollbackMode int
 
 const (
 	None      NodeType = 0
 	Validator NodeType = 1
+)
+
+const (
+	NoRollback RollbackMode = iota
+	E2IRollback
+	I2ERollback
 )
 
 func (nt NodeType) IsSet(value NodeType) bool {
@@ -138,6 +147,7 @@ type TestClusterConfig struct {
 
 	IsPropertyTest  bool
 	TestRewardToken string
+	RollbackMode    RollbackMode
 
 	RootTrackerPollInterval time.Duration
 
@@ -480,6 +490,12 @@ func WithTLSCertificate(certFile string, keyFile string) ClusterOption {
 	}
 }
 
+func WithRollback(rollbackMode RollbackMode) ClusterOption {
+	return func(h *TestClusterConfig) {
+		h.RollbackMode = rollbackMode
+	}
+}
+
 func WithBridgeBatchThreshold(threshold uint64) ClusterOption {
 	return func(h *TestClusterConfig) {
 		h.BridgeBatchThreshold = threshold
@@ -742,44 +758,77 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		if config.PredeployContract != "" {
 			parts := strings.Split(config.PredeployContract, ":")
 			require.Equal(t, 2, len(parts))
-			args = append(args, "--stake-token", parts[0])
-		}
 
+			if parts[1] == "RootERC20" {
+				args = append(args, "--stake-token", parts[0])
+			}
+		}
 		// run genesis command with all the arguments
 		err = cluster.cmdRun(args...)
 		require.NoError(t, err)
-	}
 
-	if config.PredeployContract != "" {
-		parts := strings.Split(config.PredeployContract, ":")
-		require.Equal(t, 2, len(parts))
-		// run predeploy genesis population
-		args := []string{
-			"genesis", "predeploy",
-			"--predeploy-address", parts[0],
-			"--artifacts-name", parts[1],
-			"--chain", genesisPath,
-			"--deployer-address", config.BladeAdmin}
+		if config.PredeployContract != "" {
+			parts := strings.Split(config.PredeployContract, ":")
+			require.Equal(t, 2, len(parts))
 
-		err = cluster.cmdRun(args...)
-		require.NoError(t, err)
+			// run predeploy genesis population
+			args := []string{
+				"genesis", "predeploy",
+				"--predeploy-address", parts[0],
+				"--artifacts-name", parts[1],
+				"--chain", genesisPath,
+				"--deployer-address", bladeAdmin}
+
+			err = cluster.cmdRun(args...)
+			require.NoError(t, err)
+		}
 	}
 
 	bridgeJSONRPCs := make([]string, config.NumberOfBridges)
+
+	var gatewayContractAddress string
 
 	for i := uint64(0); i < cluster.Config.NumberOfBridges; i++ {
 		// start bridge
 		bridge, err := NewTestBridge(t, cluster.Config, i+1)
 		require.NoError(t, err)
 
+		var isExternal bool
+
+		if config.RollbackMode == I2ERollback {
+			txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(bridge.JSONRPCAddr()))
+			require.NoError(t, err)
+			deployerKey, err := helper.DecodePrivateKey("")
+			require.NoError(t, err)
+
+			deployerAddress := deployerKey.Address()
+			txn := helper.CreateTransaction(types.ZeroAddress, &deployerAddress, nil, ethgo.Ether(1), true)
+			_, err = txRelayer.SendTransactionLocal(txn)
+			require.NoError(t, err)
+
+			txn = helper.CreateTransaction(deployerKey.Address(), nil, contractsapi.TestRollbackGateway.Bytecode, nil, true)
+			receipt, err := txRelayer.SendTransaction(txn, deployerKey)
+			require.NoError(t, err)
+			require.Equal(t, uint64(types.ReceiptSuccess), receipt.Status)
+
+			gatewayContractAddress = types.Address(receipt.ContractAddress).String()
+			isExternal = true
+		} else if config.RollbackMode == E2IRollback {
+			parts := strings.Split(config.PredeployContract, ":")
+			require.Equal(t, 2, len(parts))
+
+			gatewayContractAddress = parts[0]
+		}
+
 		// deploy bridge chain contracts
-		err = bridge.deployExternalChainContracts(genesisPath, cluster.Config.BridgeBatchThreshold)
+		err = bridge.deployExternalChainContracts(genesisPath, config.BridgeBatchThreshold,
+			gatewayContractAddress, isExternal)
 		require.NoError(t, err)
 
 		polybftConfig, err := polycfg.LoadPolyBFTConfig(genesisPath)
 		require.NoError(t, err)
 
-		tokenConfig, err := polycfg.ParseRawTokenConfig(cluster.Config.NativeTokenConfigRaw)
+		tokenConfig, err := polycfg.ParseRawTokenConfig(config.NativeTokenConfigRaw)
 		require.NoError(t, err)
 
 		// fund addresses on the bridge chain
@@ -831,6 +880,20 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 			cluster.Servers[0].JSONRPCAddr())
 
 		cluster.BridgeRelayers[i] = bridgeRelayer
+	}
+	// Initialize Gateway contract with BLS, BN256G2 and validators
+	if config.RollbackMode != NoRollback {
+		ipAddress := cluster.Bridges[0].JSONRPCAddr()
+		if config.RollbackMode == I2ERollback {
+			ipAddress = cluster.Bridges[0].JSONRPCAddr()
+		}
+
+		txRelayer, err := txrelayer.NewTxRelayer(
+			txrelayer.WithIPAddress(ipAddress),
+		)
+		require.NoError(t, err)
+
+		initializeGatewayRollbackContract(t, types.StringToAddress(gatewayContractAddress), cluster, &txRelayer)
 	}
 
 	return cluster
@@ -1206,4 +1269,52 @@ func CopyDir(source, destination string) error {
 
 		return os.WriteFile(filepath.Join(destination, relPath), data, 0600)
 	})
+}
+
+func initializeGatewayRollbackContract(t *testing.T, address types.Address,
+	cluster *TestCluster, txRelayer *txrelayer.TxRelayer) {
+	t.Helper()
+
+	validators, err := genesis.ReadValidatorsByPrefix(
+		cluster.Config.TmpDir, cluster.Config.ValidatorPrefix, nil, true)
+	require.NoError(t, err)
+
+	initContract := func(txRelayer *txrelayer.TxRelayer,
+		initInputFn contractsapi.ABIEncoder, contractAddr types.Address,
+		contractName string, deployerKey crypto.Key) error {
+		input, err := initInputFn.EncodeAbi()
+		require.NoError(t, err)
+
+		receipt, err := helper.SendTransaction(*txRelayer, contractAddr,
+			input, contractName, deployerKey)
+		require.NoError(t, err)
+		require.Equal(t, uint64(types.ReceiptSuccess), receipt.Status)
+
+		return nil
+	}
+
+	validatorSet := make([]*contractsapi.Validator, len(validators))
+
+	for i, val := range validators {
+		blsKey, err := val.UnmarshalBLSPublicKey()
+		require.NoError(t, err)
+
+		validatorSet[i] = &contractsapi.Validator{
+			Address:     val.Address,
+			BlsKey:      blsKey.ToBigInt(),
+			VotingPower: val.Stake,
+		}
+	}
+
+	inputParams := &contractsapi.InitializeGatewayFn{
+		NewBls:     contracts.BLSContract,
+		NewBn256G2: contracts.BLS256Contract,
+		Validators: validatorSet,
+	}
+
+	key, err := helper.DecodePrivateKey("")
+	require.NoError(t, err)
+
+	err = initContract(txRelayer, inputParams, address, "TestRollbackGateway", key)
+	require.NoError(t, err)
 }

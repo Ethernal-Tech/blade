@@ -168,6 +168,10 @@ func main() {
 			"blade/Gateway.sol",
 			"Gateway",
 		},
+		{
+			"blade/TestRollbackGateway.sol",
+			"TestRollbackGateway",
+		},
 	}
 
 	str := `// This is auto-generated file. DO NOT EDIT.
