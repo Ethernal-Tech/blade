@@ -358,7 +358,7 @@ func TestE2E_Consensus_Validator_Unstake(t *testing.T) {
 
 	// wait for couple of epochs to withdraw stake
 	require.NoError(t, cluster.WaitForBlock(currentBlock.Header.Number+(polybftCfg.EpochSize*2), time.Minute))
-	require.NoError(t, srv.WitdhrawStake())
+	require.NoError(t, srv.WithdrawStake())
 
 	// check that validator is no longer active (out of validator set)
 	validatorInfo, err = validatorHelper.GetValidatorInfo(validatorAcc.Address(), relayer)
