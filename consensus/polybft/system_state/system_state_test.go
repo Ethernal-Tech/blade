@@ -119,7 +119,7 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
 				signedBatch.bitmap = "smth";
 				signedBatch.threshold = 1;
 				signedBatch.isRollback = false;
-				signedBatch.validatorSetBatchId = 0;
+				signedBatch.validatorSetBatchId = 1;
 				batches[_num] = signedBatch;
 			}
 
@@ -165,7 +165,7 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
 		Bitmap:              []byte("smth"),
 		Threshold:           big.NewInt(1),
 		IsRollback:          false,
-		ValidatorSetBatchID: nil,
+		ValidatorSetBatchID: big.NewInt(1),
 	}, sbmb)
 }
 
