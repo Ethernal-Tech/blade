@@ -264,7 +264,7 @@ func WithLogLevel(level hclog.Level) BridgeRelayerOption {
 	}
 }
 
-func WithLogJsonFormat(jsonFormat bool) BridgeRelayerOption {
+func WithLogJSONFormat(jsonFormat bool) BridgeRelayerOption {
 	return func(options *options) error {
 		options.jsonLogFormat = jsonFormat
 
@@ -295,7 +295,7 @@ func NewBridgeRelayer(internalRPCAddr string, privateKey string, opts ...BridgeR
 	relayer.internalRPCAddr = internalRPCAddr
 	relayer.internalClient = txRelayer
 
-	//default options
+	// default options
 	sopts := &options{
 		logDir:        "",
 		logLevel:      hclog.Info,
@@ -437,12 +437,14 @@ func (r *BridgeRelayer) Start() {
 				r.logger.Error("failed to get batches from BridgeStorage contract", "err", err)
 
 				continue
-			} else if len(batches) == 0 {
-				r.logger.Info("Cannot find a new batches")
-
-				continue
 			} else {
-				r.logger.Info("Found", len(batches), "new batches")
+				if len(batches) == 0 {
+					r.logger.Info("Cannot find a new batches")
+
+					continue
+				} else {
+					r.logger.Info("Found", len(batches), "new batches")
+				}
 			}
 
 			for _, batch := range batches {
@@ -488,6 +490,7 @@ func (r *BridgeRelayer) Start() {
 					r.logger.Info("batch id has been successfully stored into bolt DB", "bridge id", lastBridged.String())
 				} else {
 					r.logger.Info("Trying to get a commit validator set", "the id higher than", lastBridged.String())
+
 					newValidatorSet, err := GetBridgeValidatorSet(batch.ValidatorSetBatchID, r.internalClient)
 					if err != nil {
 						r.logger.Error("failed to get validator set from BridgeStorage contract", "err", err)
@@ -525,7 +528,6 @@ func (r *BridgeRelayer) Start() {
 
 					r.logger.Info("batch id has been successfully stored into bolt DB", "bridge id", lastBridged.String())
 				}
-
 			}
 		}
 	}
@@ -625,7 +627,7 @@ func (r *BridgeRelayer) sendSignedBridgeMessageBatch(batch *contractsapi.SignedB
 
 	_, err = destinationRelayer.SendTransaction(tx, r.privateKey)
 	if err != nil {
-		return fmt.Errorf("id-ed batch has already been processed or cannot be procesed, err: %w", err)
+		return fmt.Errorf("id-ed batch has already been processed or cannot be processed, err: %w", err)
 	}
 
 	return nil

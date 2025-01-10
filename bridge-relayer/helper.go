@@ -191,7 +191,9 @@ func GetBridgeMessagesInRange(startID, endID *big.Int, txrelayer txrelayer.TxRel
 	return bridgeMessages, nil
 }
 
-func GetBridgeValidatorSet(commitValidatorSetid *big.Int, txrelayer txrelayer.TxRelayer) (*contractsapi.SignedValidatorSet, error) {
+func GetBridgeValidatorSet(
+	commitValidatorSetid *big.Int,
+	txrelayer txrelayer.TxRelayer) (*contractsapi.SignedValidatorSet, error) {
 	funcName := "getCommittedValidatorSet"
 	validatorSet := &contractsapi.SignedValidatorSet{}
 

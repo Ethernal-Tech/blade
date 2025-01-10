@@ -29,8 +29,8 @@ func runCommand(*cobra.Command, []string) {
 		bridgerelayer.WithExternalChainID(uint64(params.externalChainID)),
 		bridgerelayer.WithGenesisPath(params.genesisPath),
 		bridgerelayer.WithLogLevel(hclog.LevelFromString(params.logLevel)),
-		bridgerelayer.WithLogJsonFormat(params.jsonFormatOuttputter),
-		bridgerelayer.WithDBPath(params.boltDbPath),
+		bridgerelayer.WithLogJSONFormat(params.jsonFormatOuttputter),
+		bridgerelayer.WithDBPath(params.boltDBPath),
 	)
 
 	if err != nil {
@@ -115,7 +115,7 @@ func setFlags(cmd *cobra.Command) {
 	)
 
 	cmd.Flags().StringVar(
-		&params.boltDbPath,
+		&params.boltDBPath,
 		"database-path",
 		"",
 		"path to bolt database",

@@ -838,7 +838,6 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		if cluster.Config.RelayerPrivateKey != nil && cluster.Config.RelayerPrivateKey.Address() != types.ZeroAddress {
 			err = bridge.fundRelayerAddressOnExternal(cluster.Config.RelayerPrivateKey.Address())
 			require.NoError(t, err)
-
 		}
 
 		// add premine if token is non-mintable

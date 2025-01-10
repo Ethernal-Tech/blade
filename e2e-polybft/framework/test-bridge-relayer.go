@@ -16,7 +16,13 @@ type TestRelayer struct {
 	node          *node
 }
 
-func NewTestBridgeRelayer(t *testing.T, clusterConfig *TestClusterConfig, externalChainID uint64, genesisPath string, key *crypto.ECDSAKey, validatorJSONRPC string) *TestRelayer {
+func NewTestBridgeRelayer(
+	t *testing.T,
+	clusterConfig *TestClusterConfig,
+	externalChainID uint64,
+	genesisPath string,
+	key *crypto.ECDSAKey,
+	validatorJSONRPC string) *TestRelayer {
 	relayer := &TestRelayer{
 		t:             t,
 		clusterConfig: clusterConfig,
@@ -33,7 +39,7 @@ func (t *TestRelayer) start(externalChainID uint64, key *crypto.ECDSAKey, genesi
 		t.t.Fatal(err)
 	}
 
-	//Build arguments
+	// build arguments
 	args := []string{
 		"bridge-relayer",
 		"--genesis-path", genesisPath,
