@@ -104,6 +104,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 		t.Logf("Receiver#%d=%s\n", i+1, receivers[i])
 	}
 
+	// relayer key
 	relayerKey, err := crypto.GenerateECDSAKey()
 	require.NoError(t, err)
 
@@ -324,6 +325,10 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 		t.Logf("Depositor#%d=%s\n", i+1, depositors[i])
 	}
 
+	// relayer key
+	relayerKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithNumBlockConfirmations(0),
 		framework.WithBridgeBatchThreshold(25),
@@ -331,6 +336,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeBlockListAdmin(adminAddr),
 		framework.WithRollback(framework.I2ERollback),
+		framework.WithRelayerPrivateKey(relayerKey),
 		framework.WithPremine(append(depositors, adminAddr)...))
 	defer cluster.Stop()
 

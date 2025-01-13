@@ -46,14 +46,15 @@ func TestEncoding_Struct(t *testing.T) {
 	t.Parallel()
 
 	bridgeBatch := SignedBridgeMessageBatch{
-		RootHash:           types.ZeroHash,
-		StartID:            big.NewInt(25),
-		EndID:              big.NewInt(35),
-		SourceChainID:      big.NewInt(1),
-		DestinationChainID: big.NewInt(0),
-		Signature:          [2]*big.Int{big.NewInt(1), big.NewInt(2)},
-		Threshold:          big.NewInt(0),
-		IsRollback:         false,
+		RootHash:            types.ZeroHash,
+		StartID:             big.NewInt(25),
+		EndID:               big.NewInt(35),
+		SourceChainID:       big.NewInt(1),
+		DestinationChainID:  big.NewInt(0),
+		Signature:           [2]*big.Int{big.NewInt(1), big.NewInt(2)},
+		Threshold:           big.NewInt(0),
+		IsRollback:          false,
+		ValidatorSetBatchID: big.NewInt(0),
 	}
 
 	encoding, err := bridgeBatch.EncodeAbi()
