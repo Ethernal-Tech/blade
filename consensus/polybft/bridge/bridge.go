@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/0xPolygon/polygon-edge/bls"
 	polychain "github.com/0xPolygon/polygon-edge/consensus/polybft/blockchain"
@@ -187,17 +188,6 @@ func (b *bridge) BridgeBatch(pendingBlockNumber uint64) ([]*BridgeBatchSigned, e
 func (b *bridge) GetTransactions(blockInfo oracle.NewBlockInfo) ([]*types.Transaction, error) {
 	var txs []*types.Transaction
 
-	if blockInfo.IsFirstBlockOfEpoch && blockInfo.ParentBlock.Number > 1 {
-		tx, err := createCommitValidatorSetTxn(blockInfo)
-		if err != nil {
-			return nil, fmt.Errorf("error while creating commit validator set tx, err: %w", err)
-		}
-
-		if tx != nil {
-			txs = append(txs, tx)
-		}
-	}
-
 	if blockInfo.IsEndOfSprint {
 		for chainID, bridgeManager := range b.bridgeManagers {
 			bridgeBatches, err := bridgeManager.BridgeBatch(blockInfo.CurrentBlock())
@@ -213,6 +203,17 @@ func (b *bridge) GetTransactions(blockInfo oracle.NewBlockInfo) ([]*types.Transa
 
 				txs = append(txs, tx)
 			}
+		}
+	}
+
+	if blockInfo.IsEndOfEpoch {
+		tx, err := createCommitValidatorSetTxn(blockInfo)
+		if err != nil {
+			return nil, fmt.Errorf("error while creating commit validator set tx, err: %w", err)
+		}
+
+		if tx != nil {
+			txs = append(txs, tx)
 		}
 	}
 
@@ -358,6 +359,11 @@ func createCommitValidatorSetTxn(bi oracle.NewBlockInfo) (*types.Transaction, er
 		NewValidatorSet: bi.CurrentEpochValidatorSet.Accounts().ToABIBinding(),
 		Signature:       signatureBig,
 		Bitmap:          parentExtra.Committed.Bitmap,
+		BlockMetadata: &contractsapi.BlockMetadata{
+			BlockRound:  new(big.Int).SetUint64(parentExtra.BlockMetaData.BlockRound),
+			EpochNumber: new(big.Int).SetUint64(parentExtra.BlockMetaData.EpochNumber),
+			BlockHash:   bi.ParentBlock.Hash,
+		},
 	}
 
 	inputData, err := input.EncodeAbi()

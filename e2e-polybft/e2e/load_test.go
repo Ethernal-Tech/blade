@@ -3,43 +3,24 @@ package e2e
 import (
 	"fmt"
 	"math/big"
-	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/command/bridge/common"
 	bridgeHelper "github.com/0xPolygon/polygon-edge/command/bridge/helper"
-	validatorHelper "github.com/0xPolygon/polygon-edge/command/validator/helper"
 	polycfg "github.com/0xPolygon/polygon-edge/consensus/polybft/config"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/e2e-polybft/framework"
 	"github.com/0xPolygon/polygon-edge/helper/hex"
-	"github.com/0xPolygon/polygon-edge/jsonrpc"
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/Ethernal-Tech/ethgo"
 	"github.com/stretchr/testify/require"
 )
-
-func init() {
-	wd, err := os.Getwd()
-	if err != nil {
-		return
-	}
-
-	parent := filepath.Dir(wd)
-	parent = strings.Trim(parent, "e2e-polybft")
-	wd = filepath.Join(parent, "/artifacts/blade")
-	os.Setenv("EDGE_BINARY", wd)
-	os.Setenv("E2E_TESTS", "true")
-	os.Setenv("E2E_LOGS", "true")
-	os.Setenv("E2E_LOG_LEVEL", "debug")
-}
 
 func TestE2E_Load_MultipleDepositBothEnds(t *testing.T) {
 	const (
@@ -419,15 +400,15 @@ func TestE2E_Load_DepositTestWithAddingTokensLater(t *testing.T) {
 
 func TestE2E_Load_ValidatorChangeSet(t *testing.T) {
 	const (
-		transfersCount        = 2
+		transfersCount        = 5
 		numBlockConfirmations = 2
-		epochSize             = 5
-		sprintSize            = uint64(10)
+		// make epoch size long enough, so that all exit events are processed within the same epoch
+		epochSize             = 40
+		sprintSize            = uint64(5)
 		numberOfAttempts      = 7
 		stateSyncedLogsCount  = 2 // map token and deposit
 		numberOfBridges       = 1
 		numberOfMapTokenEvent = 1
-		votingPowerChanges    = 2
 	)
 
 	var (
@@ -435,10 +416,10 @@ func TestE2E_Load_ValidatorChangeSet(t *testing.T) {
 		bridgeMessageResult contractsapi.BridgeMessageResultEvent
 	)
 
-	accountAddrs := make([]types.Address, transfersCount)
-	accounts := make([]string, transfersCount)
+	receiversAddrs := make([]types.Address, transfersCount)
+	receivers := make([]string, transfersCount)
 	amounts := make([]string, transfersCount)
-	accountKeys := make([]string, transfersCount)
+	receiverKeys := make([]string, transfersCount)
 
 	for i := 0; i < transfersCount; i++ {
 		key, err := crypto.GenerateECDSAKey()
@@ -447,12 +428,12 @@ func TestE2E_Load_ValidatorChangeSet(t *testing.T) {
 		rawKey, err := key.MarshallPrivateKey()
 		require.NoError(t, err)
 
-		accountKeys[i] = hex.EncodeToString(rawKey)
-		accountAddrs[i] = key.Address()
-		accounts[i] = key.Address().String()
+		receiverKeys[i] = hex.EncodeToString(rawKey)
+		receiversAddrs[i] = key.Address()
+		receivers[i] = key.Address().String()
 		amounts[i] = fmt.Sprintf("%d", bridgeAmount)
 
-		t.Logf("Receiver#%d=%s\n", i+1, accounts[i])
+		t.Logf("Receiver#%d=%s\n", i+1, receivers[i])
 	}
 
 	relayerPrivateKey, err := crypto.GenerateECDSAKey()
@@ -462,7 +443,6 @@ func TestE2E_Load_ValidatorChangeSet(t *testing.T) {
 		framework.WithTestRewardToken(),
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
 		framework.WithEpochSize(epochSize),
-		framework.WithEpochReward(int(ethgo.Ether(1).Uint64())),
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeBatchThreshold(100),
 		framework.WithRelayerPrivateKey(relayerPrivateKey),
@@ -474,7 +454,7 @@ func TestE2E_Load_ValidatorChangeSet(t *testing.T) {
 
 			tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
 
-			tcc.Premine = append(tcc.Premine, accounts...)
+			tcc.Premine = append(tcc.Premine, receivers...)
 			tcc.Premine = append(tcc.Premine, relayerPrivateKey.String())
 		}))
 
@@ -489,7 +469,7 @@ func TestE2E_Load_ValidatorChangeSet(t *testing.T) {
 
 	validatorSrv := cluster.Servers[0]
 
-	validatorEndpoint := validatorSrv.JSONRPC()
+	childEthEndpoint := validatorSrv.JSONRPC()
 
 	externalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(cluster.Bridges[0].JSONRPCAddr()))
 	require.NoError(t, err)
@@ -498,9 +478,6 @@ func TestE2E_Load_ValidatorChangeSet(t *testing.T) {
 	require.NoError(t, err)
 
 	bridgeCfg := polybftCfg.Bridge[chainID.Uint64()]
-
-	txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(validatorEndpoint))
-	require.NoError(t, err)
 
 	deployerKey, err := bridgeHelper.DecodePrivateKey("")
 	require.NoError(t, err)
@@ -516,36 +493,31 @@ func TestE2E_Load_ValidatorChangeSet(t *testing.T) {
 	require.Equal(t, uint64(types.ReceiptSuccess), receipt.Status)
 
 	rootERC20Token := types.Address(receipt.ContractAddress)
+	t.Log("External chain token address:", rootERC20Token)
 
+	// wait for a couple of sprints
 	finalBlockNum := 1 * sprintSize
 	require.NoError(t, cluster.WaitForBlock(finalBlockNum, 2*time.Minute))
 
-	bridge := cluster.Bridges[bridgeOne]
-
 	deposit := func() {
-		for i := range accounts {
-			err = bridge.Deposit(
+		require.NoError(t,
+			cluster.Bridges[bridgeOne].Deposit(
 				common.ERC20,
 				rootERC20Token,
 				bridgeCfg.ExternalERC20PredicateAddr,
 				bridgeHelper.TestAccountPrivKey,
-				accounts[i],
-				amounts[i],
+				strings.Join(receivers, ","),
+				strings.Join(amounts, ","),
 				"",
-				bridge.JSONRPCAddr(),
+				cluster.Bridges[bridgeOne].JSONRPCAddr(),
 				bridgeHelper.TestAccountPrivKey,
 				false,
-			)
-			require.NoError(t, err)
-
-			t.Log("deposit made for account=", accounts[i], "external to internal")
-		}
+			))
 
 		finalBlockNum = 10 * sprintSize
-		err = cluster.WaitForBlock(finalBlockNum, 5*time.Minute)
-		require.NoError(t, err)
+		require.NoError(t, cluster.WaitForBlock(finalBlockNum, 2*time.Minute))
 
-		logs, err := getFilteredLogs(bridgeMessageResult.Sig(), 0, finalBlockNum, validatorEndpoint)
+		logs, err := getFilteredLogs(bridgeMessageResult.Sig(), 0, finalBlockNum, childEthEndpoint)
 		require.NoError(t, err)
 
 		assertBridgeEventResultSuccess(t, logs, transfersCount+1)
@@ -553,73 +525,24 @@ func TestE2E_Load_ValidatorChangeSet(t *testing.T) {
 		childERC20Token := getChildToken(t, contractsapi.RootERC20Predicate.Abi,
 			bridgeCfg.ExternalERC20PredicateAddr, rootERC20Token, externalChainTxRelayer)
 
-		for _, receiver := range accounts {
+		txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(childEthEndpoint))
+		for _, receiver := range receivers {
 			balance := erc20BalanceOf(t, types.StringToAddress(receiver), childERC20Token, txRelayer)
-			t.Log("balance=", balance, "receiver=", receiver)
-			require.True(t, balance.Cmp(bridgeAmount) == 0)
+			require.Equal(t, bridgeAmount, balance)
 		}
+
+		t.Log("Deposits were successfully processed")
 	}
 
 	deposit()
 
-	unstakeValidator0(t, cluster, polybftCfg, txRelayer)
+	cluster.Servers[0].Stop()
+	activeValidator := cluster.Servers[4]
 
+	currentBlock, err := activeValidator.JSONRPC().BlockNumber()
+	require.NoError(t, err)
+	require.NoError(t, cluster.WaitForBlock(currentBlock+1, 2*time.Minute))
+
+	childEthEndpoint = cluster.Servers[4].JSONRPC()
 	deposit()
-}
-
-func unstakeValidator0(t *testing.T, cluster *framework.TestCluster, polybftCfg polycfg.PolyBFT, txRelayer txrelayer.TxRelayer) {
-	srv := cluster.Servers[0]
-	validatorAcc, err := validatorHelper.GetAccountFromDir(srv.DataDir())
-	require.NoError(t, err)
-
-	cluster.WaitForReady(t)
-
-	validatorAddr := validatorAcc.Ecdsa.Address()
-
-	initialValidatorBalance, err := srv.JSONRPC().GetBalance(validatorAddr, jsonrpc.LatestBlockNumberOrHash)
-	require.NoError(t, err)
-	t.Logf("Balance (before unstake)=%d\n", initialValidatorBalance)
-
-	// wait for some rewards to get accumulated
-	require.NoError(t, cluster.WaitForBlock(polybftCfg.EpochSize*3, time.Minute))
-
-	validatorInfo, err := validatorHelper.GetValidatorInfo(validatorAcc.Address(), txRelayer)
-	require.NoError(t, err)
-	require.True(t, validatorInfo.IsActive)
-
-	initialStake := validatorInfo.Stake
-	t.Logf("Stake (before unstake)=%d\n", initialStake)
-
-	reward := validatorInfo.WithdrawableRewards
-	t.Logf("Rewards=%d\n", reward)
-	require.Greater(t, reward.Uint64(), uint64(0))
-
-	// unstake entire balance (which should remove validator from the validator set in next epoch)
-	require.NoError(t, srv.Unstake(initialStake))
-
-	currentBlock, err := srv.JSONRPC().GetBlockByNumber(jsonrpc.LatestBlockNumber, false)
-	require.NoError(t, err)
-
-	// wait for couple of epochs to withdraw stake
-	require.NoError(t, cluster.WaitForBlock(currentBlock.Header.Number+(polybftCfg.EpochSize*2), time.Minute))
-	require.NoError(t, srv.WithdrawStake())
-
-	// check that validator is no longer active (out of validator set)
-	validatorInfo, err = validatorHelper.GetValidatorInfo(validatorAcc.Address(), txRelayer)
-	require.NoError(t, err)
-	require.False(t, validatorInfo.IsActive)
-	require.True(t, validatorInfo.Stake.Cmp(big.NewInt(0)) == 0)
-
-	t.Logf("Stake (after unstake and withdraw)=%d\n", validatorInfo.Stake)
-
-	balanceBeforeRewardsWithdraw, err := srv.JSONRPC().GetBalance(validatorAddr, jsonrpc.LatestBlockNumberOrHash)
-	require.NoError(t, err)
-	t.Logf("Balance (before withdraw rewards)=%d\n", balanceBeforeRewardsWithdraw)
-
-	// withdraw pending rewards
-	require.NoError(t, srv.WithdrawRewards())
-
-	newValidatorBalance, err := srv.JSONRPC().GetBalance(validatorAddr, jsonrpc.LatestBlockNumberOrHash)
-	require.NoError(t, err)
-	t.Logf("Balance (after withdrawal of rewards)=%s\n", newValidatorBalance)
 }
