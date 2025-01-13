@@ -30,12 +30,12 @@ func NewTestBridgeRelayer(
 		clusterConfig: clusterConfig,
 	}
 
-	relayer.start(externalChainID, key, genesisPath, validatorJSONRPC)
+	relayer.Start(externalChainID, key, genesisPath, validatorJSONRPC)
 
 	return relayer
 }
 
-func (t *TestRelayer) start(externalChainID uint64, key *crypto.ECDSAKey, genesisPath, validatorJSONRPC string) {
+func (t *TestRelayer) Start(externalChainID uint64, key *crypto.ECDSAKey, genesisPath, validatorJSONRPC string) {
 	marshalledKey, err := key.MarshallPrivateKey()
 	if err != nil {
 		t.t.Fatal(err)
@@ -64,7 +64,7 @@ func (t *TestRelayer) start(externalChainID uint64, key *crypto.ECDSAKey, genesi
 	time.Sleep(250 * time.Millisecond)
 }
 
-func (t *TestRelayer) stop() {
+func (t *TestRelayer) Stop() {
 	if err := t.node.Stop(); err != nil {
 		t.t.Fatal(err)
 	}

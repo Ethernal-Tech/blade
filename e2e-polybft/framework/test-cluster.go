@@ -961,7 +961,7 @@ func (c *TestCluster) Stop() {
 	}
 
 	for _, relayer := range c.BridgeRelayers {
-		relayer.stop()
+		relayer.Stop()
 	}
 }
 
