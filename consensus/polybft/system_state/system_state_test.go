@@ -103,6 +103,7 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
     			bytes bitmap;
 				uint256 threshold;
 				bool isRollback;
+				uint256 validatorSetBatchId;
 			}
 
 			mapping(uint256 => SignedBridgeMessageBatch) public batches;
@@ -118,6 +119,7 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
 				signedBatch.bitmap = "smth";
 				signedBatch.threshold = 1;
 				signedBatch.isRollback = false;
+				signedBatch.validatorSetBatchId = 1;
 				batches[_num] = signedBatch;
 			}
 
@@ -154,15 +156,16 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, &contractsapi.SignedBridgeMessageBatch{
-		RootHash:           types.StringToHash("0x1555ad6149fc39abc7852aad5c3df6b9df7964ac90ffbbcf6206b1eda846c881"),
-		StartID:            big.NewInt(1),
-		EndID:              big.NewInt(5),
-		SourceChainID:      big.NewInt(2),
-		DestinationChainID: big.NewInt(3),
-		Signature:          [2]*big.Int{big.NewInt(300), big.NewInt(200)},
-		Bitmap:             []byte("smth"),
-		Threshold:          big.NewInt(1),
-		IsRollback:         false,
+		RootHash:            types.StringToHash("0x1555ad6149fc39abc7852aad5c3df6b9df7964ac90ffbbcf6206b1eda846c881"),
+		StartID:             big.NewInt(1),
+		EndID:               big.NewInt(5),
+		SourceChainID:       big.NewInt(2),
+		DestinationChainID:  big.NewInt(3),
+		Signature:           [2]*big.Int{big.NewInt(300), big.NewInt(200)},
+		Bitmap:              []byte("smth"),
+		Threshold:           big.NewInt(1),
+		IsRollback:          false,
+		ValidatorSetBatchID: big.NewInt(1),
 	}, sbmb)
 }
 

@@ -1233,8 +1233,6 @@ func TestE2E_Bridge_Transfers_AccessLists(t *testing.T) {
 }
 
 func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
-	t.Skip()
-
 	var (
 		stateSyncedLogsCount  = 2
 		epochSize             = uint64(10)
@@ -1262,6 +1260,9 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 	relayerPrivateKey, err := crypto.GenerateECDSAKey()
 	require.NoError(t, err)
 
+	relayerPrivateKeyRaw, err := relayerPrivateKey.MarshallPrivateKey()
+	require.NoError(t, err)
+
 	// start cluster with default, non-mintable native erc20 root token
 	// with london fork enabled
 	cluster := framework.NewTestCluster(t, 5,
@@ -1278,6 +1279,7 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 		framework.WithSecretsCallback(func(_ []types.Address, tcc *framework.TestClusterConfig) {
 			nonValidatorKeyString := hex.EncodeToString(nonValidatorKeyRaw)
 			rewardWalletKeyString := hex.EncodeToString(rewardWalletKeyRaw)
+			relayerPrivateKeyString := hex.EncodeToString(relayerPrivateKeyRaw)
 
 			// do premine to a non validator address
 			tcc.Premine = append(tcc.Premine,
@@ -1292,6 +1294,13 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 					rewardWalletKey.Address(),
 					command.DefaultPremineBalance.String(),
 					rewardWalletKeyString))
+
+			// do premine to reward wallet address
+			tcc.Premine = append(tcc.Premine,
+				fmt.Sprintf("%s:%s:%s",
+					relayerPrivateKey.Address(),
+					command.DefaultPremineBalance.String(),
+					relayerPrivateKeyString))
 		}),
 	)
 	defer cluster.Stop()
@@ -1472,8 +1481,6 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 	})
 
 	t.Run("transfer more native tokens than 0x0 balance is", func(t *testing.T) {
-		const expectedBridgeBatchResult = 1
-
 		// since bridging native token is essentially minting
 		// (i.e. transferring tokens from 0x0 to receiver address using native transfer precompile),
 		// this test tries to deposit more tokens than 0x0 address has on its balance

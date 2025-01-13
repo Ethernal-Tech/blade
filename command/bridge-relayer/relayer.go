@@ -29,7 +29,8 @@ func runCommand(*cobra.Command, []string) {
 		bridgerelayer.WithExternalChainID(uint64(params.externalChainID)),
 		bridgerelayer.WithGenesisPath(params.genesisPath),
 		bridgerelayer.WithLogLevel(hclog.LevelFromString(params.logLevel)),
-		bridgerelayer.WithLogJsonFormat(params.jsonFormatOuttputter),
+		bridgerelayer.WithLogJSONFormat(params.jsonFormatOuttputter),
+		bridgerelayer.WithDBPath(params.boltDBPath),
 	)
 
 	if err != nil {
@@ -88,6 +89,8 @@ func setFlags(cmd *cobra.Command) {
 		"relayer's private key",
 	)
 
+	_ = cmd.MarkFlagRequired("private-key")
+
 	cmd.Flags().BoolVarP(
 		&params.jsonFormatOuttputter,
 		"json",
@@ -111,5 +114,10 @@ func setFlags(cmd *cobra.Command) {
 		"write all logs to the file at specified location instead of writing them to console",
 	)
 
-	_ = cmd.MarkFlagRequired("private-key")
+	cmd.Flags().StringVar(
+		&params.boltDBPath,
+		"database-path",
+		"",
+		"path to bolt database",
+	)
 }

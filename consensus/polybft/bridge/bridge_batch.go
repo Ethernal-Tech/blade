@@ -105,15 +105,16 @@ func (bbs *BridgeBatchSigned) EncodeAbi() ([]byte, error) {
 
 	commit := &contractsapi.CommitBatchBridgeStorageFn{
 		Batch: &contractsapi.SignedBridgeMessageBatch{
-			Threshold:          bbs.Threshold,
-			IsRollback:         bbs.IsRollback,
-			RootHash:           bbs.BridgeBatch.RootHash,
-			StartID:            bbs.BridgeBatch.StartID,
-			EndID:              bbs.BridgeBatch.EndID,
-			SourceChainID:      bbs.BridgeBatch.SourceChainID,
-			DestinationChainID: bbs.BridgeBatch.DestinationChainID,
-			Signature:          signature,
-			Bitmap:             bbs.AggSignature.Bitmap,
+			Threshold:           bbs.Threshold,
+			IsRollback:          bbs.IsRollback,
+			RootHash:            bbs.BridgeBatch.RootHash,
+			StartID:             bbs.BridgeBatch.StartID,
+			EndID:               bbs.BridgeBatch.EndID,
+			SourceChainID:       bbs.BridgeBatch.SourceChainID,
+			DestinationChainID:  bbs.BridgeBatch.DestinationChainID,
+			Signature:           signature,
+			Bitmap:              bbs.AggSignature.Bitmap,
+			ValidatorSetBatchID: big.NewInt(0),
 		},
 	}
 

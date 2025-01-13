@@ -12,43 +12,44 @@ import (
 type TestRelayer struct {
 	t *testing.T
 
-	clusterConfig    *TestClusterConfig
-	externalChainID  uint64
-	key              *crypto.ECDSAKey
-	node             *node
-	genesisPath      string
-	validatorJSONRPC string
+	clusterConfig *TestClusterConfig
+	node          *node
 }
 
-func NewTestBridgeRelayer(t *testing.T, clusterConfig *TestClusterConfig, externalChainID uint64, genesisPath string, key *crypto.ECDSAKey, validatorJSONRPC string) *TestRelayer {
+func NewTestBridgeRelayer(
+	t *testing.T,
+	clusterConfig *TestClusterConfig,
+	externalChainID uint64,
+	genesisPath string,
+	key *crypto.ECDSAKey,
+	validatorJSONRPC string) *TestRelayer {
+	t.Helper()
+
 	relayer := &TestRelayer{
-		t:                t,
-		key:              key,
-		externalChainID:  externalChainID,
-		genesisPath:      genesisPath,
-		clusterConfig:    clusterConfig,
-		validatorJSONRPC: validatorJSONRPC,
+		t:             t,
+		clusterConfig: clusterConfig,
 	}
 
-	relayer.Start()
+	relayer.start(externalChainID, key, genesisPath, validatorJSONRPC)
 
 	return relayer
 }
 
-func (t *TestRelayer) Start() {
-	marshalledKey, err := t.key.MarshallPrivateKey()
+func (t *TestRelayer) start(externalChainID uint64, key *crypto.ECDSAKey, genesisPath, validatorJSONRPC string) {
+	marshalledKey, err := key.MarshallPrivateKey()
 	if err != nil {
 		t.t.Fatal(err)
 	}
 
-	//Build arguments
+	// build arguments
 	args := []string{
 		"bridge-relayer",
-		"--genesis-path", t.genesisPath,
+		"--genesis-path", genesisPath,
 		"--private-key", hex.EncodeToString(marshalledKey),
-		"--internal-chain-rpc", t.validatorJSONRPC,
-		"--external-chain-id", strconv.FormatUint(t.externalChainID, 10),
+		"--internal-chain-rpc", validatorJSONRPC,
+		"--external-chain-id", strconv.FormatUint(externalChainID, 10),
 		"--poll-interval", strconv.Itoa(5),
+		"--database-path", t.t.TempDir() + "bridge-relayer.db",
 	}
 
 	stdout := t.clusterConfig.GetStdout("bridge-relayer")
@@ -63,7 +64,7 @@ func (t *TestRelayer) Start() {
 	time.Sleep(250 * time.Millisecond)
 }
 
-func (t *TestRelayer) Stop() {
+func (t *TestRelayer) stop() {
 	if err := t.node.Stop(); err != nil {
 		t.t.Fatal(err)
 	}
