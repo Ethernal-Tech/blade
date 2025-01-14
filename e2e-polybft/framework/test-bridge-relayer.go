@@ -12,8 +12,7 @@ import (
 type TestRelayer struct {
 	t *testing.T
 
-	clusterConfig *TestClusterConfig
-	node          *node
+	node *node
 }
 
 func NewTestBridgeRelayer(
@@ -26,16 +25,15 @@ func NewTestBridgeRelayer(
 	t.Helper()
 
 	relayer := &TestRelayer{
-		t:             t,
-		clusterConfig: clusterConfig,
+		t: t,
 	}
 
-	relayer.start(externalChainID, key, genesisPath, validatorJSONRPC)
+	relayer.start(clusterConfig, externalChainID, key, genesisPath, validatorJSONRPC)
 
 	return relayer
 }
 
-func (t *TestRelayer) start(externalChainID uint64, key *crypto.ECDSAKey, genesisPath, validatorJSONRPC string) {
+func (t *TestRelayer) start(clusterConfig *TestClusterConfig, externalChainID uint64, key *crypto.ECDSAKey, genesisPath, validatorJSONRPC string) {
 	marshalledKey, err := key.MarshallPrivateKey()
 	if err != nil {
 		t.t.Fatal(err)
@@ -52,9 +50,9 @@ func (t *TestRelayer) start(externalChainID uint64, key *crypto.ECDSAKey, genesi
 		"--database-path", t.t.TempDir() + "bridge-relayer.db",
 	}
 
-	stdout := t.clusterConfig.GetStdout("bridge-relayer")
+	stdout := clusterConfig.GetStdout("bridge-relayer")
 
-	node, err := newNode(t.clusterConfig.Binary, args, stdout)
+	node, err := newNode(clusterConfig.Binary, args, stdout)
 	if err != nil {
 		t.t.Fatal(err)
 	}
