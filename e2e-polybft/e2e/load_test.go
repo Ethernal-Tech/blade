@@ -247,7 +247,7 @@ func TestE2E_Load_MultipleDepositBothEnds(t *testing.T) {
 			time.Sleep(time.Second * 10)
 			cluster.BridgeRelayers[0].Stop()
 			time.Sleep(time.Second * 10)
-			cluster.BridgeRelayers[0].Start(chainID.Uint64(), relayerPrivateKey, path.Join(cluster.Config.TmpDir, "genesis.json"), cluster.Servers[0].JSONRPCAddr())
+			cluster.BridgeRelayers[0].Start(cluster.Config, chainID.Uint64(), relayerPrivateKey, path.Join(cluster.Config.TmpDir, "genesis.json"), cluster.Servers[0].JSONRPCAddr())
 		}(channel)
 	}
 

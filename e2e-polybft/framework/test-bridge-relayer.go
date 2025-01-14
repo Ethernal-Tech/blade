@@ -28,12 +28,12 @@ func NewTestBridgeRelayer(
 		t: t,
 	}
 
-	relayer.start(clusterConfig, externalChainID, key, genesisPath, validatorJSONRPC)
+	relayer.Start(clusterConfig, externalChainID, key, genesisPath, validatorJSONRPC)
 
 	return relayer
 }
 
-func (t *TestRelayer) start(
+func (t *TestRelayer) Start(
 	clusterConfig *TestClusterConfig,
 	externalChainID uint64,
 	key *crypto.ECDSAKey,
