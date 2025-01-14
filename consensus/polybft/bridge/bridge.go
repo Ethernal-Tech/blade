@@ -188,7 +188,7 @@ func (b *bridge) BridgeBatch(pendingBlockNumber uint64) ([]*BridgeBatchSigned, e
 func (b *bridge) GetTransactions(blockInfo oracle.NewBlockInfo) ([]*types.Transaction, error) {
 	var txs []*types.Transaction
 
-	if blockInfo.IsFirstBlockOfEpoch {
+	if blockInfo.IsFirstBlockOfEpoch && blockInfo.ParentBlock.Number > 1 {
 		tx, err := createCommitValidatorSetTxn(blockInfo)
 		if err != nil {
 			return nil, fmt.Errorf("error while creating commit validator set tx, err: %w", err)
