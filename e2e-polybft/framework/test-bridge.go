@@ -105,7 +105,7 @@ func (t *TestBridge) WaitUntil(pollFrequency, timeout time.Duration, handler fun
 	}
 }
 
-// Deposit function invokes bridge deposit of ERC tokens (from the root to the child chain)
+// Deposit function invokes bridge deposit of ERC tokens (from the external to the internal chain)
 // with given receivers, amounts and/or token ids
 func (t *TestBridge) Deposit(token bridgeCommon.TokenType, rootTokenAddr, rootPredicateAddr types.Address,
 	senderKey, receivers, amounts, tokenIDs, jsonRPCAddr, minterKey string, internalChainMintable bool) error {
@@ -193,7 +193,8 @@ func (t *TestBridge) Deposit(token bridgeCommon.TokenType, rootTokenAddr, rootPr
 	return t.cmdRun(args...)
 }
 
-// Withdraw function is used to invoke bridge withdrawals for any kind of ERC tokens (from the child to the root chain)
+// Withdraw function is used to invoke bridge withdrawals for any kind of ERC tokens
+// from the internal to the external chain
 // with given receivers, amounts and/or token ids
 func (t *TestBridge) Withdraw(token bridgeCommon.TokenType,
 	senderKey, receivers, amounts, tokenIDs, jsonRPCAddr string,
@@ -283,7 +284,7 @@ func (t *TestBridge) Withdraw(token bridgeCommon.TokenType,
 	return t.cmdRun(args...)
 }
 
-// SendExitTransaction sends exit transaction to the root chain
+// SendExitTransaction sends exit transaction to the external chain
 func (t *TestBridge) SendExitTransaction(exitHelper types.Address, exitID uint64, childJSONRPCAddr string) error {
 	if childJSONRPCAddr == "" {
 		return errors.New("provide a child chain JSON RPC endpoint URL")
@@ -374,7 +375,7 @@ func (t *TestBridge) fundAddressesOnExternal(polybftConfig polycfg.PolyBFT) erro
 	}
 
 	if err := t.cmdRun(args...); err != nil {
-		return fmt.Errorf("failed to fund non-validator addresses on root: %w", err)
+		return fmt.Errorf("failed to fund non-validator addresses on external: %w", err)
 	}
 
 	return nil
@@ -387,7 +388,7 @@ func (t *TestBridge) fundRelayerAddressOnExternal(relayerAddress types.Address) 
 	args = append(args, "--amounts", command.DefaultPremineBalance.String()) // this is more than enough tokens
 
 	if err := t.cmdRun(args...); err != nil {
-		return fmt.Errorf("failed to fund non-validator addresses on root: %w", err)
+		return fmt.Errorf("failed to fund non-validator addresses on external: %w", err)
 	}
 
 	return nil
@@ -569,7 +570,7 @@ func (t *TestBridge) calculatePort() uint64 {
 	return initialPortForBridge + (t.id-1)*3
 }
 
-// finalizeGenesis finalizes genesis on BladeManager contract on root
+// finalizeGenesis finalizes genesis on BladeManager contract on external
 func (t *TestBridge) finalizeGenesis(genesisPath string, tokenConfig *polycfg.Token) error {
 	if tokenConfig.IsMintable {
 		// we don't need to finalize anything when we have mintable (child originated) token

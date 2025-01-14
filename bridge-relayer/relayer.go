@@ -431,7 +431,7 @@ func (r *BridgeRelayer) Start() {
 	for {
 		select {
 		case <-t.C:
-			r.logger.Info("Trying to get a batches", "the id higher than", lastBridged.String())
+			r.logger.Info("Trying to get a batches", "with id higher than", lastBridged.String())
 
 			batches, err := GetBridgeBatchesFromNumber(big.NewInt(0).Add(lastBridged, big.NewInt(1)), r.internalClient)
 			if err != nil {
@@ -439,13 +439,7 @@ func (r *BridgeRelayer) Start() {
 
 				continue
 			} else {
-				if len(batches) == 0 {
-					r.logger.Info("Cannot find a new batches")
-
-					continue
-				} else {
-					r.logger.Info("Found", len(batches), "new batches")
-				}
+				r.logger.Info("Found", len(batches), "new batches")
 			}
 
 			for _, batch := range batches {
@@ -626,10 +620,17 @@ func (r *BridgeRelayer) sendSignedBridgeMessageBatch(batch *contractsapi.SignedB
 		types.WithInput(input),
 	))
 
-	_, err = destinationRelayer.SendTransaction(tx, r.privateKey)
+	receipt, err := destinationRelayer.SendTransaction(tx, r.privateKey)
 	if err != nil {
 		return fmt.Errorf("id-ed batch has already been processed or cannot be processed, err: %w", err)
 	}
+
+	r.logger.Debug("sent commit bridge message batch transaction to external chain",
+		"gatewayAddr", r.externalGatewayAddr,
+		"status", types.ReceiptStatus(receipt.Status),
+		"txHash", receipt.TransactionHash,
+		"blockNumber", receipt.BlockNumber,
+	)
 
 	return nil
 }
