@@ -414,6 +414,11 @@ func createAndSignExtra(t *testing.T, numOfValidators, numOfNewValidators int,
 		NewValidatorSet: validators.ToValidatorSet().Accounts().ToABIBinding(),
 		Signature:       sigBig,
 		Bitmap:          signature.Bitmap,
+		BlockMetadata: &contractsapi.BlockMetadata{
+			BlockHash:   proposalHash,
+			EpochNumber: new(big.Int).SetUint64(extra.BlockMetaData.EpochNumber),
+			BlockRound:  new(big.Int).SetUint64(extra.BlockMetaData.BlockRound),
+		},
 	}
 }
 

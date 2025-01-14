@@ -144,6 +144,7 @@ func TestE2E_Load_MultipleDepositBothEnds(t *testing.T) {
 				false,
 			); err != nil {
 				channel <- err
+
 				return
 			}
 
@@ -153,12 +154,14 @@ func TestE2E_Load_MultipleDepositBothEnds(t *testing.T) {
 		finalBlockNum = 10 * sprintSize
 		if err := cluster.WaitForBlock(finalBlockNum, 5*time.Minute); err != nil {
 			channel <- err
+
 			return
 		}
 
 		logs, err := getFilteredLogs(bridgeMessageResult.Sig(), 0, finalBlockNum, validatorEndpoint)
 		if err != nil {
 			channel <- err
+
 			return
 		}
 
@@ -170,8 +173,10 @@ func TestE2E_Load_MultipleDepositBothEnds(t *testing.T) {
 		for _, receiver := range accounts {
 			balance := erc20BalanceOf(t, types.StringToAddress(receiver), childERC20Token, txRelayer)
 			t.Log("balance=", balance, "receiver=", receiver)
+
 			if balance.Cmp(bridgeAmount) != 0 {
 				channel <- fmt.Errorf("balance=%d, expected=%d", balance, bridgeAmount)
+
 				return
 			}
 		}
@@ -196,8 +201,10 @@ func TestE2E_Load_MultipleDepositBothEnds(t *testing.T) {
 				false,
 			); err != nil {
 				channel <- err
+
 				return
 			}
+
 			t.Log("deposit made for account=", accounts[i], "internal to external")
 		}
 
@@ -211,6 +218,7 @@ func TestE2E_Load_MultipleDepositBothEnds(t *testing.T) {
 			return true
 		}); err != nil {
 			channel <- err
+
 			return
 		}
 
@@ -221,6 +229,7 @@ func TestE2E_Load_MultipleDepositBothEnds(t *testing.T) {
 			balance := erc20BalanceOf(t, acc, l1ChildToken, externalChainTxRelayer)
 			if balance.Cmp(big.NewInt(amount)) != 0 {
 				channel <- fmt.Errorf("balance=%d, expected=%d", balance, amount)
+
 				return
 			}
 		}
@@ -243,11 +252,13 @@ func TestE2E_Load_MultipleDepositBothEnds(t *testing.T) {
 	}
 
 	timeChan := time.After(time.Minute * transfersCount)
+
 	for range 2 {
 		select {
 		case err = <-channel:
 			if err != nil {
 				t.Fatal(err)
+
 				return
 			}
 
@@ -544,5 +555,6 @@ func TestE2E_Load_ValidatorChangeSet(t *testing.T) {
 	require.NoError(t, cluster.WaitForBlock(currentBlock+1, 2*time.Minute))
 
 	childEthEndpoint = cluster.Servers[4].JSONRPC()
+
 	deposit()
 }
