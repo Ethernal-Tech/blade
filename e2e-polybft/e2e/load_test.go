@@ -187,6 +187,7 @@ func TestE2E_Load_MultipleDepositBothEnds(t *testing.T) {
 	go func(channel chan<- error) {
 		amount := int64(100)
 		amountStr := fmt.Sprintf("%d", amount)
+
 		for i := range accounts {
 			if err := bridge.Deposit(
 				common.ERC20,
@@ -241,6 +242,7 @@ func TestE2E_Load_MultipleDepositBothEnds(t *testing.T) {
 		go func(channel chan<- error) {
 			if len(cluster.BridgeRelayers) == 0 {
 				channel <- fmt.Errorf("no relayers found")
+
 				return
 			}
 
@@ -537,6 +539,8 @@ func TestE2E_Load_ValidatorChangeSet(t *testing.T) {
 			bridgeCfg.ExternalERC20PredicateAddr, rootERC20Token, externalChainTxRelayer)
 
 		txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(childEthEndpoint))
+		require.NoError(t, err)
+
 		for _, receiver := range receivers {
 			balance := erc20BalanceOf(t, types.StringToAddress(receiver), childERC20Token, txRelayer)
 			require.Equal(t, bridgeAmount, balance)
