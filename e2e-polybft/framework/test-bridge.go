@@ -193,7 +193,8 @@ func (t *TestBridge) Deposit(token bridgeCommon.TokenType, rootTokenAddr, rootPr
 	return t.cmdRun(args...)
 }
 
-// Withdraw function is used to invoke bridge withdrawals for any kind of ERC tokens (from the internal to the external chain)
+// Withdraw function is used to invoke bridge withdrawals for any kind of ERC tokens
+// from the internal to the external chain
 // with given receivers, amounts and/or token ids
 func (t *TestBridge) Withdraw(token bridgeCommon.TokenType,
 	senderKey, receivers, amounts, tokenIDs, jsonRPCAddr string,

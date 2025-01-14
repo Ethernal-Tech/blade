@@ -33,7 +33,11 @@ func NewTestBridgeRelayer(
 	return relayer
 }
 
-func (t *TestRelayer) start(clusterConfig *TestClusterConfig, externalChainID uint64, key *crypto.ECDSAKey, genesisPath, validatorJSONRPC string) {
+func (t *TestRelayer) start(
+	clusterConfig *TestClusterConfig,
+	externalChainID uint64,
+	key *crypto.ECDSAKey,
+	genesisPath, validatorJSONRPC string) {
 	marshalledKey, err := key.MarshallPrivateKey()
 	if err != nil {
 		t.t.Fatal(err)
