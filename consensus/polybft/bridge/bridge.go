@@ -47,7 +47,6 @@ type bridge struct {
 	bridgeManagers  map[uint64]BridgeManager
 	state           *BridgeManagerStore
 	internalChainID uint64
-	relayer         BridgeEventRelayer
 	logger          hclog.Logger
 }
 
@@ -125,17 +124,6 @@ func NewBridge(runtime Runtime,
 		eventProvider.Subscribe(bridgeManager)
 	}
 
-	relayer, err := newBridgeEventRelayer(blockchain, runtimeConfig, logger, store)
-	if err != nil {
-		return nil, err
-	}
-
-	bridge.relayer = relayer
-
-	if err := relayer.Start(runtimeConfig, eventProvider); err != nil {
-		return nil, fmt.Errorf("error starting bridge event relayer, err: %w", err)
-	}
-
 	return bridge, nil
 }
 
@@ -144,8 +132,6 @@ func (b *bridge) Close() {
 	for _, bridgeManager := range b.bridgeManagers {
 		bridgeManager.Close()
 	}
-
-	b.relayer.Close()
 }
 
 // PostBlock is a function executed on every block finalization (either by consensus or syncer)

@@ -194,7 +194,6 @@ func (p *serverParams) generateConfig() *server.Config {
 		TLSCertFile:        p.rawConfig.TLSCertFile,
 		TLSKeyFile:         p.rawConfig.TLSKeyFile,
 
-		Relayer:         p.relayer,
 		MetricsInterval: p.rawConfig.MetricsInterval,
 		EventTracker: &server.EventTracker{
 			SyncBatchSize:          p.rawConfig.EventTracker.SyncBatchSize,

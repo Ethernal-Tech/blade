@@ -71,19 +71,26 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 		t.Logf("Receiver#%d=%s\n", i+1, receivers[i])
 	}
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithTestRewardToken(),
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeBatchThreshold(100),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(addrs); i++ {
 				// premine receivers, so that they are able to do withdrawals
 				tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
 			}
 
+			tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
+
 			tcc.Premine = append(tcc.Premine, receivers...)
+			tcc.Premine = append(tcc.Premine, relayerPrivateKey.String())
 		}))
 
 	defer cluster.Stop()
@@ -337,10 +344,14 @@ func TestE2E_Bridge_ERC721Transfer(t *testing.T) {
 		t.Logf("Receiver#%d=%s\n", i+1, receivers[i])
 	}
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithEpochSize(epochSize),
 		framework.WithPremine(receiversAddrs...),
 		framework.WithBridges(numberOfBridges),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(addrs); i++ {
 				tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
@@ -516,11 +527,15 @@ func TestE2E_Bridge_ERC1155Transfer(t *testing.T) {
 		t.Logf("Receiver#%d=%s\n", i+1, receivers[i])
 	}
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithNumBlockConfirmations(0),
 		framework.WithEpochSize(epochSize),
 		framework.WithPremine(receiversAddrs...),
 		framework.WithBridges(numberOfBridges),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(addrs); i++ {
 				tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
@@ -723,12 +738,16 @@ func TestE2E_Bridge_InternalChainTokensTransfer(t *testing.T) {
 		t.Logf("Depositor#%d=%s\n", i+1, depositors[i])
 	}
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	// setup cluster
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithNumBlockConfirmations(0),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeBlockListAdmin(adminAddr),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithPremine(append(depositors, adminAddr)...)) //nolint:makezero
 	defer cluster.Stop()
 
@@ -1017,6 +1036,9 @@ func TestE2E_Bridge_Transfers_AccessLists(t *testing.T) {
 	admin, _ := crypto.GenerateECDSAKey()
 	adminAddr := admin.Address()
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithNumBlockConfirmations(0),
 		framework.WithEpochSize(epochSize),
@@ -1025,6 +1047,7 @@ func TestE2E_Bridge_Transfers_AccessLists(t *testing.T) {
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeAllowListAdmin(adminAddr),
 		framework.WithBridgeBlockListAdmin(adminAddr),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithSecretsCallback(func(a []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(a); i++ {
 				receivers[i] = a[i].String()
@@ -1234,6 +1257,12 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 	rewardWalletKeyRaw, err := rewardWalletKey.MarshallPrivateKey()
 	require.NoError(t, err)
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
+	relayerPrivateKeyRaw, err := relayerPrivateKey.MarshallPrivateKey()
+	require.NoError(t, err)
+
 	// start cluster with default, non-mintable native erc20 root token
 	// with london fork enabled
 	cluster := framework.NewTestCluster(t, 5,
@@ -1242,6 +1271,7 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
 		framework.WithNativeTokenConfig(nativeTokenNonMintableConfig),
 		framework.WithBridgeBatchThreshold(25),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		// this enables London (EIP-1559) fork
 		framework.WithBurnContract(&polycfg.BurnContractInfo{
 			BlockNumber: 0,
@@ -1249,6 +1279,7 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 		framework.WithSecretsCallback(func(_ []types.Address, tcc *framework.TestClusterConfig) {
 			nonValidatorKeyString := hex.EncodeToString(nonValidatorKeyRaw)
 			rewardWalletKeyString := hex.EncodeToString(rewardWalletKeyRaw)
+			relayerPrivateKeyString := hex.EncodeToString(relayerPrivateKeyRaw)
 
 			// do premine to a non validator address
 			tcc.Premine = append(tcc.Premine,
@@ -1263,6 +1294,13 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 					rewardWalletKey.Address(),
 					command.DefaultPremineBalance.String(),
 					rewardWalletKeyString))
+
+			// do premine to reward wallet address
+			tcc.Premine = append(tcc.Premine,
+				fmt.Sprintf("%s:%s:%s",
+					relayerPrivateKey.Address(),
+					command.DefaultPremineBalance.String(),
+					relayerPrivateKeyString))
 		}),
 	)
 	defer cluster.Stop()
@@ -1443,8 +1481,6 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 	})
 
 	t.Run("transfer more native tokens than 0x0 balance is", func(t *testing.T) {
-		const expectedBridgeBatchResult = 1
-
 		// since bridging native token is essentially minting
 		// (i.e. transferring tokens from 0x0 to receiver address using native transfer precompile),
 		// this test tries to deposit more tokens than 0x0 address has on its balance
@@ -1506,11 +1542,15 @@ func TestE2E_Bridge_L1OriginatedNativeToken_ERC20StakingToken(t *testing.T) {
 	minter, err := crypto.GenerateECDSAKey()
 	require.NoError(t, err)
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithNumBlockConfirmations(0),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithBladeAdmin(minter.Address().String()),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(addrs); i++ {
 				tcc.StakeAmounts = append(tcc.StakeAmounts, initialStake)

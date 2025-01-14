@@ -62,7 +62,6 @@ type RollbackMode int
 const (
 	None      NodeType = 0
 	Validator NodeType = 1
-	Relayer   NodeType = 2
 )
 
 const (
@@ -139,6 +138,7 @@ type TestClusterConfig struct {
 	BridgeAllowListEnabled           []types.Address
 	BridgeBlockListAdmin             []types.Address
 	BridgeBlockListEnabled           []types.Address
+	RelayerPrivateKey                *crypto.ECDSAKey
 
 	NumBlockConfirmations uint64
 
@@ -241,10 +241,11 @@ func (c *TestClusterConfig) getStakeAmount(validatorIndex int) *big.Int {
 }
 
 type TestCluster struct {
-	Config      *TestClusterConfig
-	Servers     []*TestServer
-	Bridges     []*TestBridge
-	initialPort int64
+	Config         *TestClusterConfig
+	Servers        []*TestServer
+	Bridges        []*TestBridge
+	BridgeRelayers []*TestRelayer
+	initialPort    int64
 
 	once         sync.Once
 	failCh       chan struct{}
@@ -501,6 +502,12 @@ func WithBridgeBatchThreshold(threshold uint64) ClusterOption {
 	}
 }
 
+func WithRelayerPrivateKey(relayerPrivateKey *crypto.ECDSAKey) ClusterOption {
+	return func(h *TestClusterConfig) {
+		h.RelayerPrivateKey = relayerPrivateKey
+	}
+}
+
 func isTrueEnv(e string) bool {
 	return strings.ToLower(os.Getenv(e)) == "true"
 }
@@ -555,12 +562,13 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 	require.NoError(t, err)
 
 	cluster := &TestCluster{
-		Servers:     []*TestServer{},
-		Config:      config,
-		initialPort: 30300,
-		failCh:      make(chan struct{}),
-		once:        sync.Once{},
-		Bridges:     make([]*TestBridge, config.NumberOfBridges),
+		Servers:        []*TestServer{},
+		Config:         config,
+		initialPort:    30300,
+		failCh:         make(chan struct{}),
+		once:           sync.Once{},
+		Bridges:        make([]*TestBridge, config.NumberOfBridges),
+		BridgeRelayers: make([]*TestRelayer, config.NumberOfBridges),
 	}
 
 	// in case no validators are specified in opts, all nodes will be validators
@@ -824,8 +832,13 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		require.NoError(t, err)
 
 		// fund addresses on the bridge chain
-		err = bridge.fundAddressesOnRoot(polybftConfig)
+		err = bridge.fundAddressesOnExternal(polybftConfig)
 		require.NoError(t, err)
+
+		if cluster.Config.RelayerPrivateKey != nil && cluster.Config.RelayerPrivateKey.Address() != types.ZeroAddress {
+			err = bridge.fundRelayerAddressOnExternal(cluster.Config.RelayerPrivateKey.Address())
+			require.NoError(t, err)
+		}
 
 		// add premine if token is non-mintable
 		if i == 0 {
@@ -847,9 +860,6 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 
 	for i := 1; i <= int(cluster.Config.ValidatorSetSize); i++ {
 		nodeType := Validator
-		if i == 1 {
-			nodeType.Append(Relayer)
-		}
 
 		dir := cluster.Config.ValidatorPrefix + strconv.Itoa(i)
 		cluster.InitTestServer(t, dir, bridgeJSONRPCs, nodeType)
@@ -860,6 +870,16 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		cluster.InitTestServer(t, dir, bridgeJSONRPCs, None)
 	}
 
+	for i := uint64(0); i < cluster.Config.NumberOfBridges; i++ {
+		bridgeRelayer := NewTestBridgeRelayer(t,
+			cluster.Config,
+			i+1,
+			cluster.Config.Dir("genesis.json"),
+			cluster.Config.RelayerPrivateKey,
+			cluster.Servers[0].JSONRPCAddr())
+
+		cluster.BridgeRelayers[i] = bridgeRelayer
+	}
 	// Initialize Gateway contract with BLS, BN256G2 and validators
 	if config.RollbackMode != NoRollback {
 		ipAddress := cluster.Bridges[0].JSONRPCAddr()
@@ -898,7 +918,6 @@ func (c *TestCluster) InitTestServer(t *testing.T,
 		config.Chain = c.Config.Dir("genesis.json")
 		config.P2PPort = c.getOpenPort()
 		config.LogLevel = logLevel
-		config.Relayer = nodeType.IsSet(Relayer)
 		config.NumBlockConfirmations = c.Config.NumBlockConfirmations
 		config.BridgeJSONRPCs = bridgeJSONRPCs
 		config.UseTLS = c.Config.UseTLS
@@ -939,6 +958,10 @@ func (c *TestCluster) Stop() {
 		if srv.isRunning() {
 			srv.Stop()
 		}
+	}
+
+	for _, relayer := range c.BridgeRelayers {
+		relayer.stop()
 	}
 }
 

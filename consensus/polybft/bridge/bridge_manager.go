@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"net"
 	"path"
+	"strings"
 	"sync"
 
 	"github.com/Ethernal-Tech/blockchain-event-tracker/store"
@@ -32,6 +34,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/wallet"
 	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/jsonrpc"
+	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
 )
 
@@ -1074,4 +1077,21 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, log *ethgo.Log, db
 
 		return errUnknownBridgeEvent
 	}
+}
+
+// createBridgeTxRelayer creates a new instance of txrelayer.TxRelayer
+// used for sending transactions to the external chain
+func createBridgeTxRelayer(rpcEndpoint string, logger hclog.Logger) (txrelayer.TxRelayer, error) {
+	if rpcEndpoint == "" || strings.Contains(rpcEndpoint, "0.0.0.0") {
+		_, port, err := net.SplitHostPort(rpcEndpoint)
+		if err == nil {
+			rpcEndpoint = fmt.Sprintf("http://%s:%s", "127.0.0.1", port)
+		} else {
+			rpcEndpoint = txrelayer.DefaultRPCAddress
+		}
+	}
+
+	return txrelayer.NewTxRelayer(
+		txrelayer.WithIPAddress(rpcEndpoint),
+		txrelayer.WithWriter(logger.StandardWriter(&hclog.StandardLoggerOptions{})))
 }

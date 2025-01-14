@@ -36,7 +36,6 @@ type TestServerConfig struct {
 	DataDir               string
 	Chain                 string
 	LogLevel              string
-	Relayer               bool
 	NumBlockConfirmations uint64
 	BridgeJSONRPCs        []string
 	UseTLS                bool
@@ -187,10 +186,6 @@ func (t *TestServer) Start() {
 		args = append(args, "--log-level", config.LogLevel)
 	} else {
 		args = append(args, "--log-level", "DEBUG")
-	}
-
-	if config.Relayer {
-		args = append(args, "--relayer")
 	}
 
 	if config.UseTLS {
