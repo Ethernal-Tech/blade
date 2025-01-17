@@ -443,7 +443,48 @@ func (r *BridgeRelayer) Start() {
 			}
 
 			for _, batch := range batches {
-				if batch.ValidatorSetBatchID.Cmp(big.NewInt(0)) == 0 {
+
+				if batch.ValidatorSetBatchID.Cmp(big.NewInt(0)) > 0 {
+					r.logger.Info("Trying to get a commit validator set", "the id higher than", lastBridged.String())
+
+					newValidatorSet, err := GetBridgeValidatorSet(batch.ValidatorSetBatchID, r.internalClient)
+					if err != nil {
+						r.logger.Error("failed to get validator set from BridgeStorage contract", "err", err)
+					}
+
+					if err := r.sendCommitValidatorSet(newValidatorSet); err != nil {
+						r.logger.Error("failed to send validator set on gateway", "err", err)
+					}
+
+					lastBridged.Add(lastBridged, big.NewInt(1))
+
+					err = r.db.Update(func(tx *bolt.Tx) error {
+						bucket := tx.Bucket([]byte("lastBridgedBucket"))
+
+						if bucket == nil {
+							return errors.New("cannot find a bucket with the `lastBridgedBucket` name")
+						}
+
+						if value, err := json.Marshal(lastBridged.String()); err != nil {
+							return err
+						} else {
+							if err = bucket.Put(key, value); err != nil {
+								return err
+							}
+						}
+
+						return nil
+					})
+
+					if err != nil {
+						r.logger.Error("")
+
+						return
+					}
+
+					r.logger.Info("batch id has been successfully stored into bolt DB", "bridge id", lastBridged.String())
+				} else {
+
 					r.logger.Info("Found batch with id", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))), "events start-id",
 						batch.StartID.String(), "events end-id",
 						batch.EndID.String(), "is rollback batch", batch.IsRollback)
@@ -478,45 +519,6 @@ func (r *BridgeRelayer) Start() {
 
 					if err != nil {
 						fmt.Println(err)
-
-						return
-					}
-
-					r.logger.Info("batch id has been successfully stored into bolt DB", "bridge id", lastBridged.String())
-				} else {
-					r.logger.Info("Trying to get a commit validator set", "the id higher than", lastBridged.String())
-
-					newValidatorSet, err := GetBridgeValidatorSet(batch.ValidatorSetBatchID, r.internalClient)
-					if err != nil {
-						r.logger.Error("failed to get validator set from BridgeStorage contract", "err", err)
-					}
-
-					if err := r.sendCommitValidatorSet(newValidatorSet); err != nil {
-						r.logger.Error("failed to send validator set on gateway", "err", err)
-					}
-
-					lastBridged.Add(lastBridged, big.NewInt(1))
-
-					err = r.db.Update(func(tx *bolt.Tx) error {
-						bucket := tx.Bucket([]byte("lastBridgedBucket"))
-
-						if bucket == nil {
-							return errors.New("cannot find a bucket with the `lastBridgedBucket` name")
-						}
-
-						if value, err := json.Marshal(lastBridged.String()); err != nil {
-							return err
-						} else {
-							if err = bucket.Put(key, value); err != nil {
-								return err
-							}
-						}
-
-						return nil
-					})
-
-					if err != nil {
-						r.logger.Error("")
 
 						return
 					}
@@ -640,6 +642,7 @@ func (r *BridgeRelayer) sendCommitValidatorSet(newValidatorSet *contractsapi.Sig
 		NewValidatorSet: newValidatorSet.NewValidatorSet,
 		Signature:       newValidatorSet.Signature,
 		Bitmap:          newValidatorSet.Bitmap,
+		BlockMetadata:   newValidatorSet.BlockMetadata,
 	}).EncodeAbi()
 	if err != nil {
 		return err

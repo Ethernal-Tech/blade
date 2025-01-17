@@ -94,6 +94,11 @@ func GetBridgeBatchesFromNumber(batchID *big.Int,
 			return nil, fmt.Errorf("invalid format of the signature")
 		}
 
+		decodedValidatorSetBatchID, ok := v["validatorSetBatchId"].(*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the validator set batch ID")
+		}
+
 		signedBridgeBatches[i] = contractsapi.SignedBridgeMessageBatch{
 			RootHash:            decodeRootHash,
 			StartID:             decodedStartID,
@@ -104,7 +109,7 @@ func GetBridgeBatchesFromNumber(batchID *big.Int,
 			Bitmap:              decodedBitmap,
 			Threshold:           decodedThreshold,
 			IsRollback:          decodedIsRollback,
-			ValidatorSetBatchID: big.NewInt(0),
+			ValidatorSetBatchID: decodedValidatorSetBatchID,
 		}
 	}
 
