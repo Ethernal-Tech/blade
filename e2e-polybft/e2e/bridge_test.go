@@ -1621,3 +1621,110 @@ func TestE2E_Bridge_L1OriginatedNativeToken_ERC20StakingToken(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, secondValidatorInfo.Stake.Cmp(initialStake) == 0)
 }
+
+func TestE2E_Bridge_ValidatorSetChange(t *testing.T) {
+	const (
+		epochSize       = 10
+		sprintSize      = uint64(5)
+		numberOfBridges = 1
+	)
+
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
+	cluster := framework.NewTestCluster(t, 6,
+		framework.WithEpochSize(epochSize),
+		framework.WithBridges(numberOfBridges),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
+		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
+			for i := 0; i < len(addrs); i++ {
+				// premine receivers, so that they are able to do withdrawals
+				tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
+			}
+
+			tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
+
+			tcc.Premine = append(tcc.Premine, relayerPrivateKey.String())
+		}))
+
+	defer cluster.Stop()
+
+	cluster.WaitForReady(t)
+
+	validatorSrv := cluster.Servers[1]
+
+	validatorEndpoint := validatorSrv.JSONRPC()
+
+	polycfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	require.NoError(t, err)
+
+	internalTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(validatorEndpoint))
+	require.NoError(t, err)
+
+	externalTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(cluster.Bridges[0].JSONRPCAddr()))
+	require.NoError(t, err)
+
+	chainID, err := externalTxRelayer.Client().ChainID()
+	require.NoError(t, err)
+
+	getBridgeStorageValidatorSetHash := func() string {
+		method := contractsapi.BridgeStorage.Abi.GetMethod("currentValidatorSetHash")
+		res, err := internalTxRelayer.Call(types.ZeroAddress, contracts.BridgeStorageContract, method.ID())
+		require.NoError(t, err)
+
+		return res
+	}
+
+	getExternalGatewayValidatorSetHash := func() string {
+		method := contractsapi.BridgeStorage.Abi.GetMethod("currentValidatorSetHash")
+		externalGatewayAddress := polycfg.Bridge[chainID.Uint64()].ExternalGatewayAddr
+
+		res, err := externalTxRelayer.Call(types.ZeroAddress, externalGatewayAddress, method.ID())
+		require.NoError(t, err)
+
+		return res
+	}
+
+	// validator set hash before unstake
+	beforeValidatorSetHashBridge := getBridgeStorageValidatorSetHash()
+	beforeValidatorSetHashGateway := getExternalGatewayValidatorSetHash()
+
+	require.Equal(t, beforeValidatorSetHashBridge, beforeValidatorSetHashGateway)
+
+	srv := cluster.Servers[0]
+	validatorAcc, err := validatorHelper.GetAccountFromDir(srv.DataDir())
+	require.NoError(t, err)
+
+	validatorAddr := validatorAcc.Ecdsa.Address()
+
+	validatorInfo, err := validatorHelper.GetValidatorInfo(validatorAcc.Address(), internalTxRelayer)
+	require.NoError(t, err)
+	require.True(t, validatorInfo.IsActive)
+
+	initialStake := validatorInfo.Stake
+
+	// unstake validator
+	require.NoError(t, srv.Unstake(initialStake))
+
+	currentBlock, err := validatorEndpoint.BlockNumber()
+	require.NoError(t, err)
+
+	// waiting for unstake and relayer to apply
+	require.NoError(t, cluster.WaitForBlock(currentBlock+2*epochSize, time.Minute))
+
+	// validator set hash after unstake
+	afterValidatorSetHashBridge := getBridgeStorageValidatorSetHash()
+	afterValidatorSetHashGateway := getExternalGatewayValidatorSetHash()
+
+	t.Logf("Validator unstaked %s\n", validatorAddr.String())
+
+	t.Logf("BeforeValidatorSetHashBridge=%s\n", beforeValidatorSetHashBridge)
+	t.Logf("AfterValidatorSetHashBridge=%s\n", afterValidatorSetHashBridge)
+
+	t.Logf("BeforeValidatorSetHashGateway=%s\n", beforeValidatorSetHashGateway)
+	t.Logf("AfterValidatorSetHashGateway=%s\n", afterValidatorSetHashGateway)
+
+	require.NotEqual(t, beforeValidatorSetHashBridge, afterValidatorSetHashBridge)
+	require.NotEqual(t, beforeValidatorSetHashGateway, afterValidatorSetHashGateway)
+	require.Equal(t, afterValidatorSetHashBridge, afterValidatorSetHashGateway)
+}
