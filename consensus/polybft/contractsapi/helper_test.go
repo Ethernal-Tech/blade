@@ -17,6 +17,11 @@ func TestEncoding_SignedTypes(t *testing.T) {
 			NewValidatorSet: []*Validator{},
 			Signature:       [2]*big.Int{big.NewInt(1), big.NewInt(2)},
 			Bitmap:          big.NewInt(1).Bytes(),
+			BlockMetadata: &BlockMetadata{
+				BlockHash:   types.StringToHash("0x1555ad6149fc39abc7852aad5c3df6b9df7964ac90ffbbcf6206b1eda846c881"),
+				BlockRound:  big.NewInt(1),
+				EpochNumber: big.NewInt(1),
+			},
 		},
 		&SignedBridgeMessageBatch{
 			RootHash:            types.StringToHash("0x1555ad6149fc39abc7852aad5c3df6b9df7964ac90ffbbcf6206b1eda846c881"),
