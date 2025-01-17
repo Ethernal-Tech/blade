@@ -443,7 +443,6 @@ func (r *BridgeRelayer) Start() {
 			}
 
 			for _, batch := range batches {
-
 				if batch.ValidatorSetBatchID.Cmp(big.NewInt(0)) > 0 {
 					r.logger.Info("Trying to get a commit validator set", "the id higher than", lastBridged.String())
 
@@ -484,7 +483,6 @@ func (r *BridgeRelayer) Start() {
 
 					r.logger.Info("batch id has been successfully stored into bolt DB", "bridge id", lastBridged.String())
 				} else {
-
 					r.logger.Info("Found batch with id", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))), "events start-id",
 						batch.StartID.String(), "events end-id",
 						batch.EndID.String(), "is rollback batch", batch.IsRollback)
