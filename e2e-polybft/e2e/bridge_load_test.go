@@ -3,7 +3,10 @@ package e2e
 import (
 	"fmt"
 	"math/big"
+	"os"
 	"path"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,13 +24,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func init() {
+	wd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	parent := filepath.Dir(wd)
+	parent = strings.Trim(parent, "e2e-polybft")
+	wd = filepath.Join(parent, "/artifacts/blade")
+	os.Setenv("EDGE_BINARY", wd)
+	os.Setenv("E2E_TESTS", "true")
+	os.Setenv("E2E_LOGS", "true")
+	os.Setenv("E2E_LOG_LEVEL", "debug")
+}
+
 func TestE2E_BridgeLoad_MultipleDepositBothEnds(t *testing.T) {
 	const (
-		transfersCount     = 10
-		epochSize          = 10
-		sprintSize         = uint64(5)
-		numberOfBridges    = 1
-		withRelayerRestart = true
+		transfersCount  = 10
+		epochSize       = 10
+		sprintSize      = uint64(5)
+		numberOfBridges = 1
 	)
 
 	var (
@@ -251,27 +268,11 @@ func TestE2E_BridgeLoad_MultipleDepositBothEnds(t *testing.T) {
 		channel <- nil
 	}(channel)
 
-	if withRelayerRestart {
-		go func(channel chan<- error) {
-			if len(cluster.BridgeRelayers) == 0 {
-				channel <- fmt.Errorf("no relayers found")
+	timeout := time.After(time.Minute * transfersCount)
+	counter := 0
+	restart := time.NewTicker(time.Second * 15)
 
-				return
-			}
-
-			for {
-				time.Sleep(time.Second * 10)
-				cluster.BridgeRelayers[0].Stop()
-				time.Sleep(time.Second * 3)
-				cluster.BridgeRelayers[0].Start(cluster.Config, chainID.Uint64(), relayerPrivateKey,
-					path.Join(cluster.Config.TmpDir, "genesis.json"), cluster.Servers[0].JSONRPCAddr())
-			}
-		}(channel)
-	}
-
-	timeChan := time.After(time.Minute * transfersCount / 2)
-
-	for range 2 {
+	for {
 		select {
 		case err = <-channel:
 			if err != nil {
@@ -280,8 +281,20 @@ func TestE2E_BridgeLoad_MultipleDepositBothEnds(t *testing.T) {
 				return
 			}
 
-		case <-timeChan:
+			if counter++; counter == 2 {
+				return
+			}
+
+		case <-restart.C:
+			cluster.BridgeRelayers[0].Stop()
+			time.Sleep(time.Second * 3)
+			cluster.BridgeRelayers[0].Start(cluster.Config, chainID.Uint64(), relayerPrivateKey,
+				path.Join(cluster.Config.TmpDir, "genesis.json"), cluster.Servers[0].JSONRPCAddr())
+
+		case <-timeout:
 			t.Fatal("timeout")
+
+			return
 		}
 	}
 }
