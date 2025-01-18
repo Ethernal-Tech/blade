@@ -3,10 +3,7 @@ package e2e
 import (
 	"fmt"
 	"math/big"
-	"os"
 	"path"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -23,21 +20,6 @@ import (
 	"github.com/Ethernal-Tech/ethgo"
 	"github.com/stretchr/testify/require"
 )
-
-func init() {
-	wd, err := os.Getwd()
-	if err != nil {
-		return
-	}
-
-	parent := filepath.Dir(wd)
-	parent = strings.Trim(parent, "e2e-polybft")
-	wd = filepath.Join(parent, "/artifacts/blade")
-	os.Setenv("EDGE_BINARY", wd)
-	os.Setenv("E2E_TESTS", "true")
-	os.Setenv("E2E_LOGS", "true")
-	os.Setenv("E2E_LOG_LEVEL", "debug")
-}
 
 func TestE2E_BridgeLoad_MultipleDepositBothEnds(t *testing.T) {
 	const (
@@ -135,17 +117,17 @@ func TestE2E_BridgeLoad_MultipleDepositBothEnds(t *testing.T) {
 
 	channel := make(chan error)
 
-	waitNextBlock := func() {
+	waitNextBlock := func() error {
 		currentBlock, err := validatorEndpoint.BlockNumber()
 		if err != nil {
-			channel <- err
+			return err
 		}
 
 		if err := cluster.WaitForBlock(currentBlock+1, 30*time.Second); err != nil {
-			channel <- err
-
-			return
+			return err
 		}
+
+		return nil
 	}
 
 	// deposit external to internal
@@ -169,21 +151,29 @@ func TestE2E_BridgeLoad_MultipleDepositBothEnds(t *testing.T) {
 			}
 
 			t.Log("deposit made for account=", accounts[i], "external to internal")
-			waitNextBlock()
+
+			if err = waitNextBlock(); err != nil {
+				channel <- err
+
+				return
+			}
 		}
 
 		finalBlockNum, err := validatorEndpoint.BlockNumber()
 		if err != nil {
 			channel <- err
+
+			return
 		}
 
-		finalBlockNum += 2 * epochSize
-		if err := cluster.WaitForBlock(finalBlockNum, time.Minute); err != nil {
+		finalBlockNum += 3 * epochSize
+		if err := cluster.WaitForBlock(finalBlockNum, time.Minute*2); err != nil {
 			channel <- err
 
 			return
 		}
 
+		// the bridge transactions are processed and there should be a success state sync events
 		logs, err := getFilteredLogs(bridgeMessageResult.Sig(), 0, finalBlockNum, validatorEndpoint)
 		if err != nil {
 			channel <- err
@@ -191,6 +181,8 @@ func TestE2E_BridgeLoad_MultipleDepositBothEnds(t *testing.T) {
 			return
 		}
 
+		// assert that all deposits are executed successfully
+		// because of the token mapping with the first deposit
 		assertBridgeEventResultSuccess(t, logs, transfersCount+1)
 
 		childERC20Token := getChildToken(t, contractsapi.RootERC20Predicate.Abi,
@@ -235,10 +227,15 @@ func TestE2E_BridgeLoad_MultipleDepositBothEnds(t *testing.T) {
 			}
 
 			t.Log("deposit made for account=", accounts[i], "internal to external")
-			waitNextBlock()
+
+			if err = waitNextBlock(); err != nil {
+				channel <- err
+
+				return
+			}
 		}
 
-		if err := cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
+		if err := cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 			for i := uint64(1); i <= transfersCount+1; i++ {
 				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
 					return false
@@ -268,9 +265,9 @@ func TestE2E_BridgeLoad_MultipleDepositBothEnds(t *testing.T) {
 		channel <- nil
 	}(channel)
 
-	timeout := time.After(time.Minute * transfersCount)
-	counter := 0
+	timeout := time.After(time.Minute * transfersCount / 2)
 	restart := time.NewTicker(time.Second * 15)
+	counter := 0
 
 	for {
 		select {
@@ -279,17 +276,14 @@ func TestE2E_BridgeLoad_MultipleDepositBothEnds(t *testing.T) {
 				t.Fatal(err)
 
 				return
-			}
-
-			if counter++; counter == 2 {
+			} else if counter++; counter == 2 {
 				return
 			}
 
 		case <-restart.C:
 			cluster.BridgeRelayers[0].Stop()
-			time.Sleep(time.Second * 3)
-			cluster.BridgeRelayers[0].Start(cluster.Config, chainID.Uint64(), relayerPrivateKey,
-				path.Join(cluster.Config.TmpDir, "genesis.json"), cluster.Servers[0].JSONRPCAddr())
+			time.Sleep(time.Second)
+			cluster.BridgeRelayers[0].Start()
 
 		case <-timeout:
 			t.Fatal("timeout")

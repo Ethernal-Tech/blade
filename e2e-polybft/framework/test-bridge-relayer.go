@@ -2,6 +2,7 @@ package framework
 
 import (
 	"encoding/hex"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -10,7 +11,12 @@ import (
 )
 
 type TestRelayer struct {
-	t *testing.T
+	t                *testing.T
+	clusterConfig    *TestClusterConfig
+	externalChainID  uint64
+	genesisPath      string
+	key              *crypto.ECDSAKey
+	validatorJSONRPC string
 
 	node *node
 }
@@ -25,20 +31,19 @@ func NewTestBridgeRelayer(
 	t.Helper()
 
 	relayer := &TestRelayer{
-		t: t,
+		t:                t,
+		clusterConfig:    clusterConfig,
+		externalChainID:  externalChainID,
+		genesisPath:      genesisPath,
+		key:              key,
+		validatorJSONRPC: validatorJSONRPC,
 	}
-
-	relayer.Start(clusterConfig, externalChainID, key, genesisPath, validatorJSONRPC)
 
 	return relayer
 }
 
-func (t *TestRelayer) Start(
-	clusterConfig *TestClusterConfig,
-	externalChainID uint64,
-	key *crypto.ECDSAKey,
-	genesisPath, validatorJSONRPC string) {
-	marshalledKey, err := key.MarshallPrivateKey()
+func (t *TestRelayer) Start() {
+	marshalledKey, err := t.key.MarshallPrivateKey()
 	if err != nil {
 		t.t.Fatal(err)
 	}
@@ -46,17 +51,17 @@ func (t *TestRelayer) Start(
 	// build arguments
 	args := []string{
 		"bridge-relayer",
-		"--genesis-path", genesisPath,
+		"--genesis-path", t.genesisPath,
 		"--private-key", hex.EncodeToString(marshalledKey),
-		"--internal-chain-rpc", validatorJSONRPC,
-		"--external-chain-id", strconv.FormatUint(externalChainID, 10),
+		"--internal-chain-rpc", t.validatorJSONRPC,
+		"--external-chain-id", strconv.FormatUint(t.externalChainID, 10),
 		"--poll-interval", strconv.Itoa(5),
-		"--database-path", t.t.TempDir() + "bridge-relayer.db",
+		"--database-path", filepath.Dir(t.t.TempDir()) + "/bridge-relayer.db",
 	}
 
-	stdout := clusterConfig.GetStdout("bridge-relayer")
+	stdout := t.clusterConfig.GetStdout("bridge-relayer")
 
-	node, err := newNode(clusterConfig.Binary, args, stdout)
+	node, err := newNode(t.clusterConfig.Binary, args, stdout)
 	if err != nil {
 		t.t.Fatal(err)
 	}

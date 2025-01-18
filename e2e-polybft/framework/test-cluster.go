@@ -879,6 +879,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 			cluster.Servers[0].JSONRPCAddr())
 
 		cluster.BridgeRelayers[i] = bridgeRelayer
+		bridgeRelayer.Start()
 	}
 	// Initialize Gateway contract with BLS, BN256G2 and validators
 	if config.RollbackMode != NoRollback {

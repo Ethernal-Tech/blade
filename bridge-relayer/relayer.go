@@ -357,32 +357,15 @@ func NewBridgeRelayer(internalRPCAddr string, privateKey string, opts ...BridgeR
 
 	logger, err := newLoggerFromConfig(sopts)
 	if err != nil {
-		return nil, err
-	}
-
-	relayer.logger = logger
-
-	relayer.privateKey = crypto.NewECDSAKey(pk)
-
-	if sopts.dbPath == nil {
-		relayer.db, err = bolt.Open("bridge-relayer.db", 0600, nil)
-	} else {
-		relayer.db, err = bolt.Open(*sopts.dbPath, 0600, nil)
-	}
-
-	if err != nil {
 		return nil, errFunc(err)
 	}
 
-	err = relayer.db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte("lastBridgedBucket"))
-		if err != nil {
-			return err
-		}
+	relayer.logger = logger
+	relayer.privateKey = crypto.NewECDSAKey(pk)
 
-		return nil
-	})
+	logger.Info("opening bolt db...", "path", *sopts.dbPath)
 
+	relayer.db, err = openDB(sopts.dbPath)
 	if err != nil {
 		return nil, errFunc(err)
 	}
@@ -391,13 +374,12 @@ func NewBridgeRelayer(internalRPCAddr string, privateKey string, opts ...BridgeR
 }
 
 func (r *BridgeRelayer) Start() {
-	var lastBridged = big.NewInt(-1)
+	lastBridged := big.NewInt(-1)
 
-	key := []byte{'l', 'a', 's', 't'}
+	key := []byte("lastBridgedKey")
 
-	err := r.db.Update(func(tx *bolt.Tx) error {
+	err := r.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte("lastBridgedBucket"))
-
 		if bucket == nil {
 			return errors.New("cannot find a bucket with the `lastBridgedBucket` name")
 		}
@@ -411,7 +393,7 @@ func (r *BridgeRelayer) Start() {
 			}
 
 			if _, ok := lastBridged.SetString(temp, 10); !ok {
-				return errors.New("cannot set lastBridge correctly")
+				return errors.New("cannot set lastBridged correctly")
 			}
 		}
 
@@ -419,7 +401,7 @@ func (r *BridgeRelayer) Start() {
 	})
 
 	if err != nil {
-		fmt.Println(err)
+		r.logger.Error("failed to read lastBridgedBucket", "err", err)
 
 		return
 	}
@@ -439,7 +421,7 @@ func (r *BridgeRelayer) Start() {
 
 				continue
 			} else {
-				r.logger.Info("Found", len(batches), "new batches")
+				r.logger.Info("Found", "new batches", len(batches))
 			}
 
 			for _, batch := range batches {
@@ -449,83 +431,91 @@ func (r *BridgeRelayer) Start() {
 					newValidatorSet, err := GetBridgeValidatorSet(batch.ValidatorSetBatchID, r.internalClient)
 					if err != nil {
 						r.logger.Error("failed to get validator set from BridgeStorage contract", "err", err)
+
+						continue
 					}
 
 					if err := r.sendCommitValidatorSet(newValidatorSet); err != nil {
 						r.logger.Error("failed to send validator set on gateway", "err", err)
+
+						continue
 					}
-
-					lastBridged.Add(lastBridged, big.NewInt(1))
-
-					err = r.db.Update(func(tx *bolt.Tx) error {
-						bucket := tx.Bucket([]byte("lastBridgedBucket"))
-
-						if bucket == nil {
-							return errors.New("cannot find a bucket with the `lastBridgedBucket` name")
-						}
-
-						if value, err := json.Marshal(lastBridged.String()); err != nil {
-							return err
-						} else {
-							if err = bucket.Put(key, value); err != nil {
-								return err
-							}
-						}
-
-						return nil
-					})
-
-					if err != nil {
-						r.logger.Error("")
-
-						return
-					}
-
-					r.logger.Info("batch id has been successfully stored into bolt DB", "bridge id", lastBridged.String())
 				} else {
-					r.logger.Info("Found batch with id", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))), "events start-id",
-						batch.StartID.String(), "events end-id",
-						batch.EndID.String(), "is rollback batch", batch.IsRollback)
+					r.logger.Info("Found batch with id", "events start-id", batch.StartID.String(),
+						"events end-id", batch.EndID.String(), "is rollback batch", batch.IsRollback)
 
 					if err := r.sendSignedBridgeMessageBatch(&batch); err != nil {
-						r.logger.Info("bridge batch didn't send successfully")
+						r.logger.Error("bridge batch didn't send successfully", "err", err)
+
+						continue
 					}
-
-					r.logger.Info("id-ed batch",
-						"has been successfully processed/transferred",
-						big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))))
-
-					lastBridged.Add(lastBridged, big.NewInt(1))
-
-					err = r.db.Update(func(tx *bolt.Tx) error {
-						bucket := tx.Bucket([]byte("lastBridgedBucket"))
-
-						if bucket == nil {
-							return errors.New("cannot find a bucket with the `lastBridgedBucket` name")
-						}
-
-						if value, err := json.Marshal(lastBridged.String()); err != nil {
-							return err
-						} else {
-							if err = bucket.Put(key, value); err != nil {
-								return err
-							}
-						}
-
-						return nil
-					})
-
-					if err != nil {
-						fmt.Println(err)
-
-						return
-					}
-
-					r.logger.Info("batch id has been successfully stored into bolt DB", "bridge id", lastBridged.String())
 				}
+
+				lastBridged.Add(lastBridged, big.NewInt(1))
+
+				r.logger.Info("batch id has been successfully processed/transferred", "batch id", lastBridged)
+
+				err = r.db.Update(func(tx *bolt.Tx) error {
+					bucket := tx.Bucket([]byte("lastBridgedBucket"))
+
+					if bucket == nil {
+						return errors.New("cannot find a bucket with the `lastBridgedBucket` name")
+					}
+
+					value, err := json.Marshal(lastBridged.String())
+					if err != nil {
+						return err
+					}
+
+					if err = bucket.Put(key, value); err != nil {
+						return err
+					}
+
+					return nil
+				})
+
+				if err != nil {
+					r.logger.Error("failed to update lastBridgedBucket", "err", err)
+
+					return
+				}
+
+				r.logger.Info("batch id has been successfully stored into bolt DB", "batch id", lastBridged.String())
 			}
 		}
 	}
+}
+
+func openDB(dbPath *string) (*bolt.DB, error) {
+	var (
+		retVal *bolt.DB
+		err    error
+	)
+
+	if dbPath == nil {
+		retVal, err = bolt.Open("bridge-relayer.db", 0666, nil)
+	} else {
+		retVal, err = bolt.Open(*dbPath, 0666, nil)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = retVal.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("lastBridgedBucket"))
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return retVal, nil
 }
 
 // newFileLogger returns logger instance that writes all logs to a specified file.
