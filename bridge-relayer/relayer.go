@@ -414,7 +414,7 @@ func (r *BridgeRelayer) Start() {
 	for {
 		select {
 		case <-t.C:
-			r.logger.Info("trying to get batches with id > %s", lastBridged.String())
+			r.logger.Info(fmt.Sprintf("getting new batches with id > %s", lastBridged.String()))
 
 			batches, err := GetBridgeBatchesFromNumber(big.NewInt(0).Add(lastBridged, big.NewInt(1)), r.internalClient)
 			if err != nil {
@@ -427,7 +427,7 @@ func (r *BridgeRelayer) Start() {
 
 			for _, batch := range batches {
 				if batch.ValidatorSetBatchID.Cmp(big.NewInt(0)) > 0 {
-					r.logger.Info("trying to get new validator set batch with id > %s", lastBridged.String())
+					r.logger.Info(fmt.Sprintf("getting new validator set batch with id > %s", lastBridged.String()))
 
 					newValidatorSet, err := GetBridgeValidatorSet(batch.ValidatorSetBatchID, r.internalClient)
 					if err != nil {
