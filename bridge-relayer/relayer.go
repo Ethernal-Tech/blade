@@ -230,7 +230,7 @@ func WithPollInterval(interval time.Duration) BridgeRelayerOption {
 		}
 
 		if interval > maxInterval {
-			return fmt.Errorf("poll interval too long, it must be less than 10 minutes")
+			return fmt.Errorf("poll interval too long, it can not exceed 10 minutes")
 		}
 
 		o.pollInterval = &interval
@@ -357,32 +357,15 @@ func NewBridgeRelayer(internalRPCAddr string, privateKey string, opts ...BridgeR
 
 	logger, err := newLoggerFromConfig(sopts)
 	if err != nil {
-		return nil, err
-	}
-
-	relayer.logger = logger
-
-	relayer.privateKey = crypto.NewECDSAKey(pk)
-
-	if sopts.dbPath == nil {
-		relayer.db, err = bolt.Open("bridge-relayer.db", 0600, nil)
-	} else {
-		relayer.db, err = bolt.Open(*sopts.dbPath, 0600, nil)
-	}
-
-	if err != nil {
 		return nil, errFunc(err)
 	}
 
-	err = relayer.db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte("lastBridgedBucket"))
-		if err != nil {
-			return err
-		}
+	relayer.logger = logger
+	relayer.privateKey = crypto.NewECDSAKey(pk)
 
-		return nil
-	})
+	logger.Info("opening bolt db...", "path", *sopts.dbPath)
 
+	relayer.db, err = openDB(sopts.dbPath)
 	if err != nil {
 		return nil, errFunc(err)
 	}
@@ -391,15 +374,15 @@ func NewBridgeRelayer(internalRPCAddr string, privateKey string, opts ...BridgeR
 }
 
 func (r *BridgeRelayer) Start() {
-	var lastBridged = big.NewInt(-1)
+	lastBridged := big.NewInt(-1)
 
-	key := []byte{'l', 'a', 's', 't'}
+	bucketName := []byte("lastBridgedBucket")
+	key := []byte("lastBridgedKey")
 
-	err := r.db.Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte("lastBridgedBucket"))
-
+	err := r.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(bucketName)
 		if bucket == nil {
-			return errors.New("cannot find a bucket with the `lastBridgedBucket` name")
+			return errors.New("cannot find a lastBridgedBucket bucket")
 		}
 
 		value := bucket.Get(key)
@@ -411,7 +394,7 @@ func (r *BridgeRelayer) Start() {
 			}
 
 			if _, ok := lastBridged.SetString(temp, 10); !ok {
-				return errors.New("cannot set lastBridge correctly")
+				return errors.New("cannot set lastBridged correctly")
 			}
 		}
 
@@ -419,19 +402,19 @@ func (r *BridgeRelayer) Start() {
 	})
 
 	if err != nil {
-		fmt.Println(err)
+		r.logger.Error("failed to read lastBridgedBucket", "err", err)
 
 		return
 	}
 
 	t := time.NewTicker(r.pollInterval)
 
-	r.logger.Info("Starting the bridge relayer", "start batch id", lastBridged.String())
+	r.logger.Info("starting the bridge relayer...", "start batch id", lastBridged.String())
 
 	for {
 		select {
 		case <-t.C:
-			r.logger.Info("Trying to get a batches", "with id higher than", lastBridged.String())
+			r.logger.Info(fmt.Sprintf("getting new batches with id > %s", lastBridged.String()))
 
 			batches, err := GetBridgeBatchesFromNumber(big.NewInt(0).Add(lastBridged, big.NewInt(1)), r.internalClient)
 			if err != nil {
@@ -439,93 +422,101 @@ func (r *BridgeRelayer) Start() {
 
 				continue
 			} else {
-				r.logger.Info("Found", len(batches), "new batches")
+				r.logger.Info("received new bridge batches", "total", len(batches))
 			}
 
 			for _, batch := range batches {
-				if batch.ValidatorSetBatchID.Cmp(big.NewInt(0)) == 0 {
-					r.logger.Info("Found batch with id", big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))), "events start-id",
-						batch.StartID.String(), "events end-id",
-						batch.EndID.String(), "is rollback batch", batch.IsRollback)
-
-					if err := r.sendSignedBridgeMessageBatch(&batch); err != nil {
-						r.logger.Info("bridge batch didn't send successfully")
-					}
-
-					r.logger.Info("id-ed batch",
-						"has been successfully processed/transferred",
-						big.NewInt(0).Add(lastBridged, big.NewInt(int64(1))))
-
-					lastBridged.Add(lastBridged, big.NewInt(1))
-
-					err = r.db.Update(func(tx *bolt.Tx) error {
-						bucket := tx.Bucket([]byte("lastBridgedBucket"))
-
-						if bucket == nil {
-							return errors.New("cannot find a bucket with the `lastBridgedBucket` name")
-						}
-
-						if value, err := json.Marshal(lastBridged.String()); err != nil {
-							return err
-						} else {
-							if err = bucket.Put(key, value); err != nil {
-								return err
-							}
-						}
-
-						return nil
-					})
-
-					if err != nil {
-						fmt.Println(err)
-
-						return
-					}
-
-					r.logger.Info("batch id has been successfully stored into bolt DB", "bridge id", lastBridged.String())
-				} else {
-					r.logger.Info("Trying to get a commit validator set", "the id higher than", lastBridged.String())
+				if batch.ValidatorSetBatchID.Cmp(big.NewInt(0)) > 0 {
+					r.logger.Info(fmt.Sprintf("getting new validator set batch with id > %s", lastBridged.String()))
 
 					newValidatorSet, err := GetBridgeValidatorSet(batch.ValidatorSetBatchID, r.internalClient)
 					if err != nil {
 						r.logger.Error("failed to get validator set from BridgeStorage contract", "err", err)
+
+						continue
 					}
 
 					if err := r.sendCommitValidatorSet(newValidatorSet); err != nil {
-						r.logger.Error("failed to send validator set on gateway", "err", err)
+						r.logger.Error("failed to send validator set batch on gateway", "err", err)
+
+						continue
 					}
+				} else {
+					r.logger.Info("found batch", "events start-id", batch.StartID.String(),
+						"events end-id", batch.EndID.String(), "is rollback batch", batch.IsRollback)
 
-					lastBridged.Add(lastBridged, big.NewInt(1))
+					if err := r.sendSignedBridgeMessageBatch(&batch); err != nil {
+						r.logger.Error("failed to send bridge batch on gateway", "err", err)
 
-					err = r.db.Update(func(tx *bolt.Tx) error {
-						bucket := tx.Bucket([]byte("lastBridgedBucket"))
-
-						if bucket == nil {
-							return errors.New("cannot find a bucket with the `lastBridgedBucket` name")
-						}
-
-						if value, err := json.Marshal(lastBridged.String()); err != nil {
-							return err
-						} else {
-							if err = bucket.Put(key, value); err != nil {
-								return err
-							}
-						}
-
-						return nil
-					})
-
-					if err != nil {
-						r.logger.Error("")
-
-						return
+						continue
 					}
-
-					r.logger.Info("batch id has been successfully stored into bolt DB", "bridge id", lastBridged.String())
 				}
+
+				lastBridged.Add(lastBridged, big.NewInt(1))
+
+				r.logger.Info("batch has been successfully processed/sent", "batch id", lastBridged)
+
+				err = r.db.Update(func(tx *bolt.Tx) error {
+					bucket := tx.Bucket(bucketName)
+
+					if bucket == nil {
+						return errors.New("cannot find a lastBridgedBucket bucket")
+					}
+
+					value, err := json.Marshal(lastBridged.String())
+					if err != nil {
+						return err
+					}
+
+					if err = bucket.Put(key, value); err != nil {
+						return err
+					}
+
+					return nil
+				})
+
+				if err != nil {
+					r.logger.Error("failed to update lastBridgedBucket", "err", err)
+
+					return
+				}
+
+				r.logger.Info("batch has been successfully saved into bolt DB", "batch id", lastBridged.String())
 			}
 		}
 	}
+}
+
+func openDB(dbPath *string) (*bolt.DB, error) {
+	var (
+		retVal *bolt.DB
+		err    error
+	)
+
+	if dbPath == nil {
+		retVal, err = bolt.Open("bridge-relayer.db", 0666, nil)
+	} else {
+		retVal, err = bolt.Open(*dbPath, 0666, nil)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = retVal.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("lastBridgedBucket"))
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return retVal, nil
 }
 
 // newFileLogger returns logger instance that writes all logs to a specified file.
@@ -640,6 +631,7 @@ func (r *BridgeRelayer) sendCommitValidatorSet(newValidatorSet *contractsapi.Sig
 		NewValidatorSet: newValidatorSet.NewValidatorSet,
 		Signature:       newValidatorSet.Signature,
 		Bitmap:          newValidatorSet.Bitmap,
+		BlockMetadata:   newValidatorSet.BlockMetadata,
 	}).EncodeAbi()
 	if err != nil {
 		return err

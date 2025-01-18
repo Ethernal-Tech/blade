@@ -169,7 +169,7 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
 	}, sbmb)
 }
 
-func TestSystemState_EncodeAndDecodeStructWithDinamicValues(t *testing.T) {
+func TestSystemState_EncodeAndDecodeStructWithDynamicValues(t *testing.T) {
 	t.Parallel()
 
 	svs := &contractsapi.SignedValidatorSet{
@@ -192,6 +192,11 @@ func TestSystemState_EncodeAndDecodeStructWithDinamicValues(t *testing.T) {
 		},
 		Signature: [2]*big.Int{big.NewInt(300), big.NewInt(200)},
 		Bitmap:    []byte("smth"),
+		BlockMetadata: &contractsapi.BlockMetadata{
+			BlockHash:   types.StringToHash("0x1555ad6149fc39abc7852aad5c3df6b9df7964ac90ffbbcf6206b1eda846c881"),
+			BlockRound:  big.NewInt(1),
+			EpochNumber: big.NewInt(1),
+		},
 	}
 
 	rawSvs, err := svs.EncodeAbi()

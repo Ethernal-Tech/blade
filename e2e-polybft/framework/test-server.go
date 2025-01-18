@@ -341,8 +341,8 @@ func (t *TestServer) MintERC20Token(addresses []string, amounts []*big.Int, erc2
 	return runCommand(t.clusterConfig.Binary, args, t.clusterConfig.GetStdout("mint-erc20"))
 }
 
-// WitdhrawStake withdraws given amount of stake back to the validator address
-func (t *TestServer) WitdhrawStake() error {
+// WithdrawStake withdraws given amount of stake back to the validator address
+func (t *TestServer) WithdrawStake() error {
 	args := []string{
 		"validator",
 		"withdraw",

@@ -1955,10 +1955,27 @@ func (c *CommitBatchBridgeStorageFn) DecodeAbi(buf []byte) error {
 	return decodeMethod(BridgeStorage.Abi.Methods["commitBatch"], buf, c)
 }
 
+type BlockMetadata struct {
+	BlockHash   types.Hash `abi:"blockHash"`
+	BlockRound  *big.Int   `abi:"blockRound"`
+	EpochNumber *big.Int   `abi:"epochNumber"`
+}
+
+var BlockMetadataABIType = abi.MustNewType("tuple(bytes32 blockHash,uint256 blockRound,uint256 epochNumber)")
+
+func (b *BlockMetadata) EncodeAbi() ([]byte, error) {
+	return BlockMetadataABIType.Encode(b)
+}
+
+func (b *BlockMetadata) DecodeAbi(buf []byte) error {
+	return decodeStruct(BlockMetadataABIType, buf, &b)
+}
+
 type CommitValidatorSetBridgeStorageFn struct {
-	NewValidatorSet []*Validator `abi:"newValidatorSet"`
-	Signature       [2]*big.Int  `abi:"signature"`
-	Bitmap          []byte       `abi:"bitmap"`
+	NewValidatorSet []*Validator   `abi:"newValidatorSet"`
+	Signature       [2]*big.Int    `abi:"signature"`
+	Bitmap          []byte         `abi:"bitmap"`
+	BlockMetadata   *BlockMetadata `abi:"blockMetadata"`
 }
 
 func (c *CommitValidatorSetBridgeStorageFn) Sig() []byte {

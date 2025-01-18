@@ -517,7 +517,7 @@ func (b *bridgeEventManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSign
 				if err != nil {
 					if errors.Is(err, errQuorumNotReached) {
 						// a valid case, batch has no quorum, we should not return an error
-						if pendingBatch.BridgeBatch.EndID.Uint64()-pendingBatch.BridgeBatch.StartID.Uint64() > 0 {
+						if pendingBatch.BridgeBatch.EndID.Uint64()-pendingBatch.BridgeBatch.StartID.Uint64() >= 0 {
 							b.logger.Debug("can not submit a batch, quorum not reached",
 								"from", pendingBatch.BridgeBatch.StartID.Uint64(),
 								"to", pendingBatch.BridgeBatch.EndID.Uint64())
@@ -587,7 +587,7 @@ func (b *bridgeEventManager) getRollbackBatch(blockNumber uint64) ([]*BridgeBatc
 			if err != nil {
 				if errors.Is(err, errQuorumNotReached) {
 					// a valid case, batch has no quorum, we should not return an error
-					if p.BridgeBatch.EndID.Uint64()-p.BridgeBatch.StartID.Uint64() > 0 {
+					if p.BridgeBatch.EndID.Uint64()-p.BridgeBatch.StartID.Uint64() >= 0 {
 						b.logger.Debug("can not submit a rollback batch, quorum not reached",
 							"from", p.BridgeBatch.StartID.Uint64(),
 							"to", p.BridgeBatch.EndID.Uint64())
@@ -877,7 +877,7 @@ func (b *bridgeEventManager) buildBridgeBatch(
 		DestinationChainID: destinationChainID,
 	})
 
-	if pendingBridgeBatch.BridgeBatch.EndID.Uint64()-pendingBridgeBatch.BridgeBatch.StartID.Uint64() > 0 {
+	if pendingBridgeBatch.BridgeBatch.EndID.Uint64()-pendingBridgeBatch.BridgeBatch.StartID.Uint64() >= 0 {
 		b.logger.Debug(
 			"[buildBridgeBatch] build batch",
 			"from", pendingBridgeBatch.BridgeBatch.StartID.Uint64(),

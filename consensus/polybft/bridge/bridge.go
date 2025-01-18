@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/0xPolygon/polygon-edge/bls"
 	polychain "github.com/0xPolygon/polygon-edge/consensus/polybft/blockchain"
@@ -358,6 +359,11 @@ func createCommitValidatorSetTxn(bi oracle.NewBlockInfo) (*types.Transaction, er
 		NewValidatorSet: bi.CurrentEpochValidatorSet.Accounts().ToABIBinding(),
 		Signature:       signatureBig,
 		Bitmap:          parentExtra.Committed.Bitmap,
+		BlockMetadata: &contractsapi.BlockMetadata{
+			BlockRound:  new(big.Int).SetUint64(parentExtra.BlockMetaData.BlockRound),
+			EpochNumber: new(big.Int).SetUint64(parentExtra.BlockMetaData.EpochNumber),
+			BlockHash:   bi.ParentBlock.Hash,
+		},
 	}
 
 	inputData, err := input.EncodeAbi()
