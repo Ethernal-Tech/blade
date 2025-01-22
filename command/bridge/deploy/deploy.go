@@ -111,6 +111,27 @@ func GetCommand() *cobra.Command {
 			"otherwise it will pre-allocate the internal predicates addresses in the genesis configuration.",
 	)
 
+	cmd.Flags().Uint64Var(
+		&params.bridgeBatchThreshold,
+		bridgeBatchThresholdFlag,
+		100,
+		"block offset for execution of bridge transaction",
+	)
+
+	cmd.Flags().StringVar(
+		&params.internalGatewayAddress,
+		internalGatewayAddress,
+		"",
+		"predefined internal gateway address to be used instead of deploying a new one",
+	)
+
+	cmd.Flags().StringVar(
+		&params.externalGatewayAddress,
+		externalGatewayAddress,
+		"",
+		"predefined external gateway address to be used instead of deploying a new one",
+	)
+
 	cmd.MarkFlagsMutuallyExclusive(helper.TestModeFlag, deployerKeyFlag)
 
 	return cmd
@@ -192,6 +213,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 	consensusCfg.Bridge[externalChainID].EventTrackerStartBlocks = map[types.Address]uint64{
 		deploymentResultInfo.BridgeCfg.ExternalGatewayAddr: latestBlockNum,
 	}
+	consensusCfg.Bridge[externalChainID].BridgeBatchThreshold = params.bridgeBatchThreshold
 
 	// write updated consensus configuration
 	chainConfig.Params.Engine[polycfg.ConsensusName] = consensusCfg
@@ -246,13 +268,25 @@ func deployContracts(
 		internalContracts []*contract
 	)
 
+	isInternalGatewayPredeployed := params.internalGatewayAddress != ""
+	if isInternalGatewayPredeployed {
+		bridgeConfig.InternalGatewayAddr = types.StringToAddress(params.internalGatewayAddress)
+	}
+
+	isExternalGatewayPredeployed := params.externalGatewayAddress != ""
+	if isExternalGatewayPredeployed {
+		bridgeConfig.ExternalGatewayAddr = types.StringToAddress(params.externalGatewayAddress)
+	}
+
 	// setup external contracts
-	if externalContracts, err = initExternalContracts(bridgeConfig, externalChainClient, externalChainID); err != nil {
+	externalContracts, err = initExternalContracts(bridgeConfig, externalChainClient,
+		externalChainID, isExternalGatewayPredeployed)
+	if err != nil {
 		return nil, err
 	}
 
 	// setup internal contracts
-	internalContracts = initInternalContracts(chainCfg)
+	internalContracts = initInternalContracts(chainCfg, isInternalGatewayPredeployed)
 
 	// pre-allocate internal predicates addresses in genesis if blade is bootstrapping
 	if params.isBootstrap {

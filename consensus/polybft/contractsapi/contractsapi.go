@@ -1917,18 +1917,19 @@ func (i *InitializeBridgeStorageFn) DecodeAbi(buf []byte) error {
 }
 
 type SignedBridgeMessageBatch struct {
-	RootHash           types.Hash  `abi:"rootHash"`
-	StartID            *big.Int    `abi:"startId"`
-	EndID              *big.Int    `abi:"endId"`
-	SourceChainID      *big.Int    `abi:"sourceChainId"`
-	DestinationChainID *big.Int    `abi:"destinationChainId"`
-	Signature          [2]*big.Int `abi:"signature"`
-	Bitmap             []byte      `abi:"bitmap"`
-	Threshold          *big.Int    `abi:"threshold"`
-	IsRollback         bool        `abi:"isRollback"`
+	RootHash            types.Hash  `abi:"rootHash"`
+	StartID             *big.Int    `abi:"startId"`
+	EndID               *big.Int    `abi:"endId"`
+	SourceChainID       *big.Int    `abi:"sourceChainId"`
+	DestinationChainID  *big.Int    `abi:"destinationChainId"`
+	Signature           [2]*big.Int `abi:"signature"`
+	Bitmap              []byte      `abi:"bitmap"`
+	Threshold           *big.Int    `abi:"threshold"`
+	IsRollback          bool        `abi:"isRollback"`
+	ValidatorSetBatchID *big.Int    `abi:"validatorSetBatchId"`
 }
 
-var SignedBridgeMessageBatchABIType = abi.MustNewType("tuple(bytes32 rootHash,uint256 startId,uint256 endId,uint256 sourceChainId,uint256 destinationChainId,uint256[2] signature,bytes bitmap,uint256 threshold,bool isRollback)")
+var SignedBridgeMessageBatchABIType = abi.MustNewType("tuple(bytes32 rootHash,uint256 startId,uint256 endId,uint256 sourceChainId,uint256 destinationChainId,uint256[2] signature,bytes bitmap,uint256 threshold,bool isRollback,uint256 validatorSetBatchId)")
 
 func (s *SignedBridgeMessageBatch) EncodeAbi() ([]byte, error) {
 	return SignedBridgeMessageBatchABIType.Encode(s)
@@ -1954,10 +1955,27 @@ func (c *CommitBatchBridgeStorageFn) DecodeAbi(buf []byte) error {
 	return decodeMethod(BridgeStorage.Abi.Methods["commitBatch"], buf, c)
 }
 
+type BlockMetadata struct {
+	BlockHash   types.Hash `abi:"blockHash"`
+	BlockRound  *big.Int   `abi:"blockRound"`
+	EpochNumber *big.Int   `abi:"epochNumber"`
+}
+
+var BlockMetadataABIType = abi.MustNewType("tuple(bytes32 blockHash,uint256 blockRound,uint256 epochNumber)")
+
+func (b *BlockMetadata) EncodeAbi() ([]byte, error) {
+	return BlockMetadataABIType.Encode(b)
+}
+
+func (b *BlockMetadata) DecodeAbi(buf []byte) error {
+	return decodeStruct(BlockMetadataABIType, buf, &b)
+}
+
 type CommitValidatorSetBridgeStorageFn struct {
-	NewValidatorSet []*Validator `abi:"newValidatorSet"`
-	Signature       [2]*big.Int  `abi:"signature"`
-	Bitmap          []byte       `abi:"bitmap"`
+	NewValidatorSet []*Validator   `abi:"newValidatorSet"`
+	Signature       [2]*big.Int    `abi:"signature"`
+	Bitmap          []byte         `abi:"bitmap"`
+	BlockMetadata   *BlockMetadata `abi:"blockMetadata"`
 }
 
 func (c *CommitValidatorSetBridgeStorageFn) Sig() []byte {
@@ -2153,4 +2171,32 @@ func (b *BridgeMsgEvent) ParseLog(log *ethgo.Log) (bool, error) {
 
 func (b *BridgeMsgEvent) Decode(input []byte) error {
 	return Gateway.Abi.Events["BridgeMsg"].Inputs.DecodeStruct(input, &b)
+}
+
+type BridgeBatchResultEvent struct {
+	StartID            *big.Int `abi:"startId"`
+	EndID              *big.Int `abi:"endId"`
+	SourceChainID      *big.Int `abi:"sourceChainId"`
+	DestinationChainID *big.Int `abi:"destinationChainId"`
+	IsRollback         bool     `abi:"isRollback"`
+}
+
+func (*BridgeBatchResultEvent) Sig() ethgo.Hash {
+	return Gateway.Abi.Events["BridgeBatchResult"].ID()
+}
+
+func (b *BridgeBatchResultEvent) Encode() ([]byte, error) {
+	return Gateway.Abi.Events["BridgeBatchResult"].Inputs.Encode(b)
+}
+
+func (b *BridgeBatchResultEvent) ParseLog(log *ethgo.Log) (bool, error) {
+	if !Gateway.Abi.Events["BridgeBatchResult"].Match(log) {
+		return false, nil
+	}
+
+	return true, decodeEvent(Gateway.Abi.Events["BridgeBatchResult"], log, b)
+}
+
+func (b *BridgeBatchResultEvent) Decode(input []byte) error {
+	return Gateway.Abi.Events["BridgeBatchResult"].Inputs.DecodeStruct(input, &b)
 }

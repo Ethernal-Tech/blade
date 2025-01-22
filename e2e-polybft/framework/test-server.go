@@ -36,7 +36,6 @@ type TestServerConfig struct {
 	DataDir               string
 	Chain                 string
 	LogLevel              string
-	Relayer               bool
 	NumBlockConfirmations uint64
 	BridgeJSONRPCs        []string
 	UseTLS                bool
@@ -197,10 +196,6 @@ func (t *TestServer) Start() {
 		args = append(args, "--log-level", "DEBUG")
 	}
 
-	if config.Relayer {
-		args = append(args, "--relayer")
-	}
-
 	if config.UseTLS {
 		args = append(args, "--use-tls")
 	}
@@ -354,8 +349,8 @@ func (t *TestServer) MintERC20Token(addresses []string, amounts []*big.Int, erc2
 	return runCommand(t.clusterConfig.Binary, args, t.clusterConfig.GetStdout("mint-erc20"))
 }
 
-// WitdhrawStake withdraws given amount of stake back to the validator address
-func (t *TestServer) WitdhrawStake() error {
+// WithdrawStake withdraws given amount of stake back to the validator address
+func (t *TestServer) WithdrawStake() error {
 	args := []string{
 		"validator",
 		"withdraw",

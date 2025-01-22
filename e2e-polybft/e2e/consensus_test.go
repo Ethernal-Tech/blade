@@ -358,7 +358,7 @@ func TestE2E_Consensus_Validator_Unstake(t *testing.T) {
 
 	// wait for couple of epochs to withdraw stake
 	require.NoError(t, cluster.WaitForBlock(currentBlock.Header.Number+(polybftCfg.EpochSize*2), time.Minute))
-	require.NoError(t, srv.WitdhrawStake())
+	require.NoError(t, srv.WithdrawStake())
 
 	// check that validator is no longer active (out of validator set)
 	validatorInfo, err = validatorHelper.GetValidatorInfo(validatorAcc.Address(), relayer)
@@ -544,11 +544,15 @@ func TestE2E_Consensus_EIP1559Check(t *testing.T) {
 	recipient := types.StringToAddress("1234")
 	burnContractAddr := types.StringToAddress("0xDeadBeef")
 
+	relayerPrivate, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	// sender must have premined some native tokens
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithBridges(1),
 		framework.WithNativeTokenConfig(nativeTokenNonMintableConfig),
 		framework.WithBurnContract(&polycfg.BurnContractInfo{BlockNumber: 0, Address: burnContractAddr}),
+		framework.WithRelayerPrivateKey(relayerPrivate),
 		framework.WithSecretsCallback(func(a []types.Address, config *framework.TestClusterConfig) {
 			for range a {
 				config.StakeAmounts = append(config.StakeAmounts, command.DefaultPremineBalance)

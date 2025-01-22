@@ -71,18 +71,26 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 		t.Logf("Receiver#%d=%s\n", i+1, receivers[i])
 	}
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithTestRewardToken(),
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
+		framework.WithBridgeBatchThreshold(100),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(addrs); i++ {
 				// premine receivers, so that they are able to do withdrawals
 				tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
 			}
 
+			tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
+
 			tcc.Premine = append(tcc.Premine, receivers...)
+			tcc.Premine = append(tcc.Premine, relayerPrivateKey.String())
 		}))
 
 	defer cluster.Stop()
@@ -188,7 +196,7 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 
 		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 			for i := range receivers {
-				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i+1)) {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i+1), false) {
 					return false
 				}
 			}
@@ -254,7 +262,7 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 					bridgeCfg.InternalGatewayAddr,
 					internalChainTxRelayer,
 					// this sum represent minimal value for event id based on earlier events
-					uint64(numberOfMapTokenEvent+transfersCount+depositsSubset+i)) {
+					uint64(numberOfMapTokenEvent+transfersCount+depositsSubset+i), false) {
 					return false
 				}
 			}
@@ -286,13 +294,16 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 					bridgeCfg.InternalGatewayAddr,
 					internalChainTxRelayer,
 					// this sum represent minimal value for event id based on earlier events
-					uint64(numberOfMapTokenEvent+transfersCount+2*depositsSubset+i)) {
+					uint64(numberOfMapTokenEvent+transfersCount+2*depositsSubset+i), false) {
 					return false
 				}
 			}
 
 			return true
 		}))
+
+		finalBlockNum, err = childEthEndpoint.BlockNumber()
+		require.NoError(t, err)
 
 		// the transactions are mined and state syncs should be executed by the relayer
 		// and there should be a success events
@@ -333,10 +344,14 @@ func TestE2E_Bridge_ERC721Transfer(t *testing.T) {
 		t.Logf("Receiver#%d=%s\n", i+1, receivers[i])
 	}
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithEpochSize(epochSize),
 		framework.WithPremine(receiversAddrs...),
 		framework.WithBridges(numberOfBridges),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(addrs); i++ {
 				tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
@@ -464,7 +479,7 @@ func TestE2E_Bridge_ERC721Transfer(t *testing.T) {
 
 	require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
 		for i := 1; i <= transfersCount; i++ {
-			if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i)) {
+			if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i), false) {
 				return false
 			}
 		}
@@ -512,11 +527,15 @@ func TestE2E_Bridge_ERC1155Transfer(t *testing.T) {
 		t.Logf("Receiver#%d=%s\n", i+1, receivers[i])
 	}
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithNumBlockConfirmations(0),
 		framework.WithEpochSize(epochSize),
 		framework.WithPremine(receiversAddrs...),
 		framework.WithBridges(numberOfBridges),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(addrs); i++ {
 				tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
@@ -654,7 +673,7 @@ func TestE2E_Bridge_ERC1155Transfer(t *testing.T) {
 
 	require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
 		for i := 1; i <= transfersCount; i++ {
-			if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i)) {
+			if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i), false) {
 				return false
 			}
 		}
@@ -719,12 +738,16 @@ func TestE2E_Bridge_InternalChainTokensTransfer(t *testing.T) {
 		t.Logf("Depositor#%d=%s\n", i+1, depositors[i])
 	}
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	// setup cluster
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithNumBlockConfirmations(0),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeBlockListAdmin(adminAddr),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithPremine(append(depositors, adminAddr)...)) //nolint:makezero
 	defer cluster.Stop()
 
@@ -797,7 +820,7 @@ func TestE2E_Bridge_InternalChainTokensTransfer(t *testing.T) {
 		// first exit event is mapping child token on a rootchain
 		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
 			for i := uint64(1); i <= transfersCount+1; i++ {
-				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i) {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
 					return false
 				}
 			}
@@ -923,7 +946,7 @@ func TestE2E_Bridge_InternalChainTokensTransfer(t *testing.T) {
 		// first exit event is mapping child token on a rootchain
 		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
 			for i := uint64(1); i <= transfersCount+1; i++ {
-				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i) {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
 					return false
 				}
 			}
@@ -1013,6 +1036,9 @@ func TestE2E_Bridge_Transfers_AccessLists(t *testing.T) {
 	admin, _ := crypto.GenerateECDSAKey()
 	adminAddr := admin.Address()
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithNumBlockConfirmations(0),
 		framework.WithEpochSize(epochSize),
@@ -1021,6 +1047,7 @@ func TestE2E_Bridge_Transfers_AccessLists(t *testing.T) {
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeAllowListAdmin(adminAddr),
 		framework.WithBridgeBlockListAdmin(adminAddr),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithSecretsCallback(func(a []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(a); i++ {
 				receivers[i] = a[i].String()
@@ -1188,7 +1215,7 @@ func TestE2E_Bridge_Transfers_AccessLists(t *testing.T) {
 
 		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
 			for i := uint64(1); i <= uint64(transfersCount); i++ {
-				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i) {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
 					return false
 				}
 			}
@@ -1230,6 +1257,12 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 	rewardWalletKeyRaw, err := rewardWalletKey.MarshallPrivateKey()
 	require.NoError(t, err)
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
+	relayerPrivateKeyRaw, err := relayerPrivateKey.MarshallPrivateKey()
+	require.NoError(t, err)
+
 	// start cluster with default, non-mintable native erc20 root token
 	// with london fork enabled
 	cluster := framework.NewTestCluster(t, 5,
@@ -1237,6 +1270,8 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 		framework.WithEpochSize(int(epochSize)),
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
 		framework.WithNativeTokenConfig(nativeTokenNonMintableConfig),
+		framework.WithBridgeBatchThreshold(25),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		// this enables London (EIP-1559) fork
 		framework.WithBurnContract(&polycfg.BurnContractInfo{
 			BlockNumber: 0,
@@ -1244,6 +1279,7 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 		framework.WithSecretsCallback(func(_ []types.Address, tcc *framework.TestClusterConfig) {
 			nonValidatorKeyString := hex.EncodeToString(nonValidatorKeyRaw)
 			rewardWalletKeyString := hex.EncodeToString(rewardWalletKeyRaw)
+			relayerPrivateKeyString := hex.EncodeToString(relayerPrivateKeyRaw)
 
 			// do premine to a non validator address
 			tcc.Premine = append(tcc.Premine,
@@ -1258,6 +1294,13 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 					rewardWalletKey.Address(),
 					command.DefaultPremineBalance.String(),
 					rewardWalletKeyString))
+
+			// do premine to reward wallet address
+			tcc.Premine = append(tcc.Premine,
+				fmt.Sprintf("%s:%s:%s",
+					relayerPrivateKey.Address(),
+					command.DefaultPremineBalance.String(),
+					relayerPrivateKeyString))
 		}),
 	)
 	defer cluster.Stop()
@@ -1381,7 +1424,7 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 
 		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
 			for bridgeEventID := uint64(1); bridgeEventID <= bridgeEvents; bridgeEventID++ {
-				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, bridgeEventID) {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, bridgeEventID, false) {
 					return false
 				}
 			}
@@ -1438,8 +1481,6 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 	})
 
 	t.Run("transfer more native tokens than 0x0 balance is", func(t *testing.T) {
-		const expectedStateSyncsCount = 1
-
 		// since bridging native token is essentially minting
 		// (i.e. transferring tokens from 0x0 to receiver address using native transfer precompile),
 		// this test tries to deposit more tokens than 0x0 address has on its balance
@@ -1470,20 +1511,18 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 			logs, err := getFilteredLogs(bridgeMessageResult.Sig(), currentBlock.Number()+1, finalBlockNum+i*epochSize, childEthEndpoint)
 			require.NoError(t, err)
 
-			if len(logs) == expectedStateSyncsCount || i == numberOfAttempts-1 {
-				// assert that sent deposit has failed
-				checkBridgeMessageResultLogs(t, logs, expectedStateSyncsCount,
-					func(t *testing.T, ssre contractsapi.BridgeMessageResultEvent) {
-						t.Helper()
-
-						require.False(t, ssre.Status)
-					})
-
-				break
-			}
+			require.Equal(t, 0, len(logs))
 
 			require.NoError(t, cluster.WaitForBlock(finalBlockNum+(i+1)*epochSize, time.Minute))
 		}
+
+		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
+			if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, 3, true) {
+				return false
+			}
+
+			return true
+		}))
 	})
 }
 
@@ -1503,11 +1542,15 @@ func TestE2E_Bridge_L1OriginatedNativeToken_ERC20StakingToken(t *testing.T) {
 	minter, err := crypto.GenerateECDSAKey()
 	require.NoError(t, err)
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithNumBlockConfirmations(0),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithBladeAdmin(minter.Address().String()),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(addrs); i++ {
 				tcc.StakeAmounts = append(tcc.StakeAmounts, initialStake)
@@ -1577,4 +1620,111 @@ func TestE2E_Bridge_L1OriginatedNativeToken_ERC20StakingToken(t *testing.T) {
 	secondValidatorInfo, err = validatorHelper.GetValidatorInfo(validatorAccTwo.Ecdsa.Address(), relayer)
 	require.NoError(t, err)
 	require.True(t, secondValidatorInfo.Stake.Cmp(initialStake) == 0)
+}
+
+func TestE2E_Bridge_ValidatorSetChange(t *testing.T) {
+	const (
+		epochSize       = 10
+		sprintSize      = uint64(5)
+		numberOfBridges = 1
+	)
+
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
+	cluster := framework.NewTestCluster(t, 6,
+		framework.WithEpochSize(epochSize),
+		framework.WithBridges(numberOfBridges),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
+		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
+			for i := 0; i < len(addrs); i++ {
+				// premine receivers, so that they are able to do withdrawals
+				tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
+			}
+
+			tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
+
+			tcc.Premine = append(tcc.Premine, relayerPrivateKey.String())
+		}))
+
+	defer cluster.Stop()
+
+	cluster.WaitForReady(t)
+
+	validatorSrv := cluster.Servers[1]
+
+	validatorEndpoint := validatorSrv.JSONRPC()
+
+	polycfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	require.NoError(t, err)
+
+	internalTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(validatorEndpoint))
+	require.NoError(t, err)
+
+	externalTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(cluster.Bridges[0].JSONRPCAddr()))
+	require.NoError(t, err)
+
+	chainID, err := externalTxRelayer.Client().ChainID()
+	require.NoError(t, err)
+
+	getBridgeStorageValidatorSetHash := func() string {
+		method := contractsapi.BridgeStorage.Abi.GetMethod("currentValidatorSetHash")
+		res, err := internalTxRelayer.Call(types.ZeroAddress, contracts.BridgeStorageContract, method.ID())
+		require.NoError(t, err)
+
+		return res
+	}
+
+	getExternalGatewayValidatorSetHash := func() string {
+		method := contractsapi.BridgeStorage.Abi.GetMethod("currentValidatorSetHash")
+		externalGatewayAddress := polycfg.Bridge[chainID.Uint64()].ExternalGatewayAddr
+
+		res, err := externalTxRelayer.Call(types.ZeroAddress, externalGatewayAddress, method.ID())
+		require.NoError(t, err)
+
+		return res
+	}
+
+	// validator set hash before unstake
+	beforeValidatorSetHashBridge := getBridgeStorageValidatorSetHash()
+	beforeValidatorSetHashGateway := getExternalGatewayValidatorSetHash()
+
+	require.Equal(t, beforeValidatorSetHashBridge, beforeValidatorSetHashGateway)
+
+	srv := cluster.Servers[0]
+	validatorAcc, err := validatorHelper.GetAccountFromDir(srv.DataDir())
+	require.NoError(t, err)
+
+	validatorAddr := validatorAcc.Ecdsa.Address()
+
+	validatorInfo, err := validatorHelper.GetValidatorInfo(validatorAcc.Address(), internalTxRelayer)
+	require.NoError(t, err)
+	require.True(t, validatorInfo.IsActive)
+
+	initialStake := validatorInfo.Stake
+
+	// unstake validator
+	require.NoError(t, srv.Unstake(initialStake))
+
+	currentBlock, err := validatorEndpoint.BlockNumber()
+	require.NoError(t, err)
+
+	// waiting for unstake and relayer to apply
+	require.NoError(t, cluster.WaitForBlock(currentBlock+2*epochSize, time.Minute))
+
+	// validator set hash after unstake
+	afterValidatorSetHashBridge := getBridgeStorageValidatorSetHash()
+	afterValidatorSetHashGateway := getExternalGatewayValidatorSetHash()
+
+	t.Logf("Validator unstaked %s\n", validatorAddr.String())
+
+	t.Logf("BeforeValidatorSetHashBridge=%s\n", beforeValidatorSetHashBridge)
+	t.Logf("AfterValidatorSetHashBridge=%s\n", afterValidatorSetHashBridge)
+
+	t.Logf("BeforeValidatorSetHashGateway=%s\n", beforeValidatorSetHashGateway)
+	t.Logf("AfterValidatorSetHashGateway=%s\n", afterValidatorSetHashGateway)
+
+	require.NotEqual(t, beforeValidatorSetHashBridge, afterValidatorSetHashBridge)
+	require.NotEqual(t, beforeValidatorSetHashGateway, afterValidatorSetHashGateway)
+	require.Equal(t, afterValidatorSetHashBridge, afterValidatorSetHashGateway)
 }

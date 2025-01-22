@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/0xPolygon/polygon-edge/bls"
 	polychain "github.com/0xPolygon/polygon-edge/consensus/polybft/blockchain"
@@ -47,7 +48,6 @@ type bridge struct {
 	bridgeManagers  map[uint64]BridgeManager
 	state           *BridgeManagerStore
 	internalChainID uint64
-	relayer         BridgeEventRelayer
 	logger          hclog.Logger
 }
 
@@ -126,17 +126,6 @@ func NewBridge(runtime Runtime,
 		eventProvider.Subscribe(bridgeManager)
 	}
 
-	relayer, err := newBridgeEventRelayer(blockchain, runtimeConfig, logger, store)
-	if err != nil {
-		return nil, err
-	}
-
-	bridge.relayer = relayer
-
-	if err := relayer.Start(runtimeConfig, eventProvider); err != nil {
-		return nil, fmt.Errorf("error starting bridge event relayer, err: %w", err)
-	}
-
 	return bridge, nil
 }
 
@@ -145,8 +134,6 @@ func (b *bridge) Close() {
 	for _, bridgeManager := range b.bridgeManagers {
 		bridgeManager.Close()
 	}
-
-	b.relayer.Close()
 }
 
 // PostBlock is a function executed on every block finalization (either by consensus or syncer)
@@ -237,7 +224,6 @@ func (b *bridge) GetTransactions(blockInfo oracle.NewBlockInfo) ([]*types.Transa
 // VerifyTransactions verifies the system transactions associated with the given block.
 func (b *bridge) VerifyTransactions(blockInfo oracle.NewBlockInfo, txs []*types.Transaction) error {
 	var (
-		bridgeBatchTxExists      bool
 		commitValidatorSetExists bool
 		commitBatchFn            = new(contractsapi.CommitBatchBridgeStorageFn)
 		commitValidatorSetFn     = new(contractsapi.CommitValidatorSetBridgeStorageFn)
@@ -260,12 +246,6 @@ func (b *bridge) VerifyTransactions(blockInfo oracle.NewBlockInfo, txs []*types.
 			if !blockInfo.IsEndOfSprint {
 				return errBridgeBatchTxInNonSprintBlock
 			}
-
-			if bridgeBatchTxExists {
-				return errBridgeBatchTxExists
-			}
-
-			bridgeBatchTxExists = true
 
 			bridgeBatchFn := &BridgeBatchSigned{}
 			if err := bridgeBatchFn.DecodeAbi(txData); err != nil {
@@ -380,6 +360,11 @@ func createCommitValidatorSetTxn(bi oracle.NewBlockInfo) (*types.Transaction, er
 		NewValidatorSet: bi.CurrentEpochValidatorSet.Accounts().ToABIBinding(),
 		Signature:       signatureBig,
 		Bitmap:          parentExtra.Committed.Bitmap,
+		BlockMetadata: &contractsapi.BlockMetadata{
+			BlockRound:  new(big.Int).SetUint64(parentExtra.BlockMetaData.BlockRound),
+			EpochNumber: new(big.Int).SetUint64(parentExtra.BlockMetaData.EpochNumber),
+			BlockHash:   bi.ParentBlock.Hash,
+		},
 	}
 
 	inputData, err := input.EncodeAbi()

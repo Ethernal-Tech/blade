@@ -43,7 +43,8 @@ var (
 
 	SignedValidatorABIType = abi.MustNewType(
 		"tuple(tuple(address _address,uint256[4] blsKey,uint256 votingPower)[] newValidatorSet," +
-			"uint256[2] signature, bytes bitmap)")
+			"uint256[2] signature, bytes bitmap, tuple(bytes32 blockHash,uint256 blockRound," +
+			"uint256 epochNumber) blockMetadata)")
 )
 
 var (
@@ -70,9 +71,10 @@ func (b *BridgeBatch) DecodeAbi(buf []byte) error {
 }
 
 type SignedValidatorSet struct {
-	NewValidatorSet []*Validator `abi:"newValidatorSet"`
-	Signature       [2]*big.Int  `abi:"signature"`
-	Bitmap          []byte       `abi:"bitmap"`
+	NewValidatorSet []*Validator   `abi:"newValidatorSet"`
+	Signature       [2]*big.Int    `abi:"signature"`
+	Bitmap          []byte         `abi:"bitmap"`
+	BlockMetadata   *BlockMetadata `abi:"blockMetadata"`
 }
 
 func (s *SignedValidatorSet) EncodeAbi() ([]byte, error) {
