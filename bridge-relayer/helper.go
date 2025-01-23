@@ -48,70 +48,70 @@ func GetBridgeBatchesFromNumber(batchID *big.Int,
 
 	signedBridgeBatches := make([]contractsapi.SignedBridgeMessageBatch, len(decodedSlice))
 
-	for i, v := range decodedSlice {
-		decodeRootHash, ok := v["rootHash"].([32]uint8)
-		if !ok {
-			return nil, fmt.Errorf("invalid format of the root hash")
-		}
+	// for i, v := range decodedSlice {
+	// 	decodeRootHash, ok := v["rootHash"].([32]uint8)
+	// 	if !ok {
+	// 		return nil, fmt.Errorf("invalid format of the root hash")
+	// 	}
 
-		decodedStartID, ok := v["startId"].(*big.Int)
-		if !ok {
-			return nil, fmt.Errorf("invalid format of the start ID")
-		}
+	// 	decodedStartID, ok := v["startId"].(*big.Int)
+	// 	if !ok {
+	// 		return nil, fmt.Errorf("invalid format of the start ID")
+	// 	}
 
-		decodedEndID, ok := v["endId"].(*big.Int)
-		if !ok {
-			return nil, fmt.Errorf("invalid format of the end ID")
-		}
+	// 	decodedEndID, ok := v["endId"].(*big.Int)
+	// 	if !ok {
+	// 		return nil, fmt.Errorf("invalid format of the end ID")
+	// 	}
 
-		decodedSourceChainID, ok := v["sourceChainId"].(*big.Int)
-		if !ok {
-			return nil, fmt.Errorf("invalid format of the source chain ID")
-		}
+	// 	decodedSourceChainID, ok := v["sourceChainId"].(*big.Int)
+	// 	if !ok {
+	// 		return nil, fmt.Errorf("invalid format of the source chain ID")
+	// 	}
 
-		decodedDestinationChainID, ok := v["destinationChainId"].(*big.Int)
-		if !ok {
-			return nil, fmt.Errorf("invalid format of the destination chain ID")
-		}
+	// 	decodedDestinationChainID, ok := v["destinationChainId"].(*big.Int)
+	// 	if !ok {
+	// 		return nil, fmt.Errorf("invalid format of the destination chain ID")
+	// 	}
 
-		decodedBitmap, ok := v["bitmap"].([]byte)
-		if !ok {
-			return nil, fmt.Errorf("invalid format of the bitmap")
-		}
+	// 	decodedBitmap, ok := v["bitmap"].([]byte)
+	// 	if !ok {
+	// 		return nil, fmt.Errorf("invalid format of the bitmap")
+	// 	}
 
-		decodedThreshold, ok := v["threshold"].(*big.Int)
-		if !ok {
-			return nil, fmt.Errorf("invalid format of the threshold")
-		}
+	// 	decodedThreshold, ok := v["threshold"].(*big.Int)
+	// 	if !ok {
+	// 		return nil, fmt.Errorf("invalid format of the threshold")
+	// 	}
 
-		decodedIsRollback, ok := v["isRollback"].(bool)
-		if !ok {
-			return nil, fmt.Errorf("invalid format of the rollback flag")
-		}
+	// 	decodedIsRollback, ok := v["isRollback"].(bool)
+	// 	if !ok {
+	// 		return nil, fmt.Errorf("invalid format of the rollback flag")
+	// 	}
 
-		decodedSignature, ok := v["signature"].([2]*big.Int)
-		if !ok {
-			return nil, fmt.Errorf("invalid format of the signature")
-		}
+	// 	decodedSignature, ok := v["signature"].([2]*big.Int)
+	// 	if !ok {
+	// 		return nil, fmt.Errorf("invalid format of the signature")
+	// 	}
 
-		decodedValidatorSetBatchID, ok := v["validatorSetBatchId"].(*big.Int)
-		if !ok {
-			return nil, fmt.Errorf("invalid format of the validator set batch ID")
-		}
+	// 	decodedValidatorSetBatchID, ok := v["validatorSetBatchId"].(*big.Int)
+	// 	if !ok {
+	// 		return nil, fmt.Errorf("invalid format of the validator set batch ID")
+	// 	}
 
-		signedBridgeBatches[i] = contractsapi.SignedBridgeMessageBatch{
-			RootHash:            decodeRootHash,
-			StartID:             decodedStartID,
-			EndID:               decodedEndID,
-			SourceChainID:       decodedSourceChainID,
-			DestinationChainID:  decodedDestinationChainID,
-			Signature:           decodedSignature,
-			Bitmap:              decodedBitmap,
-			Threshold:           decodedThreshold,
-			IsRollback:          decodedIsRollback,
-			ValidatorSetBatchID: decodedValidatorSetBatchID,
-		}
-	}
+	// 	signedBridgeBatches[i] = contractsapi.SignedBridgeMessageBatch{
+	// 		RootHash:            decodeRootHash,
+	// 		StartID:             decodedStartID,
+	// 		EndID:               decodedEndID,
+	// 		SourceChainID:       decodedSourceChainID,
+	// 		DestinationChainID:  decodedDestinationChainID,
+	// 		Signature:           decodedSignature,
+	// 		Bitmap:              decodedBitmap,
+	// 		Threshold:           decodedThreshold,
+	// 		IsRollback:          decodedIsRollback,
+	// 		ValidatorSetBatchID: decodedValidatorSetBatchID,
+	// 	}
+	// }
 
 	return signedBridgeBatches, nil
 }
