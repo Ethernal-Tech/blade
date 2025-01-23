@@ -146,7 +146,7 @@ func (bbs *BridgeBatchSigned) DecodeAbi(txData []byte) error {
 
 	*bbs = BridgeBatchSigned{
 		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-
+			Messages:           commit.SignedBatch.Batch.Messages,
 			SourceChainID:      commit.SignedBatch.Batch.SourceChainID,
 			DestinationChainID: commit.SignedBatch.Batch.DestinationChainID,
 			Threshold:          commit.SignedBatch.Batch.Threshold,
