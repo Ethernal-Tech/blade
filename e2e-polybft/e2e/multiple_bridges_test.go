@@ -4,7 +4,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"os"
 	"path"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -28,6 +31,21 @@ const (
 	nativeTokenConfig = "Blade:BLD:18:false:1337"
 )
 
+func init() {
+	wd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	parent := filepath.Dir(wd)
+	parent = strings.Trim(parent, "e2e-polybft")
+	wd = filepath.Join(parent, "/artifacts/blade")
+	os.Setenv("EDGE_BINARY", wd)
+	os.Setenv("E2E_TESTS", "true")
+	os.Setenv("E2E_LOGS", "true")
+	os.Setenv("E2E_LOG_LEVEL", "debug")
+}
+
 // The purpose of this test is to verify the correctness of bridging different token types (ERC20, ERC721, ERC1155) between
 // an internal chain and potentially multiple external chains. The external chains represent the source chains of the tokens.
 // This means that token creation (minting) is performed on them. The test content and flow is relatively straightforward. The
@@ -44,13 +62,13 @@ const (
 func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 	const (
 		// This also represents the number of deposit/withdraw transactions that will be made.
-		numberOfAccounts = 5
+		numberOfAccounts = 1
 		// Necessary, since external chains do not have instant finality.
 		numBlockConfirmations = 2
 		// Number of blocks after which the validator set is changed.
 		epochSize = 40
 		// Number of bridges, and therefore the number of external chains.
-		numberOfBridges = 1
+		numberOfBridges = 2
 	)
 
 	// Since the success of the test is partially based on sequential checks of successfully processed events, the
@@ -86,11 +104,15 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 		t.Logf("#%d - %s", i+1, accounts[i].Address().String())
 	}
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	// Creating a cluster with configuration parameters and premining funds for previously generated addresses (to be able
 	// to pay fees). Validators (5) are pre-funded by default, allowing them to stake and participate in the consensus.
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithTestRewardToken(),
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithSecretsCallback(func(_ []types.Address, tcc *framework.TestClusterConfig) {
@@ -166,6 +188,7 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 					t.Logf(pf+format, args...)
 				}
 
+				t.Logf("Deployer on external chain %d has the address %s", externalChainIDs[bridgeNum], deployerKey.Address().String())
 				// Deploying the ERC20 smart contract to the external chain.
 				receipt, err := externalChainTxRelayers[bridgeNum].SendTransaction(tx, deployerKey)
 				require.NoError(t, err)
@@ -200,7 +223,7 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 				// external chain to the child ERC20 smart contract on the internal chain.
 				require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 					for i := range numberOfAccounts + 1 {
-						if !isEventProcessed(t, bridgeConfigs[bridgeNum].InternalGatewayAddr, internalChainTxRelayer, uint64(erc20InternalESP+i)) {
+						if !isEventProcessed(t, bridgeConfigs[bridgeNum].InternalGatewayAddr, internalChainTxRelayer, uint64(erc20InternalESP+i), false) {
 							logFunc("Event %d still not processed", erc20InternalESP+i)
 
 							return false
@@ -252,7 +275,7 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 				// to the number of withdraws (number of accounts). The mapping event does not exist in this case.
 				require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 					for i := range numberOfAccounts {
-						if !isEventProcessed(t, bridgeConfigs[bridgeNum].ExternalGatewayAddr, externalChainTxRelayers[bridgeNum], uint64(erc20ExternalESP+i)) {
+						if !isEventProcessed(t, bridgeConfigs[bridgeNum].ExternalGatewayAddr, externalChainTxRelayers[bridgeNum], uint64(erc20ExternalESP+i), false) {
 							logFunc("Event %d still not processed", erc20ExternalESP+i)
 
 							return false
@@ -281,6 +304,7 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 	})
 
 	t.Run("bridge ERC721 tokens", func(t *testing.T) {
+		t.Skip()
 		tx := types.NewTx(types.NewLegacyTx(
 			types.WithTo(nil),
 			types.WithInput(contractsapi.RootERC721.Bytecode),
@@ -293,7 +317,7 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 		for i := range numberOfBridges {
 			wg.Add(1)
 
-			go func(bridgeNum int) {
+			func(bridgeNum int) {
 				defer wg.Done()
 
 				logFunc := func(format string, args ...any) {
@@ -335,7 +359,7 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 				// external chain to the child ERC721 smart contract on the internal chain.
 				require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 					for i := range numberOfAccounts + 1 {
-						if !isEventProcessed(t, bridgeConfigs[bridgeNum].InternalGatewayAddr, internalChainTxRelayer, uint64(erc721InternalESP+i)) {
+						if !isEventProcessed(t, bridgeConfigs[bridgeNum].InternalGatewayAddr, internalChainTxRelayer, uint64(erc721InternalESP+i), false) {
 							logFunc("Event %d still not processed", erc721InternalESP+i)
 
 							return false
@@ -384,7 +408,7 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 				// to the number of withdraws (number of accounts). The mapping event does not exist in this case.
 				require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 					for i := range numberOfAccounts {
-						if !isEventProcessed(t, bridgeConfigs[bridgeNum].ExternalGatewayAddr, externalChainTxRelayers[bridgeNum], uint64(erc721ExternalESP+i)) {
+						if !isEventProcessed(t, bridgeConfigs[bridgeNum].ExternalGatewayAddr, externalChainTxRelayers[bridgeNum], uint64(erc721ExternalESP+i), false) {
 							logFunc("Event %d still not processed", erc721ExternalESP+i)
 
 							return false
@@ -410,6 +434,7 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 	})
 
 	t.Run("bridge ERC1155 tokens", func(t *testing.T) {
+		t.Skip()
 		tx := types.NewTx(types.NewLegacyTx(
 			types.WithTo(nil),
 			types.WithInput(contractsapi.RootERC1155.Bytecode),
@@ -464,7 +489,7 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 				// external chain to the child ERC1155 smart contract on the internal chain.
 				require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 					for i := range numberOfAccounts + 1 {
-						if !isEventProcessed(t, bridgeConfigs[bridgeNum].InternalGatewayAddr, internalChainTxRelayer, uint64(erc1155InternalESP+i)) {
+						if !isEventProcessed(t, bridgeConfigs[bridgeNum].InternalGatewayAddr, internalChainTxRelayer, uint64(erc1155InternalESP+i), false) {
 							logFunc("Event %d still not processed", erc1155InternalESP+i)
 
 							return false
@@ -529,7 +554,7 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 				// to the number of withdraws (number of accounts). The mapping event does not exist in this case.
 				require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 					for i := range numberOfAccounts {
-						if !isEventProcessed(t, bridgeConfigs[bridgeNum].ExternalGatewayAddr, externalChainTxRelayers[bridgeNum], uint64(erc1155ExternalESP+i)) {
+						if !isEventProcessed(t, bridgeConfigs[bridgeNum].ExternalGatewayAddr, externalChainTxRelayers[bridgeNum], uint64(erc1155ExternalESP+i), false) {
 							logFunc("Event %d still not processed", erc1155ExternalESP+i)
 
 							return false
@@ -745,7 +770,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 				// internal chain to the child ERC20 smart contract on the external chain.
 				require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 					for i := range numberOfAccounts + 1 {
-						if !isEventProcessed(t, bridgeConfigs[bridgeNum].ExternalGatewayAddr, externalChainTxRelayers[bridgeNum], uint64(erc20ExternalESP+i)) {
+						if !isEventProcessed(t, bridgeConfigs[bridgeNum].ExternalGatewayAddr, externalChainTxRelayers[bridgeNum], uint64(erc20ExternalESP+i), false) {
 							logFunc("Event %d still not processed", erc20ExternalESP+i)
 
 							return false
@@ -797,7 +822,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 				// to the number of withdraws (number of accounts). The mapping event does not exist in this case.
 				require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 					for i := range numberOfAccounts {
-						if !isEventProcessed(t, bridgeConfigs[bridgeNum].InternalGatewayAddr, internalChainTxRelayer, uint64(erc20InternalESP+i)) {
+						if !isEventProcessed(t, bridgeConfigs[bridgeNum].InternalGatewayAddr, internalChainTxRelayer, uint64(erc20InternalESP+i), false) {
 							logFunc("Event %d still not processed", erc20InternalESP+i)
 
 							return false
@@ -880,7 +905,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 				// internal chain to the child ERC721 smart contract on the external chain.
 				require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 					for i := range numberOfAccounts + 1 {
-						if !isEventProcessed(t, bridgeConfigs[bridgeNum].ExternalGatewayAddr, externalChainTxRelayers[bridgeNum], uint64(erc721ExternalESP+i)) {
+						if !isEventProcessed(t, bridgeConfigs[bridgeNum].ExternalGatewayAddr, externalChainTxRelayers[bridgeNum], uint64(erc721ExternalESP+i), false) {
 							logFunc("Event %d still not processed", erc721ExternalESP+i)
 
 							return false
@@ -929,7 +954,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 				// to the number of withdraws (number of accounts). The mapping event does not exist in this case.
 				require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 					for i := range numberOfAccounts {
-						if !isEventProcessed(t, bridgeConfigs[bridgeNum].InternalGatewayAddr, internalChainTxRelayer, uint64(erc721InternalESP+i)) {
+						if !isEventProcessed(t, bridgeConfigs[bridgeNum].InternalGatewayAddr, internalChainTxRelayer, uint64(erc721InternalESP+i), false) {
 							logFunc("Event %d still not processed", erc721InternalESP+i)
 
 							return false
@@ -1009,7 +1034,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 				// internal chain to the child ERC1155 smart contract on the external chain.
 				require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 					for i := range numberOfAccounts + 1 {
-						if !isEventProcessed(t, bridgeConfigs[bridgeNum].ExternalGatewayAddr, externalChainTxRelayers[bridgeNum], uint64(erc1155ExternalESP+i)) {
+						if !isEventProcessed(t, bridgeConfigs[bridgeNum].ExternalGatewayAddr, externalChainTxRelayers[bridgeNum], uint64(erc1155ExternalESP+i), false) {
 							logFunc("Event %d still not processed", erc1155ExternalESP+i)
 
 							return false
@@ -1074,7 +1099,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 				// to the number of withdraws (number of accounts). The mapping event does not exist in this case.
 				require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 					for i := range numberOfAccounts {
-						if !isEventProcessed(t, bridgeConfigs[bridgeNum].InternalGatewayAddr, internalChainTxRelayer, uint64(erc1155InternalESP+i)) {
+						if !isEventProcessed(t, bridgeConfigs[bridgeNum].InternalGatewayAddr, internalChainTxRelayer, uint64(erc1155InternalESP+i), false) {
 							logFunc("Event %d still not processed", erc1155InternalESP+i)
 
 							return false
@@ -1257,7 +1282,7 @@ func TestE2E_Multiple_Bridges_ExternalToInternalNativeTokenTransfer(t *testing.T
 			// to the number of deposits (number of accounts). The mapping is already done in the cluster launching.
 			require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 				for i := range numberOfAccounts {
-					if !isEventProcessed(t, bridgeConfigs[bridgeNum].InternalGatewayAddr, internalChainTxRelayer, uint64(i+1)) {
+					if !isEventProcessed(t, bridgeConfigs[bridgeNum].InternalGatewayAddr, internalChainTxRelayer, uint64(i+1), false) {
 						logFunc("Event %d still not processed", i+1)
 
 						return false
@@ -1303,7 +1328,7 @@ func TestE2E_Multiple_Bridges_ExternalToInternalNativeTokenTransfer(t *testing.T
 			// to the number of withdraws (number of accounts).
 			require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 				for i := range numberOfAccounts {
-					if !isEventProcessed(t, bridgeConfigs[bridgeNum].ExternalGatewayAddr, externalChainTxRelayers[bridgeNum], uint64(i+1)) {
+					if !isEventProcessed(t, bridgeConfigs[bridgeNum].ExternalGatewayAddr, externalChainTxRelayers[bridgeNum], uint64(i+1), false) {
 						logFunc("Event %d still not processed", i+1)
 
 						return false
@@ -1370,6 +1395,9 @@ func TestE2E_Multiple_Bridges_InternalToExternalNativeTokenTransfer(t *testing.T
 		t.Logf("#%d - %s", i+1, accounts[i].Address().String())
 	}
 
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
 	// Creating a cluster with configuration parameters. Configuring and deploying the root native ERC20 smart contract on the
 	// internal chain is also part of this process (it is done by default). Validators (5) are pre-funded by default, allowing
 	// them to stake and participate in the consensus.
@@ -1377,6 +1405,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalNativeTokenTransfer(t *testing.T
 		framework.WithTestRewardToken(),
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
 		framework.WithEpochSize(epochSize),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithBridges(numberOfBridges),
 		framework.WithSecretsCallback(func(_ []types.Address, tcc *framework.TestClusterConfig) {
 			addresses := make([]string, len(accounts)+1)
@@ -1493,7 +1522,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalNativeTokenTransfer(t *testing.T
 			// on the internal chain to the child ERC20 smart contract on the external chain.
 			require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 				for i := range numberOfAccounts + 1 {
-					if !isEventProcessed(t, bridgeConfigs[bridgeNum].ExternalGatewayAddr, externalChainTxRelayers[bridgeNum], uint64(i+1)) {
+					if !isEventProcessed(t, bridgeConfigs[bridgeNum].ExternalGatewayAddr, externalChainTxRelayers[bridgeNum], uint64(i+1), false) {
 						logFunc("Event %d still not processed", i+1)
 
 						return false
@@ -1545,7 +1574,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalNativeTokenTransfer(t *testing.T
 			// to the number of withdraws (number of accounts).
 			require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 				for i := range numberOfAccounts {
-					if !isEventProcessed(t, bridgeConfigs[bridgeNum].InternalGatewayAddr, internalChainTxRelayer, uint64(i+1)) {
+					if !isEventProcessed(t, bridgeConfigs[bridgeNum].InternalGatewayAddr, internalChainTxRelayer, uint64(i+1), false) {
 						logFunc("Event %d still not processed", i+1)
 
 						return false

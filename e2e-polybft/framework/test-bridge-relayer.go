@@ -2,6 +2,7 @@ package framework
 
 import (
 	"encoding/hex"
+	"fmt"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -56,7 +57,7 @@ func (t *TestRelayer) Start() {
 		"--internal-chain-rpc", t.validatorJSONRPC,
 		"--external-chain-id", strconv.FormatUint(t.externalChainID, 10),
 		"--poll-interval", strconv.Itoa(5),
-		"--database-path", filepath.Dir(t.t.TempDir()) + "/bridge-relayer.db",
+		"--database-path", fmt.Sprintf("%s/bridge-relayer-%d.db", filepath.Dir(t.t.TempDir()), t.externalChainID),
 	}
 
 	stdout := t.clusterConfig.GetStdout("bridge-relayer")

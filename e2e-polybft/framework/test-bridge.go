@@ -387,6 +387,7 @@ func (t *TestBridge) fundRelayerAddressOnExternal(relayerAddress types.Address) 
 
 	args = append(args, "--addresses", relayerAddress.String())
 	args = append(args, "--amounts", command.DefaultPremineBalance.String()) // this is more than enough tokens
+	args = append(args, "--json-rpc", t.JSONRPCAddr())
 
 	if err := t.cmdRun(args...); err != nil {
 		return fmt.Errorf("failed to fund non-validator addresses on external: %w", err)
