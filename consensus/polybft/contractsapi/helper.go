@@ -52,24 +52,6 @@ var (
 	_ ABIEncoder = &DistributeRewardForEpochManagerFn{}
 )
 
-type BridgeBatch struct {
-	RootHash           types.Hash `abi:"rootHash"`
-	StartID            *big.Int   `abi:"startId"`
-	EndID              *big.Int   `abi:"endId"`
-	SourceChainID      *big.Int   `abi:"sourceChainId"`
-	DestinationChainID *big.Int   `abi:"destinationChainId"`
-	Threshold          *big.Int   `abi:"threshold"`
-	IsRollback         bool       `abi:"isRollback"`
-}
-
-func (b *BridgeBatch) EncodeAbi() ([]byte, error) {
-	return BridgeBatchABIType.Encode(b)
-}
-
-func (b *BridgeBatch) DecodeAbi(buf []byte) error {
-	return decodeStruct(BridgeBatchABIType, buf, &b)
-}
-
 type SignedValidatorSet struct {
 	NewValidatorSet []*Validator   `abi:"newValidatorSet"`
 	Signature       [2]*big.Int    `abi:"signature"`

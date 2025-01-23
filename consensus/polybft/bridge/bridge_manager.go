@@ -464,10 +464,11 @@ func (b *bridgeEventManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error
 		b.lock.Lock()
 
 		for i := 0; i < len(b.unexecutedBatches); {
+			length := len(b.unexecutedBatches[i].Messages)
 			if b.unexecutedBatches[i].SourceChainID.Cmp(event.SourceChainID) == 0 &&
 				b.unexecutedBatches[i].DestinationChainID.Cmp(event.DestinationChainID) == 0 &&
-				b.unexecutedBatches[i].StartID.Cmp(event.StartID) == 0 &&
-				b.unexecutedBatches[i].EndID.Cmp(event.EndID) == 0 {
+				b.unexecutedBatches[i].Messages[0].ID.Cmp(event.StartID) == 0 &&
+				b.unexecutedBatches[i].Messages[length-1].ID.Cmp(event.EndID) == 0 {
 				b.unexecutedBatches = append(b.unexecutedBatches[:i], b.unexecutedBatches[i+1:]...)
 			} else {
 				i++
@@ -476,10 +477,11 @@ func (b *bridgeEventManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error
 
 		if event.IsRollback {
 			for i := 0; i < len(b.rollbackBatches); {
+				length := len(b.unexecutedBatches[i].Messages)
 				if b.rollbackBatches[i].SourceChainID.Cmp(event.SourceChainID) == 0 &&
 					b.rollbackBatches[i].DestinationChainID.Cmp(event.DestinationChainID) == 0 &&
-					b.rollbackBatches[i].StartID.Cmp(event.StartID) == 0 &&
-					b.rollbackBatches[i].EndID.Cmp(event.EndID) == 0 {
+					b.rollbackBatches[i].Messages[0].ID.Cmp(event.StartID) == 0 &&
+					b.rollbackBatches[i].Messages[length-1].ID.Cmp(event.EndID) == 0 {
 					b.rollbackBatches = append(b.rollbackBatches[:i], b.rollbackBatches[i+1:]...)
 				} else {
 					i++
@@ -509,18 +511,19 @@ func (b *bridgeEventManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSign
 		// we start from the end, since last pending batch is the largest one
 		for i := len(pendingBatches) - 1; i >= 0; i-- {
 			pendingBatch := pendingBatches[i]
-			if (pendingBatch.StartID.Uint64() == b.nextEventIDInternal &&
+			if (pendingBatch.Messages[0].ID.Uint64() == b.nextEventIDInternal &&
 				pendingBatch.SourceChainID.Uint64() == b.internalChainID) ||
-				(pendingBatch.StartID.Uint64() == b.nextEventIDExternal &&
+				(pendingBatch.Messages[0].ID.Uint64() == b.nextEventIDExternal &&
 					pendingBatch.SourceChainID.Uint64() == b.externalChainID) {
 				aggregatedSignature, err := b.getAggSignatureForBridgeBatchMessage(blockNumber, pendingBatch)
 				if err != nil {
 					if errors.Is(err, errQuorumNotReached) {
+						length := len(pendingBatch.Messages)
 						// a valid case, batch has no quorum, we should not return an error
-						if pendingBatch.BridgeBatch.EndID.Uint64()-pendingBatch.BridgeBatch.StartID.Uint64() >= 0 {
+						if pendingBatch.Messages[length-1].ID.Uint64()-pendingBatch.Messages[0].ID.Uint64() >= 0 {
 							b.logger.Debug("can not submit a batch, quorum not reached",
-								"from", pendingBatch.BridgeBatch.StartID.Uint64(),
-								"to", pendingBatch.BridgeBatch.EndID.Uint64())
+								"from", pendingBatch.Messages[0].ID.Uint64(),
+								"to", pendingBatch.Messages[length-1].ID.Uint64())
 						}
 
 						continue
@@ -530,8 +533,8 @@ func (b *bridgeEventManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSign
 				}
 
 				largestBridgeBatch = &BridgeBatchSigned{
-					BridgeBatch:  pendingBatch.BridgeBatch,
-					AggSignature: aggregatedSignature,
+					BridgeMessageBatch: pendingBatch.BridgeMessageBatch,
+					AggSignature:       aggregatedSignature,
 				}
 
 				break
@@ -586,11 +589,12 @@ func (b *bridgeEventManager) getRollbackBatch(blockNumber uint64) ([]*BridgeBatc
 			aggregatedSignature, err := b.getAggSignatureForBridgeBatchMessage(blockNumber, p)
 			if err != nil {
 				if errors.Is(err, errQuorumNotReached) {
+					length := len(p.Messages)
 					// a valid case, batch has no quorum, we should not return an error
-					if p.BridgeBatch.EndID.Uint64()-p.BridgeBatch.StartID.Uint64() >= 0 {
+					if p.Messages[length-1].ID.Uint64()-p.Messages[0].ID.Uint64() >= 0 {
 						b.logger.Debug("can not submit a rollback batch, quorum not reached",
-							"from", p.BridgeBatch.StartID.Uint64(),
-							"to", p.BridgeBatch.EndID.Uint64())
+							"from", p.Messages[0].ID.Uint64(),
+							"to", p.Messages[length-1].ID.Uint64())
 					}
 
 					continue
@@ -599,7 +603,7 @@ func (b *bridgeEventManager) getRollbackBatch(blockNumber uint64) ([]*BridgeBatc
 				return nil, err
 			}
 
-			result = append(result, &BridgeBatchSigned{BridgeBatch: p.BridgeBatch, AggSignature: aggregatedSignature})
+			result = append(result, &BridgeBatchSigned{BridgeMessageBatch: p.BridgeMessageBatch, AggSignature: aggregatedSignature})
 		}
 	}
 
@@ -628,7 +632,7 @@ func (b *bridgeEventManager) getAggSignatureForBridgeBatchMessage(blockNumber ui
 	votes, err := b.state.getMessageVotes(
 		pendingBridgeBatch.Epoch,
 		bridgeBatchHash.Bytes(),
-		pendingBridgeBatch.BridgeBatch.SourceChainID.Uint64())
+		pendingBridgeBatch.BridgeMessageBatch.SourceChainID.Uint64())
 	if err != nil {
 		return polytypes.Signature{}, err
 	}
@@ -876,6 +880,8 @@ func (b *bridgeEventManager) buildBridgeBatch(
 		SourceChainID:      sourceChainID,
 		DestinationChainID: destinationChainID,
 	})
+
+	length := len(pendingBridgeBatch.Messages)
 
 	if pendingBridgeBatch.BridgeBatch.EndID.Uint64()-pendingBridgeBatch.BridgeBatch.StartID.Uint64() >= 0 {
 		b.logger.Debug(
