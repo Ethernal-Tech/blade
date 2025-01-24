@@ -114,9 +114,11 @@ func TestBridgeEventManager_PostEpoch_BuildBridgeBatch(t *testing.T) {
 		}
 
 		require.NoError(t, s.buildExternalBridgeBatch(nil))
+
+		length := len(s.pendingBridgeBatchesExternal[0].Messages)
 		require.Len(t, s.pendingBridgeBatchesExternal, 1)
-		require.Equal(t, uint64(1), s.pendingBridgeBatchesExternal[0].BridgeBatch.StartID.Uint64())
-		require.Equal(t, uint64(5), s.pendingBridgeBatchesExternal[0].BridgeBatch.EndID.Uint64())
+		require.Equal(t, uint64(1), s.pendingBridgeBatchesExternal[0].Messages[0].ID.Uint64())
+		require.Equal(t, uint64(5), s.pendingBridgeBatchesExternal[0].Messages[length-1].ID.Uint64())
 		require.Equal(t, uint64(0), s.pendingBridgeBatchesExternal[0].Epoch)
 
 		// add the next 5 bridge messages, at that point, so that it generates a larger batch
@@ -125,9 +127,11 @@ func TestBridgeEventManager_PostEpoch_BuildBridgeBatch(t *testing.T) {
 		}
 
 		require.NoError(t, s.buildExternalBridgeBatch(nil))
+
+		length = len(s.pendingBridgeBatchesExternal[1].Messages)
 		require.Len(t, s.pendingBridgeBatchesExternal, 2)
-		require.Equal(t, uint64(1), s.pendingBridgeBatchesExternal[1].BridgeBatch.StartID.Uint64())
-		require.Equal(t, uint64(10), s.pendingBridgeBatchesExternal[1].BridgeBatch.EndID.Uint64())
+		require.Equal(t, uint64(1), s.pendingBridgeBatchesExternal[1].Messages[0].ID.Uint64())
+		require.Equal(t, uint64(10), s.pendingBridgeBatchesExternal[1].Messages[length-1].ID.Uint64())
 		require.Equal(t, uint64(0), s.pendingBridgeBatchesExternal[1].Epoch)
 
 		// the message was sent
@@ -295,11 +299,14 @@ func TestBridgeEventManager_BuildBridgeBatch(t *testing.T) {
 
 	s.pendingBridgeBatchesExternal = []*PendingBridgeBatch{
 		{
-			BridgeBatch: &contractsapi.BridgeBatch{
+			BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
+				Messages: []*contractsapi.BridgeMessage{
+					&contractsapi.BridgeMessage{
+						ID:                 big.NewInt(1),
+						SourceChainID:      big.NewInt(1),
+						DestinationChainID: big.NewInt(2)}},
 				Threshold:          bigZero,
 				IsRollback:         false,
-				StartID:            big.NewInt(1),
-				EndID:              big.NewInt(2),
 				SourceChainID:      big.NewInt(1),
 				DestinationChainID: big.NewInt(2),
 			},
@@ -429,12 +436,14 @@ func TestBridgeEventManager_AddLog_BuildBridgeBatches(t *testing.T) {
 
 		require.NoError(t, s.PostBlock(postBlockRequiest))
 
+		length := len(s.pendingBridgeBatchesExternal[0].Messages)
+
 		bridgeEvents, err = s.state.getBridgeMessageEventsForBridgeBatch(1, 1, nil, 1, 2)
 		require.NoError(t, err)
 		require.Len(t, bridgeEvents, 1)
 		require.Len(t, s.pendingBridgeBatchesExternal, 1)
-		require.Equal(t, uint64(1), s.pendingBridgeBatchesExternal[0].BridgeBatch.StartID.Uint64())
-		require.Equal(t, uint64(1), s.pendingBridgeBatchesExternal[0].BridgeBatch.EndID.Uint64())
+		require.Equal(t, uint64(1), s.pendingBridgeBatchesExternal[0].Messages[0].ID.Uint64())
+		require.Equal(t, uint64(1), s.pendingBridgeBatchesExternal[0].Messages[length-1].ID.Uint64())
 
 		// add one more log to have a minimum batch
 		goodLog2 := goodLog.Copy()
@@ -443,9 +452,11 @@ func TestBridgeEventManager_AddLog_BuildBridgeBatches(t *testing.T) {
 
 		require.NoError(t, s.PostBlock(postBlockRequiest))
 
+		length = len(s.pendingBridgeBatchesExternal[1].Messages)
+
 		require.Len(t, s.pendingBridgeBatchesExternal, 2)
-		require.Equal(t, uint64(1), s.pendingBridgeBatchesExternal[1].BridgeBatch.StartID.Uint64())
-		require.Equal(t, uint64(2), s.pendingBridgeBatchesExternal[1].BridgeBatch.EndID.Uint64())
+		require.Equal(t, uint64(1), s.pendingBridgeBatchesExternal[1].Messages[0].ID.Uint64())
+		require.Equal(t, uint64(2), s.pendingBridgeBatchesExternal[1].Messages[length-1].ID.Uint64())
 
 		// add two more logs to have larger batch
 		goodLog3 := goodLog.Copy()
@@ -460,9 +471,11 @@ func TestBridgeEventManager_AddLog_BuildBridgeBatches(t *testing.T) {
 
 		require.NoError(t, s.PostBlock(postBlockRequiest))
 
+		length = len(s.pendingBridgeBatchesExternal[3].Messages)
+
 		require.Len(t, s.pendingBridgeBatchesExternal, 4)
-		require.Equal(t, uint64(1), s.pendingBridgeBatchesExternal[3].BridgeBatch.StartID.Uint64())
-		require.Equal(t, uint64(4), s.pendingBridgeBatchesExternal[3].BridgeBatch.EndID.Uint64())
+		require.Equal(t, uint64(1), s.pendingBridgeBatchesExternal[3].Messages[0].ID.Uint64())
+		require.Equal(t, uint64(4), s.pendingBridgeBatchesExternal[3].Messages[length-1].ID.Uint64())
 	})
 
 	t.Run("Node is not a validator", func(t *testing.T) {

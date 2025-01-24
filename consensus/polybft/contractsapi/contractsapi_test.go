@@ -46,14 +46,13 @@ func TestEncoding_Struct(t *testing.T) {
 	t.Parallel()
 
 	bridgeBatch := SignedBridgeMessageBatch{
-		RootHash:            types.ZeroHash,
-		StartID:             big.NewInt(25),
-		EndID:               big.NewInt(35),
-		SourceChainID:       big.NewInt(1),
-		DestinationChainID:  big.NewInt(0),
+		Batch: &BridgeMessageBatch{
+			SourceChainID:      big.NewInt(1),
+			DestinationChainID: big.NewInt(0),
+			Threshold:          big.NewInt(0),
+			IsRollback:         false,
+		},
 		Signature:           [2]*big.Int{big.NewInt(1), big.NewInt(2)},
-		Threshold:           big.NewInt(0),
-		IsRollback:          false,
 		ValidatorSetBatchID: big.NewInt(0),
 	}
 
@@ -63,8 +62,8 @@ func TestEncoding_Struct(t *testing.T) {
 	var bridgeBatchDecoded SignedBridgeMessageBatch
 
 	require.NoError(t, bridgeBatchDecoded.DecodeAbi(encoding))
-	require.Equal(t, bridgeBatch.SourceChainID, bridgeBatchDecoded.SourceChainID)
-	require.Equal(t, bridgeBatch.DestinationChainID.Uint64(), bridgeBatchDecoded.DestinationChainID.Uint64())
+	require.Equal(t, bridgeBatch.Batch.SourceChainID, bridgeBatchDecoded.Batch.SourceChainID)
+	require.Equal(t, bridgeBatch.Batch.DestinationChainID.Uint64(), bridgeBatchDecoded.Batch.DestinationChainID.Uint64())
 }
 
 func TestEncodingAndParsingEvent(t *testing.T) {

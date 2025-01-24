@@ -130,12 +130,9 @@ func TestGetTransactions(t *testing.T) {
 
 				bridgeManagerMock := NewBridgeManagerMock(t)
 				bridgeManagerMock.On("BridgeBatch", blockInfo.CurrentBlock()).Return([]*BridgeBatchSigned{{
-					BridgeBatch: &contractsapi.BridgeBatch{
+					BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
 						Threshold:          bigZero,
 						IsRollback:         false,
-						RootHash:           types.StringToHash("0x123"),
-						StartID:            big.NewInt(1),
-						EndID:              big.NewInt(10),
 						SourceChainID:      big.NewInt(1),
 						DestinationChainID: big.NewInt(2),
 					},
@@ -218,7 +215,7 @@ func TestVerifyTransactions(t *testing.T) {
 				IsEndOfSprint: false,
 			},
 			setupMocks: func(bridge *bridge, blockInfo *oracle.NewBlockInfo) []*types.Transaction {
-				batch, _, _ := createAndSignBridgeBatch(t, 5, 1, 1, 10, 2, 1)
+				batch, _, _ := createAndSignBridgeBatch(t, 5, 1, 2, 1)
 
 				input, err := batch.EncodeAbi()
 				require.NoError(t, err)
@@ -238,7 +235,7 @@ func TestVerifyTransactions(t *testing.T) {
 				FirstBlockInEpoch: 1,
 			},
 			setupMocks: func(bridge *bridge, blockInfo *oracle.NewBlockInfo) []*types.Transaction {
-				batch, _, validators := createAndSignBridgeBatch(t, 5, blockInfo.CurrentEpoch, 1, 10, 2, 1)
+				batch, _, validators := createAndSignBridgeBatch(t, 5, blockInfo.CurrentEpoch, 2, 1)
 
 				input, err := batch.EncodeAbi()
 				require.NoError(t, err)
@@ -423,17 +420,14 @@ func createAndSignExtra(t *testing.T, numOfValidators, numOfNewValidators int,
 }
 
 func createAndSignBridgeBatch(t *testing.T, numOfValidators int,
-	epoch, startID, endID, destinationChainID, sourceChainID uint64,
+	epoch, destinationChainID, sourceChainID uint64,
 ) (*BridgeBatchSigned, *polytypes.Signature, *validator.TestValidators) {
 	t.Helper()
 
 	pendingBridgeBatch := &PendingBridgeBatch{
-		BridgeBatch: &contractsapi.BridgeBatch{
+		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
 			Threshold:          bigZero,
 			IsRollback:         false,
-			RootHash:           types.StringToHash("0x123"),
-			StartID:            big.NewInt(int64(startID)),
-			EndID:              big.NewInt(int64(endID)),
 			SourceChainID:      big.NewInt(int64(sourceChainID)),
 			DestinationChainID: big.NewInt(int64(destinationChainID)),
 		},
@@ -446,8 +440,8 @@ func createAndSignBridgeBatch(t *testing.T, numOfValidators int,
 	signature, validators := createValidatorsAndSignHash(t, numOfValidators, hash)
 
 	return &BridgeBatchSigned{
-		BridgeBatch:  pendingBridgeBatch.BridgeBatch,
-		AggSignature: *signature,
+		BridgeMessageBatch: pendingBridgeBatch.BridgeMessageBatch,
+		AggSignature:       *signature,
 	}, signature, validators
 }
 
