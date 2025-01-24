@@ -25,6 +25,7 @@ func TestEncoding_SignedTypes(t *testing.T) {
 		},
 		&SignedBridgeMessageBatch{
 			Batch: &BridgeMessageBatch{
+				Messages:           []*BridgeMessage{},
 				SourceChainID:      big.NewInt(2),
 				DestinationChainID: big.NewInt(3),
 				Threshold:          big.NewInt(1),

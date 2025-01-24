@@ -70,7 +70,20 @@ func generateBridgeMessageEvents(t *testing.T, eventsCount int, startIdx uint64)
 func CreateTestBridgeBatchMessage(t *testing.T, numberOfMessages, firstIndex uint64) *BridgeBatchSigned {
 	t.Helper()
 
+	messages := make([]*contractsapi.BridgeMessage, numberOfMessages)
+
+	for i := firstIndex; i < firstIndex+numberOfMessages; i++ {
+		messages[i-firstIndex] = &contractsapi.BridgeMessage{
+			ID:                 new(big.Int).SetUint64(i),
+			SourceChainID:      big.NewInt(1),
+			DestinationChainID: big.NewInt(0),
+			Sender:             types.Address{},
+			Receiver:           types.Address{},
+			Payload:            []byte{}}
+	}
+
 	msg := contractsapi.BridgeMessageBatch{
+		Messages:           messages,
 		SourceChainID:      big.NewInt(1),
 		DestinationChainID: big.NewInt(0),
 	}

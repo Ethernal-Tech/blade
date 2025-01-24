@@ -93,6 +93,14 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
 	cc := &testutil.Contract{}
 	cc.AddCallback(func() string {
 		return `
+			struct BridgeMessage {
+				uint256 id;
+				uint256 sourceChainId;
+				uint256 destinationChainId;
+				address sender;
+				address receiver;
+				bytes payload;
+			}
 
 			struct BridgeMessageBatch {
     			BridgeMessage[] messages;
