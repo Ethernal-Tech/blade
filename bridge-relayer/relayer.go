@@ -443,7 +443,7 @@ func (r *BridgeRelayer) Start() {
 					}
 				} else {
 					r.logger.Info("found batch", "events start-id", batch.Batch.Messages[0].ID.String(),
-						"events end-id", batch.Batch.Messages[len(batch.Batch.Messages)].ID.String(),
+						"events end-id", batch.Batch.Messages[len(batch.Batch.Messages)-1].ID.String(),
 						"is rollback batch", batch.Batch.IsRollback)
 
 					if err := r.sendSignedBridgeMessageBatch(&batch); err != nil {

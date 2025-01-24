@@ -1066,6 +1066,7 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, log *ethgo.Log, db
 		if !bridgeBatch.Batch.IsRollback {
 			b.unexecutedBatches = append(b.unexecutedBatches, &PendingBridgeBatch{
 				BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
+					Messages:           bridgeBatch.Batch.Messages,
 					SourceChainID:      bridgeBatch.Batch.SourceChainID,
 					DestinationChainID: bridgeBatch.Batch.DestinationChainID,
 					Threshold:          bridgeBatch.Batch.Threshold,
