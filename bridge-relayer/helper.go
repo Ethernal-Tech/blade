@@ -48,74 +48,122 @@ func GetBridgeBatchesFromNumber(batchID *big.Int,
 
 	signedBridgeBatches := make([]contractsapi.SignedBridgeMessageBatch, len(decodedSlice))
 
-	// for i, v := range decodedSlice {
-	// 	decodeRootHash, ok := v["rootHash"].([32]uint8)
-	// 	if !ok {
-	// 		return nil, fmt.Errorf("invalid format of the root hash")
-	// 	}
+	for i, v := range decodedSlice {
+		decodedBatch, ok := v["batch"].(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the batch")
+		}
 
-	// 	decodedStartID, ok := v["startId"].(*big.Int)
-	// 	if !ok {
-	// 		return nil, fmt.Errorf("invalid format of the start ID")
-	// 	}
+		decodedSourceChainID, ok := decodedBatch["sourceChainId"].(*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the source chain ID")
+		}
 
-	// 	decodedEndID, ok := v["endId"].(*big.Int)
-	// 	if !ok {
-	// 		return nil, fmt.Errorf("invalid format of the end ID")
-	// 	}
+		decodedDestinationChainID, ok := decodedBatch["destinationChainId"].(*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the destination chain ID")
+		}
 
-	// 	decodedSourceChainID, ok := v["sourceChainId"].(*big.Int)
-	// 	if !ok {
-	// 		return nil, fmt.Errorf("invalid format of the source chain ID")
-	// 	}
+		decodedThreshold, ok := decodedBatch["threshold"].(*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the threshold")
+		}
 
-	// 	decodedDestinationChainID, ok := v["destinationChainId"].(*big.Int)
-	// 	if !ok {
-	// 		return nil, fmt.Errorf("invalid format of the destination chain ID")
-	// 	}
+		decodedIsRollback, ok := decodedBatch["isRollback"].(bool)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the rollback flag")
+		}
 
-	// 	decodedBitmap, ok := v["bitmap"].([]byte)
-	// 	if !ok {
-	// 		return nil, fmt.Errorf("invalid format of the bitmap")
-	// 	}
+		rawMessages, ok := decodedBatch["messages"].([]map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the batch messages")
+		}
 
-	// 	decodedThreshold, ok := v["threshold"].(*big.Int)
-	// 	if !ok {
-	// 		return nil, fmt.Errorf("invalid format of the threshold")
-	// 	}
+		decodedMessages, err := decodeBridgeMessages(rawMessages)
+		if err != nil {
+			return nil, err
+		}
 
-	// 	decodedIsRollback, ok := v["isRollback"].(bool)
-	// 	if !ok {
-	// 		return nil, fmt.Errorf("invalid format of the rollback flag")
-	// 	}
+		decodedBitmap, ok := v["bitmap"].([]byte)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the bitmap")
+		}
 
-	// 	decodedSignature, ok := v["signature"].([2]*big.Int)
-	// 	if !ok {
-	// 		return nil, fmt.Errorf("invalid format of the signature")
-	// 	}
+		decodedSignature, ok := v["signature"].([2]*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the signature")
+		}
 
-	// 	decodedValidatorSetBatchID, ok := v["validatorSetBatchId"].(*big.Int)
-	// 	if !ok {
-	// 		return nil, fmt.Errorf("invalid format of the validator set batch ID")
-	// 	}
+		decodedValidatorSetBatchID, ok := v["validatorSetBatchId"].(*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the validator set batch ID")
+		}
 
-	// 	signedBridgeBatches[i] = contractsapi.SignedBridgeMessageBatch{
-	// 		RootHash:            decodeRootHash,
-	// 		StartID:             decodedStartID,
-	// 		EndID:               decodedEndID,
-	// 		SourceChainID:       decodedSourceChainID,
-	// 		DestinationChainID:  decodedDestinationChainID,
-	// 		Signature:           decodedSignature,
-	// 		Bitmap:              decodedBitmap,
-	// 		Threshold:           decodedThreshold,
-	// 		IsRollback:          decodedIsRollback,
-	// 		ValidatorSetBatchID: decodedValidatorSetBatchID,
-	// 	}
-	// }
+		signedBridgeBatches[i] = contractsapi.SignedBridgeMessageBatch{
+			Batch: &contractsapi.BridgeMessageBatch{
+				Messages:           decodedMessages,
+				SourceChainID:      decodedSourceChainID,
+				DestinationChainID: decodedDestinationChainID,
+				Threshold:          decodedThreshold,
+				IsRollback:         decodedIsRollback,
+			},
+			Signature:           decodedSignature,
+			Bitmap:              decodedBitmap,
+			ValidatorSetBatchID: decodedValidatorSetBatchID,
+		}
+	}
 
 	return signedBridgeBatches, nil
 }
 
+func decodeBridgeMessages(rawMessages []map[string]interface{}) ([]*contractsapi.BridgeMessage, error) {
+	bridgeMessages := make([]*contractsapi.BridgeMessage, len(rawMessages))
+
+	for i, v := range rawMessages {
+		decodedID, ok := v["id"].(*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the root hash")
+		}
+
+		decodedSourceChainID, ok := v["sourceChainId"].(*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the source chain ID")
+		}
+
+		decodedDestinationChainID, ok := v["destinationChainId"].(*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the destination chain ID")
+		}
+
+		decodedSender, ok := v["sender"].(ethgo.Address)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the sender")
+		}
+
+		decodedReceiver, ok := v["receiver"].(ethgo.Address)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the receiver")
+		}
+
+		decodedPayload, ok := v["payload"].([]byte)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the payload")
+		}
+
+		bridgeMessages[i] = &contractsapi.BridgeMessage{
+			ID:                 decodedID,
+			SourceChainID:      decodedSourceChainID,
+			DestinationChainID: decodedDestinationChainID,
+			Sender:             types.Address(decodedSender),
+			Receiver:           types.Address(decodedReceiver),
+			Payload:            decodedPayload,
+		}
+	}
+
+	return bridgeMessages, nil
+}
+
+// Since we changed how bridging works, we can remove this function (it's unused).
 func GetBridgeMessagesInRange(startID, endID *big.Int, txrelayer txrelayer.TxRelayer,
 	gatewayContract types.Address) ([]*contractsapi.BridgeMessage, error) {
 	funcName := "getMessagesInRange"
