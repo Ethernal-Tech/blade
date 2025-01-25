@@ -244,6 +244,8 @@ func (b *bridgeEventManager) createRollbackBatches(blockNumber *big.Int,
 				)
 			}
 
+			b.logger.Error("ERR", "CREATE ROLLBACK BATCHES", b.unexecutedBatches[i].BridgeMessageBatch)
+
 			// gossip message
 			b.multicast(&BridgeBatchVote{
 				Hash: hashBytes,
@@ -477,7 +479,7 @@ func (b *bridgeEventManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error
 
 		if event.IsRollback {
 			for i := 0; i < len(b.rollbackBatches); {
-				length := len(b.unexecutedBatches[i].Messages)
+				length := len(b.rollbackBatches[i].Messages)
 				if b.rollbackBatches[i].SourceChainID.Cmp(event.SourceChainID) == 0 &&
 					b.rollbackBatches[i].DestinationChainID.Cmp(event.DestinationChainID) == 0 &&
 					b.rollbackBatches[i].Messages[0].ID.Cmp(event.StartID) == 0 &&
@@ -603,7 +605,9 @@ func (b *bridgeEventManager) getRollbackBatch(blockNumber uint64) ([]*BridgeBatc
 				return nil, err
 			}
 
-			result = append(result, &BridgeBatchSigned{BridgeMessageBatch: p.BridgeMessageBatch, AggSignature: aggregatedSignature})
+			result = append(result,
+				&BridgeBatchSigned{BridgeMessageBatch: p.BridgeMessageBatch,
+					AggSignature: aggregatedSignature})
 		}
 	}
 

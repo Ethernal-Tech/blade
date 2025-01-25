@@ -301,7 +301,7 @@ func TestBridgeEventManager_BuildBridgeBatch(t *testing.T) {
 		{
 			BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
 				Messages: []*contractsapi.BridgeMessage{
-					&contractsapi.BridgeMessage{
+					{
 						ID:                 big.NewInt(1),
 						SourceChainID:      big.NewInt(1),
 						DestinationChainID: big.NewInt(2)}},
