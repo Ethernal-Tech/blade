@@ -425,7 +425,10 @@ func (r *BridgeRelayer) Start() {
 				r.logger.Info("received new bridge batches", "total", len(batches))
 			}
 
+			batchNum := 0
+
 			for _, batch := range batches {
+				batchNum++
 				if batch.ValidatorSetBatchID.Cmp(big.NewInt(0)) > 0 {
 					r.logger.Info(fmt.Sprintf("getting new validator set batch with id > %s", lastBridged.String()))
 
@@ -442,6 +445,10 @@ func (r *BridgeRelayer) Start() {
 						continue
 					}
 				} else {
+					if batch.DestinationChainID.Cmp(r.externalChainID) != 0 && batch.SourceChainID.Cmp(r.externalChainID) != 0 {
+						continue
+					}
+
 					r.logger.Info("found batch", "events start-id", batch.StartID.String(),
 						"events end-id", batch.EndID.String(), "is rollback batch", batch.IsRollback)
 
@@ -452,7 +459,7 @@ func (r *BridgeRelayer) Start() {
 					}
 				}
 
-				lastBridged.Add(lastBridged, big.NewInt(1))
+				lastBridged.Add(lastBridged, big.NewInt(int64(batchNum)))
 
 				r.logger.Info("batch has been successfully processed/sent", "batch id", lastBridged)
 
@@ -482,6 +489,7 @@ func (r *BridgeRelayer) Start() {
 				}
 
 				r.logger.Info("batch has been successfully saved into bolt DB", "batch id", lastBridged.String())
+				batchNum = 0
 			}
 		}
 	}

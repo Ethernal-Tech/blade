@@ -868,16 +868,42 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		cluster.InitTestServer(t, dir, bridgeJSONRPCs, None)
 	}
 
-	for i := uint64(0); i < cluster.Config.NumberOfBridges; i++ {
+	if cluster.Config.NumberOfBridges == 1 && cluster.Config.RelayerPrivateKey != nil {
+		key := cluster.Config.RelayerPrivateKey
+
 		bridgeRelayer := NewTestBridgeRelayer(t,
 			cluster.Config,
-			i+1,
+			1,
 			cluster.Config.Dir("genesis.json"),
-			cluster.Config.RelayerPrivateKey,
+			key,
 			cluster.Servers[0].JSONRPCAddr())
 
-		cluster.BridgeRelayers[i] = bridgeRelayer
+		cluster.BridgeRelayers[0] = bridgeRelayer
 		bridgeRelayer.Start()
+	} else {
+		for i := uint64(0); i < cluster.Config.NumberOfBridges; i++ {
+			key, err := crypto.GenerateECDSAKey()
+			require.NoError(t, err)
+
+			txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(cluster.Bridges[i].JSONRPCAddr()))
+
+			t.Logf("Relayer address: %s", key.Address().String())
+
+			bridgeRelayer := NewTestBridgeRelayer(t,
+				cluster.Config,
+				i+1,
+				cluster.Config.Dir("genesis.json"),
+				key,
+				cluster.Servers[0].JSONRPCAddr())
+
+			cluster.BridgeRelayers[i] = bridgeRelayer
+			bridgeRelayer.Start()
+
+			relayerAddress := key.Address()
+			txn := helper.CreateTransaction(types.ZeroAddress, &relayerAddress, nil, ethgo.Ether(10), true)
+			_, err = txRelayer.SendTransactionLocal(txn)
+			require.NoError(t, err)
+		}
 	}
 	// Initialize Gateway contract with BLS, BN256G2 and validators
 	if config.RollbackMode != NoRollback {
