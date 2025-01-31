@@ -3,10 +3,7 @@ package e2e
 import (
 	"fmt"
 	"math/big"
-	"os"
 	"path"
-	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -28,24 +25,8 @@ import (
 )
 
 const (
-	chainConfigFile   = "genesis.json"
-	nativeTokenConfig = "Blade:BLD:18:false:100"
+	chainConfigFile = "genesis.json"
 )
-
-func init() {
-	wd, err := os.Getwd()
-	if err != nil {
-		return
-	}
-
-	parent := filepath.Dir(wd)
-	parent = strings.Trim(parent, "e2e-polybft")
-	wd = filepath.Join(parent, "/artifacts/blade")
-	os.Setenv("EDGE_BINARY", wd)
-	os.Setenv("E2E_TESTS", "true")
-	os.Setenv("E2E_LOGS", "true")
-	os.Setenv("E2E_LOG_LEVEL", "debug")
-}
 
 // The purpose of this test is to verify the correctness of bridging different token types (ERC20, ERC721, ERC1155) between
 // an internal chain and potentially multiple external chains. The external chains represent the source chains of the tokens.
