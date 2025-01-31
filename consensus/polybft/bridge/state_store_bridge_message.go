@@ -90,14 +90,12 @@ func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, externalChainsIDs []uint6
 		// because we have multiple chains that can generate same events
 		// we need to create bridge message bucket for each pair of internal and external chains
 		createBucketsAndReturnBridgeMessageBucket := func(chainIDBytes []byte) (*bolt.Bucket, error) {
-
 			bridgeMessageChainIDBucket, err := bridgeMessageBucket.CreateBucketIfNotExists(chainIDBytes)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create bucket chainID=%s: %w", string(bridgeMessageEventsBucket), err)
 			}
 
 			if _, err := bridgeBatchesBucket.CreateBucketIfNotExists(chainIDBytes); err != nil {
-
 				return nil, fmt.Errorf("failed to create bucket chainID=%s: %w", string(bridgeBatchBucket), err)
 			}
 
@@ -109,6 +107,7 @@ func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, externalChainsIDs []uint6
 		}
 
 		internalChainIDBytes := common.EncodeUint64ToBytes(internalChainID)
+
 		internalBridgeMessageBucket, err := createBucketsAndReturnBridgeMessageBucket(internalChainIDBytes)
 		if err != nil {
 			return err
@@ -116,6 +115,7 @@ func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, externalChainsIDs []uint6
 
 		for _, chainID := range externalChainsIDs {
 			chainIDBytes := common.EncodeUint64ToBytes(chainID)
+
 			bridgeMessageChainIDBucket, err := createBucketsAndReturnBridgeMessageBucket(chainIDBytes)
 			if err != nil {
 				return err
@@ -130,7 +130,6 @@ func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, externalChainsIDs []uint6
 			if _, err := internalBridgeMessageBucket.CreateBucketIfNotExists(chainIDBytes); err != nil {
 				return fmt.Errorf("failed to create bucket chainID=%s: %w", string(bridgeMessageEventsBucket), err)
 			}
-
 		}
 
 		return nil
