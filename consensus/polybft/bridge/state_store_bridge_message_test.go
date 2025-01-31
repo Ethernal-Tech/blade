@@ -70,7 +70,7 @@ func TestState_getBridgeEventsForBridgeBatch_NotEnoughEvents(t *testing.T) {
 		}, nil))
 	}
 
-	_, err := state.getBridgeMessageEventsForBridgeBatch(0, maxNumberOfBatchEvents-1, nil, 0, 0)
+	_, err := state.getBridgeMessageEventsForBridgeBatch(0, maxNumberOfBatchEvents-1, nil, 1, 0)
 	assert.ErrorIs(t, err, errNotEnoughBridgeEvents)
 }
 

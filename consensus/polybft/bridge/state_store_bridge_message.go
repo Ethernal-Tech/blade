@@ -66,7 +66,7 @@ type BridgeManagerStore struct {
 	chainIDs []uint64
 }
 
-func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, chainIDs []uint64) (*BridgeManagerStore, error) {
+func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, chainIDs []uint64, internalChainID uint64) (*BridgeManagerStore, error) {
 	var err error
 
 	store := &BridgeManagerStore{db: db, chainIDs: chainIDs}
@@ -89,8 +89,23 @@ func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, chainIDs []uint64) (*Brid
 		for _, chainID := range chainIDs {
 			chainIDBytes := common.EncodeUint64ToBytes(chainID)
 
-			if _, err := bridgeMessageBucket.CreateBucketIfNotExists(chainIDBytes); err != nil {
+			bridgeMessageChainIDBucket, err := bridgeMessageBucket.CreateBucketIfNotExists(chainIDBytes)
+			if err != nil {
 				return fmt.Errorf("failed to create bucket chainID=%s: %w", string(bridgeMessageEventsBucket), err)
+			}
+
+			if chainID == internalChainID {
+				for _, chainID := range chainIDs {
+					if chainID != internalChainID {
+						if _, err := bridgeMessageChainIDBucket.CreateBucketIfNotExists(common.EncodeUint64ToBytes(chainID)); err != nil {
+							return fmt.Errorf("failed to create bucket chainID=%s: %w", string(bridgeMessageEventsBucket), err)
+						}
+					}
+				}
+			} else {
+				if _, err := bridgeMessageChainIDBucket.CreateBucketIfNotExists(common.EncodeUint64ToBytes(internalChainID)); err != nil {
+					return fmt.Errorf("failed to create bucket chainID=%s: %w", string(bridgeMessageEventsBucket), err)
+				}
 			}
 
 			if _, err := bridgeBatchesBucket.CreateBucketIfNotExists(chainIDBytes); err != nil {
@@ -122,7 +137,9 @@ func (bms *BridgeManagerStore) insertBridgeMessageEvent(event *contractsapi.Brid
 			return err
 		}
 
-		bucket := tx.Bucket(bridgeMessageEventsBucket).Bucket(common.EncodeUint64ToBytes(event.SourceChainID.Uint64()))
+		bucket := tx.Bucket(bridgeMessageEventsBucket).
+			Bucket(common.EncodeUint64ToBytes(event.SourceChainID.Uint64())).
+			Bucket(common.EncodeUint64ToBytes(event.DestinationChainID.Uint64()))
 
 		return bucket.Put(common.EncodeUint64ToBytes(event.ID.Uint64()), raw)
 	}
@@ -139,7 +156,8 @@ func (bms *BridgeManagerStore) removeBridgeEvents(
 	bridgeMessageResult contractsapi.BridgeMessageResultEvent, dbTx *bolt.Tx) error {
 	insertFn := func(tx *bolt.Tx) error {
 		eventsBucket := tx.Bucket(bridgeMessageEventsBucket).
-			Bucket(common.EncodeUint64ToBytes(bridgeMessageResult.SourceChainID.Uint64()))
+			Bucket(common.EncodeUint64ToBytes(bridgeMessageResult.SourceChainID.Uint64())).
+			Bucket(common.EncodeUint64ToBytes(bridgeMessageResult.DestinationChainID.Uint64()))
 
 		bridgeMessageID := bridgeMessageResult.Counter.Uint64()
 		bridgeMessageEventIDKey := common.EncodeUint64ToBytes(bridgeMessageID)
@@ -166,18 +184,21 @@ func (bms *BridgeManagerStore) list() ([]*contractsapi.BridgeMsgEvent, error) {
 
 	for _, chainID := range bms.chainIDs {
 		err := bms.db.View(func(tx *bolt.Tx) error {
-			return tx.Bucket(bridgeMessageEventsBucket).
-				Bucket(common.EncodeUint64ToBytes(chainID)).ForEach(func(k, v []byte) error {
-				var event *contractsapi.BridgeMsgEvent
-				if err := json.Unmarshal(v, &event); err != nil {
-					return err
-				}
+			chainIDBucket := tx.Bucket(bridgeMessageEventsBucket).Bucket(common.EncodeUint64ToBytes(chainID))
+			return chainIDBucket.ForEachBucket(func(k []byte) error {
+				return chainIDBucket.Bucket(k).ForEach(func(k, v []byte) error {
+					var event *contractsapi.BridgeMsgEvent
+					if err := json.Unmarshal(v, &event); err != nil {
+						return err
+					}
 
-				events = append(events, event)
+					events = append(events, event)
 
-				return nil
+					return nil
+				})
 			})
 		})
+
 		if err != nil {
 			return nil, err
 		}
@@ -196,9 +217,12 @@ func (bms *BridgeManagerStore) getBridgeMessageEventsForBridgeBatch(
 	)
 
 	getFn := func(tx *bolt.Tx) error {
-		bucket := tx.Bucket(bridgeMessageEventsBucket).Bucket(common.EncodeUint64ToBytes(sourceChainID))
+		bucket := tx.Bucket(bridgeMessageEventsBucket).
+			Bucket(common.EncodeUint64ToBytes(sourceChainID)).
+			Bucket(common.EncodeUint64ToBytes(destinationChainID))
 		for i := fromIndex; i <= toIndex; i++ {
 			v := bucket.Get(common.EncodeUint64ToBytes(i))
+
 			if v == nil {
 				return errNotEnoughBridgeEvents
 			}

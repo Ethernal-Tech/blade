@@ -97,7 +97,7 @@ func NewBridge(runtime Runtime,
 		chainIDs = append(chainIDs, chainID)
 	}
 
-	store, err := newBridgeManagerStore(state.DB(), dbTx, chainIDs)
+	store, err := newBridgeManagerStore(state.DB(), dbTx, chainIDs, internalChainID)
 	if err != nil {
 		return nil, fmt.Errorf("error creating bridge manager store, err: %w", err)
 	}
