@@ -189,7 +189,6 @@ func (bms *BridgeManagerStore) list() ([]*contractsapi.BridgeMsgEvent, error) {
 			chainIDBucket := tx.Bucket(bridgeMessageEventsBucket).Bucket(common.EncodeUint64ToBytes(chainID))
 
 			return chainIDBucket.ForEachBucket(func(k []byte) error {
-
 				return chainIDBucket.Bucket(k).ForEach(func(k, v []byte) error {
 					var event *contractsapi.BridgeMsgEvent
 					if err := json.Unmarshal(v, &event); err != nil {
