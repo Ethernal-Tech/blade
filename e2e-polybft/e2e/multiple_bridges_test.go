@@ -631,6 +631,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 	}
 
 	deployerKeys := make([]*crypto.ECDSAKey, numberOfBridges)
+
 	for i := range numberOfBridges {
 		deployerKey, err := crypto.GenerateECDSAKey()
 		require.NoError(t, err)
@@ -847,6 +848,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 
 			go func(bridgeNum int, accounts []*crypto.ECDSAKey) {
 				defer wg.Done()
+
 				deployerKey := deployerKeys[bridgeNum]
 
 				tx := types.NewTx(types.NewLegacyTx(
@@ -982,6 +984,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 
 			go func(bridgeNum int, accounts []*crypto.ECDSAKey) {
 				defer wg.Done()
+
 				deployerKey := deployerKeys[bridgeNum]
 
 				tx := types.NewTx(types.NewLegacyTx(

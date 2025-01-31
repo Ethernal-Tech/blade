@@ -270,7 +270,8 @@ func (b *bridgeEventManager) Close() {
 
 // initTracker starts a new event tracker (to receive bridge events from external chain)
 func (b *bridgeEventManager) initTracker(runtimeCfg *config.Runtime) (*tracker.EventTracker, error) {
-	store, err := store.NewBoltDBEventTrackerStore(path.Join(runtimeCfg.StateDataDir, fmt.Sprintf("/bridge-%d.db", b.externalChainID)))
+	store, err := store.NewBoltDBEventTrackerStore(path.Join(runtimeCfg.StateDataDir,
+		fmt.Sprintf("/bridge-%d.db", b.externalChainID)))
 	if err != nil {
 		return nil, err
 	}

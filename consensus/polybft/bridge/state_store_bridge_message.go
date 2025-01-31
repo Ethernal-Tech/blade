@@ -66,7 +66,8 @@ type BridgeManagerStore struct {
 	chainIDs []uint64
 }
 
-func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, chainIDs []uint64, internalChainID uint64) (*BridgeManagerStore, error) {
+func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, chainIDs []uint64,
+	internalChainID uint64) (*BridgeManagerStore, error) {
 	var err error
 
 	store := &BridgeManagerStore{db: db, chainIDs: chainIDs}
@@ -103,7 +104,8 @@ func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, chainIDs []uint64, intern
 					}
 				}
 			} else {
-				if _, err := bridgeMessageChainIDBucket.CreateBucketIfNotExists(common.EncodeUint64ToBytes(internalChainID)); err != nil {
+				if _, err := bridgeMessageChainIDBucket.CreateBucketIfNotExists(
+					common.EncodeUint64ToBytes(internalChainID)); err != nil {
 					return fmt.Errorf("failed to create bucket chainID=%s: %w", string(bridgeMessageEventsBucket), err)
 				}
 			}
@@ -185,7 +187,9 @@ func (bms *BridgeManagerStore) list() ([]*contractsapi.BridgeMsgEvent, error) {
 	for _, chainID := range bms.chainIDs {
 		err := bms.db.View(func(tx *bolt.Tx) error {
 			chainIDBucket := tx.Bucket(bridgeMessageEventsBucket).Bucket(common.EncodeUint64ToBytes(chainID))
+
 			return chainIDBucket.ForEachBucket(func(k []byte) error {
+
 				return chainIDBucket.Bucket(k).ForEach(func(k, v []byte) error {
 					var event *contractsapi.BridgeMsgEvent
 					if err := json.Unmarshal(v, &event); err != nil {

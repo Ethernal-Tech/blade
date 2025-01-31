@@ -429,6 +429,7 @@ func (r *BridgeRelayer) Start() {
 
 			for _, batch := range batches {
 				batchNum++
+
 				if batch.ValidatorSetBatchID.Cmp(big.NewInt(0)) > 0 {
 					r.logger.Info(fmt.Sprintf("getting new validator set batch with id > %s", lastBridged.String()))
 
@@ -489,6 +490,7 @@ func (r *BridgeRelayer) Start() {
 				}
 
 				r.logger.Info("batch has been successfully saved into bolt DB", "batch id", lastBridged.String())
+
 				batchNum = 0
 			}
 		}
