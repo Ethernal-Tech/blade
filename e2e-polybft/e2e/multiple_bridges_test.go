@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"encoding/hex"
 	"fmt"
 	"math/big"
 	"os"
@@ -24,11 +23,13 @@ import (
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/stretchr/testify/require"
+
+	"github.com/0xPolygon/polygon-edge/helper/hex"
 )
 
 const (
 	chainConfigFile   = "genesis.json"
-	nativeTokenConfig = "Blade:BLD:18:false:1337"
+	nativeTokenConfig = "Blade:BLD:18:false:100"
 )
 
 func init() {
@@ -66,7 +67,7 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 		// Necessary, since external chains do not have instant finality.
 		numBlockConfirmations = 2
 		// Number of blocks after which the validator set is changed.
-		epochSize = 40
+		epochSize = 10
 		// Number of bridges, and therefore the number of external chains.
 		numberOfBridges = 2
 	)
@@ -91,11 +92,12 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 		erc1155InternalESP = numberOfAccounts*2 + 3
 	)
 
-	accounts := make([]*crypto.ECDSAKey, numberOfBridges*numberOfAccounts)
+	allAccountsNum := numberOfAccounts * numberOfBridges
+	accounts := make([]*crypto.ECDSAKey, allAccountsNum)
 
-	t.Logf("%d accounts were created with the following addresses:", numberOfAccounts)
+	t.Logf("%d accounts were created with the following addresses:", allAccountsNum)
 
-	for i := 0; i < numberOfBridges*numberOfAccounts; i++ {
+	for i := 0; i < allAccountsNum; i++ {
 
 		ecdsaKey, err := crypto.GenerateECDSAKey()
 		require.NoError(t, err)
@@ -105,20 +107,16 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 		t.Logf("#%d - %s", i+1, accounts[i].Address().String())
 	}
 
-	// relayerPrivateKey, err := crypto.GenerateECDSAKey()
-	// require.NoError(t, err)
-
 	// Creating a cluster with configuration parameters and premining funds for previously generated addresses (to be able
 	// to pay fees). Validators (5) are pre-funded by default, allowing them to stake and participate in the consensus.
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithTestRewardToken(),
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
-		// framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithSecretsCallback(func(_ []types.Address, tcc *framework.TestClusterConfig) {
 			addresses := make([]string, numberOfAccounts*numberOfBridges)
-			for i := 0; i < numberOfBridges*numberOfAccounts; i++ {
+			for i := 0; i < allAccountsNum; i++ {
 				addresses[i] = accounts[i].Address().String()
 			}
 
@@ -179,7 +177,6 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 			go func(bridgeNum int, accounts []*crypto.ECDSAKey) {
 				defer wg.Done()
 
-				time.Sleep(time.Duration(bridgeNum) * time.Second)
 				logFunc := func(format string, args ...any) {
 					pf := fmt.Sprintf("[%s⇄%s] ", internalChainID.String(), externalChainIDs[bridgeNum].String())
 					t.Logf(pf+format, args...)
@@ -304,11 +301,6 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 	})
 
 	t.Run("bridge ERC721 tokens", func(t *testing.T) {
-		tx := types.NewTx(types.NewLegacyTx(
-			types.WithTo(nil),
-			types.WithInput(contractsapi.RootERC721.Bytecode),
-		))
-
 		wg := sync.WaitGroup{}
 
 		// Creating a goroutine for each bridge, that is, for each relation internal chain - one of the external chains
@@ -323,6 +315,11 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 					pf := fmt.Sprintf("[%s⇄%s] ", internalChainID.String(), externalChainIDs[bridgeNum].String())
 					t.Logf(pf+format, args...)
 				}
+
+				tx := types.NewTx(types.NewLegacyTx(
+					types.WithTo(nil),
+					types.WithInput(contractsapi.RootERC721.Bytecode),
+				))
 
 				// Deploying the ERC721 smart contract to the external chain.
 				receipt, err := externalChainTxRelayers[bridgeNum].SendTransaction(tx, deployerKey)
@@ -614,9 +611,9 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 		// Necessary, since external chains do not have instant finality.
 		numBlockConfirmations = 2
 		// Number of blocks after which the validator set is changed.
-		epochSize = 40
+		epochSize = 10
 		// Number of bridges, and therefore the number of external chains.
-		numberOfBridges = 1
+		numberOfBridges = 2
 	)
 
 	// Since the success of the test is partially based on sequential checks of successfully processed events, the
@@ -639,11 +636,12 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 		erc1155InternalESP = numberOfAccounts*2 + 1
 	)
 
-	accounts := make([]*crypto.ECDSAKey, numberOfAccounts)
+	allAccountsNum := numberOfAccounts * numberOfBridges
+	accounts := make([]*crypto.ECDSAKey, allAccountsNum)
 
-	t.Logf("%d accounts were created with the following addresses:", numberOfAccounts)
+	t.Logf("%d accounts were created with the following addresses:", allAccountsNum)
 
-	for i := 0; i < numberOfAccounts; i++ {
+	for i := range allAccountsNum {
 		ecdsaKey, err := crypto.GenerateECDSAKey()
 		require.NoError(t, err)
 
@@ -652,10 +650,13 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 		t.Logf("#%d - %s", i+1, accounts[i].Address().String())
 	}
 
-	// A private key (and its corresponding address) that is used for deploying root ERC smart contracts on internal chain.
-	// It is pre-funded together with previously generated addresses.
-	deployerKey, err := bridgeHelper.DecodePrivateKey("")
-	require.NoError(t, err)
+	deployerKeys := make([]*crypto.ECDSAKey, numberOfBridges)
+	for i := range numberOfBridges {
+		deployerKey, err := crypto.GenerateECDSAKey()
+		require.NoError(t, err)
+
+		deployerKeys[i] = deployerKey
+	}
 
 	// Creating a cluster with configuration parameters and premining funds for previously generated addresses (to be able
 	// to pay fees). Validators (5) are pre-funded by default, allowing them to stake and participate in the consensus.
@@ -665,12 +666,14 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithSecretsCallback(func(_ []types.Address, tcc *framework.TestClusterConfig) {
-			addresses := make([]string, len(accounts)+1)
-			for i := 0; i < len(accounts); i++ {
+			addresses := make([]string, allAccountsNum+numberOfBridges)
+			for i := range allAccountsNum {
 				addresses[i] = accounts[i].Address().String()
 			}
 
-			addresses[len(accounts)] = deployerKey.Address().String()
+			for i := range numberOfBridges {
+				addresses[allAccountsNum+i] = deployerKeys[i].Address().String()
+			}
 
 			tcc.Premine = append(tcc.Premine, addresses...)
 		}))
@@ -714,11 +717,6 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 	}
 
 	t.Run("bridge ERC20 tokens", func(t *testing.T) {
-		tx := types.NewTx(types.NewLegacyTx(
-			types.WithTo(nil),
-			types.WithInput(contractsapi.RootERC20.Bytecode),
-		))
-
 		wg := sync.WaitGroup{}
 
 		// Creating a goroutine for each bridge, that is, for each relation internal chain - one of the external chains
@@ -726,8 +724,15 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 		for i := range numberOfBridges {
 			wg.Add(1)
 
-			go func(bridgeNum int) {
+			go func(bridgeNum int, accounts []*crypto.ECDSAKey) {
 				defer wg.Done()
+
+				deployerKey := deployerKeys[bridgeNum]
+
+				tx := types.NewTx(types.NewLegacyTx(
+					types.WithTo(nil),
+					types.WithInput(contractsapi.RootERC20.Bytecode),
+				))
 
 				logFunc := func(format string, args ...any) {
 					pf := fmt.Sprintf("[%s⇄%s] ", internalChainID.String(), externalChainIDs[bridgeNum].String())
@@ -743,18 +748,22 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 				rootERC20Token := types.Address(receipt.ContractAddress)
 				logFunc("Root ERC20 smart contract was successfully deployed on the internal chain %d at address %s", internalChainID, rootERC20Token.String())
 
+				pk, err := deployerKey.MarshallPrivateKey()
+				require.NoError(t, err)
+
+				key := hex.EncodeToString(pk)
 				// For each account, depositing (bridging) 100000000000000000 WEI (0.1 ETH) from the internal to the external chain.
 				for i := 0; i < numberOfAccounts; i++ {
 					err := cluster.Bridges[bridgeNum].Deposit(
 						common.ERC20,
 						rootERC20Token,
 						bridgeConfigs[bridgeNum].InternalMintableERC20PredicateAddr,
-						bridgeHelper.TestAccountPrivKey,
+						key,
 						accounts[i].Address().String(),
 						"100000000000000000",
 						"",
 						cluster.Servers[0].JSONRPCAddr(),
-						bridgeHelper.TestAccountPrivKey,
+						key,
 						false,
 					)
 
@@ -842,18 +851,13 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 
 					logFunc("Account %s has the balance of %s tokens on the root ERC20 smart contract", account.Address().String(), balance.String())
 				}
-			}(i)
+			}(i, accounts[i*numberOfAccounts:(i+1)*numberOfAccounts])
 		}
 
 		wg.Wait()
 	})
 
 	t.Run("bridge ERC721 tokens", func(t *testing.T) {
-		tx := types.NewTx(types.NewLegacyTx(
-			types.WithTo(nil),
-			types.WithInput(contractsapi.RootERC721.Bytecode),
-		))
-
 		wg := sync.WaitGroup{}
 
 		// Creating a goroutine for each bridge, that is, for each relation internal chain - one of the external chains
@@ -861,8 +865,14 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 		for i := range numberOfBridges {
 			wg.Add(1)
 
-			go func(bridgeNum int) {
+			go func(bridgeNum int, accounts []*crypto.ECDSAKey) {
 				defer wg.Done()
+				deployerKey := deployerKeys[bridgeNum]
+
+				tx := types.NewTx(types.NewLegacyTx(
+					types.WithTo(nil),
+					types.WithInput(contractsapi.RootERC721.Bytecode),
+				))
 
 				logFunc := func(format string, args ...any) {
 					pf := fmt.Sprintf("[%s⇄%s] ", internalChainID.String(), externalChainIDs[bridgeNum].String())
@@ -878,18 +888,23 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 				rootERC721Token := types.Address(receipt.ContractAddress)
 				logFunc("Root ERC721 smart contract was successfully deployed on the internal chain %d at address %s", internalChainID, rootERC721Token.String())
 
+				pk, err := deployerKey.MarshallPrivateKey()
+				require.NoError(t, err)
+
+				key := hex.EncodeToString(pk)
+
 				// For each account, depositing (bridging) ERC721 token from the internal to the external chain.
 				for i := 0; i < numberOfAccounts; i++ {
 					err := cluster.Bridges[bridgeNum].Deposit(
 						common.ERC721,
 						rootERC721Token,
 						bridgeConfigs[bridgeNum].InternalMintableERC721PredicateAddr,
-						bridgeHelper.TestAccountPrivKey,
+						key,
 						accounts[i].Address().String(),
 						"",
 						fmt.Sprintf("%d", i),
 						cluster.Servers[0].JSONRPCAddr(),
-						bridgeHelper.TestAccountPrivKey,
+						key,
 						false,
 					)
 
@@ -971,18 +986,13 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 
 					logFunc("Account %s is the owner of ERC721 token with ID %d on the internal chain", account.Address().String(), i)
 				}
-			}(i)
+			}(i, accounts[i*numberOfAccounts:(i+1)*numberOfAccounts])
 		}
 
 		wg.Wait()
 	})
 
 	t.Run("bridge ERC1155 tokens", func(t *testing.T) {
-		tx := types.NewTx(types.NewLegacyTx(
-			types.WithTo(nil),
-			types.WithInput(contractsapi.RootERC1155.Bytecode),
-		))
-
 		wg := sync.WaitGroup{}
 
 		// Creating a goroutine for each bridge, that is, for each relation internal chain - one of the external chains
@@ -990,8 +1000,14 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 		for i := range numberOfBridges {
 			wg.Add(1)
 
-			go func(bridgeNum int) {
+			go func(bridgeNum int, accounts []*crypto.ECDSAKey) {
 				defer wg.Done()
+				deployerKey := deployerKeys[bridgeNum]
+
+				tx := types.NewTx(types.NewLegacyTx(
+					types.WithTo(nil),
+					types.WithInput(contractsapi.RootERC1155.Bytecode),
+				))
 
 				logFunc := func(format string, args ...any) {
 					pf := fmt.Sprintf("[%s⇄%s] ", internalChainID.String(), externalChainIDs[bridgeNum].String())
@@ -1007,18 +1023,23 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 				rootERC1155Token := types.Address(receipt.ContractAddress)
 				logFunc("Root ERC1155 smart contract was successfully deployed on the internal chain %d at address %s", internalChainID, rootERC1155Token.String())
 
+				pk, err := deployerKey.MarshallPrivateKey()
+				require.NoError(t, err)
+
+				key := hex.EncodeToString(pk)
+
 				// For each account, depositing (bridging) ERC1155 (0.5 ETH) token from the internal to the external chain.
 				for i := 0; i < numberOfAccounts; i++ {
 					err := cluster.Bridges[bridgeNum].Deposit(
 						common.ERC1155,
 						rootERC1155Token,
 						bridgeConfigs[bridgeNum].InternalMintableERC1155PredicateAddr,
-						bridgeHelper.TestAccountPrivKey,
+						key,
 						accounts[i].Address().String(),
 						"500000000000000000",
 						fmt.Sprintf("%d", i),
 						cluster.Servers[0].JSONRPCAddr(),
-						bridgeHelper.TestAccountPrivKey,
+						key,
 						false,
 					)
 
@@ -1132,226 +1153,11 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 
 					logFunc("Account %s has the balance of %s tokens on the root ERC1155 smart contract", account.Address().String(), balance.String())
 				}
-			}(i)
+			}(i, accounts[i*numberOfAccounts:(i+1)*numberOfAccounts])
 		}
 
 		wg.Wait()
 	})
-}
-
-// The purpose of this test is to verify the correctness of bridging native token of the internal chain between this chain and
-// potentially multiple external chains. However, the external chains represent the source chains of the token. This means that
-// on the external chains a root ERC20 smart contract (as a representation of the native internal chain token) will be deployed
-// and manage the token creation (minting) process. Thus, by bridging from the external to the internal chain, the ERC20 tokens
-// are locked on the external chain, while the native tokens are obtained on the internal chain, and vice versa. The test content
-// and flow is relatively straightforward. The first step in the test is account generation and launching of the cluster with the
-// appropriate configuration parameters. As part of launching, the root ERC20 smart contract is also set up and deployed on the
-// external chains. After the completion of the previously written, the deposit, or bridging, of tokens to the internal chain is
-// performed. Once it's established that all expected events have been processed, the token state on the internal chain is verified
-// to match expectations. If the previous condition is met, a withdraw, or bridging, of tokens back to the external chain is performed.
-// As in the case of the internal chain, after confirming that all expected events have been processed, the token state is verified.
-// If all of the above is satisfied, the test is successful. Everything previously described after cluster launching is performed
-// concurrently for each bridge, that is, for each relation internal chain - one of the external chains.
-func TestE2E_Multiple_Bridges_ExternalToInternalNativeTokenTransfer(t *testing.T) {
-	const (
-		// This also represents the number of deposit/withdraw transactions that will be made.
-		numberOfAccounts = 5
-		// Necessary, since external chains do not have instant finality.
-		numBlockConfirmations = 2
-		// Number of blocks after which the validator set is changed.
-		epochSize = 40
-		// Number of bridges, and therefore the number of external chains.
-		numberOfBridges = 1
-	)
-
-	accounts := make([]*crypto.ECDSAKey, numberOfAccounts)
-
-	t.Logf("%d accounts were created with the following addresses:", numberOfAccounts)
-
-	for i := 0; i < numberOfAccounts; i++ {
-		ecdsaKey, err := crypto.GenerateECDSAKey()
-		require.NoError(t, err)
-
-		accounts[i] = ecdsaKey
-
-		t.Logf("#%d - %s", i+1, accounts[i].Address().String())
-	}
-
-	// Creating a cluster with configuration parameters. Configuring and deploying the root ERC20 smart contract on the
-	// external chains is also part of this process (nativeTokenConfig). Validators (5) are pre-funded by default, allowing
-	// them to stake and participate in the consensus.
-	cluster := framework.NewTestCluster(t, 5,
-		framework.WithTestRewardToken(),
-		framework.WithNumBlockConfirmations(numBlockConfirmations),
-		framework.WithEpochSize(epochSize),
-		framework.WithBridges(numberOfBridges),
-		framework.WithNativeTokenConfig(nativeTokenConfig))
-
-	defer cluster.Stop()
-
-	cluster.WaitForReady(t)
-
-	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFile))
-	require.NoError(t, err)
-
-	// Creating a relayer to allow transactions to be sent to the internal chain (Servers[0] represents the first of the
-	// five validators set by cluster configuration parameters).
-	internalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(cluster.Servers[0].JSONRPC()))
-	require.NoError(t, err)
-
-	externalChainTxRelayers := make([]txrelayer.TxRelayer, numberOfBridges)
-
-	// Creating a relayers to allow transactions to be sent to the external chains. Since we have an external chain for
-	// each bridge, a relay is created for each of these chains.
-	for i := 0; i < numberOfBridges; i++ {
-		txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(cluster.Bridges[i].JSONRPCAddr()))
-		require.NoError(t, err)
-
-		externalChainTxRelayers[i] = txRelayer
-	}
-
-	bridgeConfigs := make([]*polycfg.Bridge, numberOfBridges)
-
-	internalChainID, err := internalChainTxRelayer.Client().ChainID()
-	require.NoError(t, err)
-
-	externalChainIDs := make([]*big.Int, numberOfBridges)
-
-	for i := 0; i < numberOfBridges; i++ {
-		chainID, err := externalChainTxRelayers[i].Client().ChainID()
-		require.NoError(t, err)
-
-		externalChainIDs[i] = chainID
-		bridgeConfigs[i] = polybftCfg.Bridge[chainID.Uint64()]
-	}
-
-	wg := sync.WaitGroup{}
-
-	// Creating a goroutine for each bridge, that is, for each relation internal chain - one of the external chains
-	// and processing bridging operations for each of them concurrently.
-	for i := range numberOfBridges {
-		wg.Add(1)
-
-		go func(bridgeNum int) {
-			defer wg.Done()
-
-			logFunc := func(format string, args ...any) {
-				pf := fmt.Sprintf("[%s⇄%s] ", internalChainID.String(), externalChainIDs[bridgeNum].String())
-				t.Logf(pf+format, args...)
-			}
-
-			// Root ERC20 smart contract is pre-deployed (in cluster launching) on the external chain.
-			rootERC20Token := bridgeConfigs[bridgeNum].ExternalNativeERC20Addr
-			logFunc("Root ERC20 smart contract was successfully deployed on the external chain %d at address %s", externalChainIDs[i], rootERC20Token.String())
-
-			balances := make([]*big.Int, numberOfAccounts)
-
-			logFunc("Balances of accounts on internal chain before deposit:")
-
-			for i := 0; i < numberOfAccounts; i++ {
-				balance, err := internalChainTxRelayer.Client().GetBalance(accounts[i].Address(), jsonrpc.LatestBlockNumberOrHash)
-				require.NoError(t, err)
-
-				logFunc("#%d - %s : %s Wei", i+1, accounts[i].Address().String(), balance.String())
-				balances[i] = balance
-			}
-
-			// For each account, depositing (bridging) 100000000000000000 WEI (0.1 ETH) from the external to the internal chain.
-			for i := 0; i < numberOfAccounts; i++ {
-				err = cluster.Bridges[bridgeNum].Deposit(
-					common.ERC20,
-					rootERC20Token,
-					bridgeConfigs[bridgeNum].ExternalERC20PredicateAddr,
-					bridgeHelper.TestAccountPrivKey,
-					accounts[i].Address().String(),
-					"100000000000000000",
-					"",
-					cluster.Bridges[bridgeNum].JSONRPCAddr(),
-					bridgeHelper.TestAccountPrivKey,
-					false,
-				)
-
-				require.NoError(t, err)
-
-				logFunc("The deposit was made for the account %s", accounts[i].Address().String())
-			}
-
-			// Verifying that all events have been successfully processed on the internal chain. The number of these events is equal
-			// to the number of deposits (number of accounts). The mapping is already done in the cluster launching.
-			require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
-				for i := range numberOfAccounts {
-					if !isEventProcessed(t, bridgeConfigs[bridgeNum].InternalGatewayAddr, internalChainTxRelayer, uint64(i+1), false) {
-						logFunc("Event %d still not processed", i+1)
-
-						return false
-					}
-				}
-
-				logFunc("All events are successfully processed")
-
-				return true
-			}))
-
-			logFunc("Balances of accounts on internal chain after deposit:")
-
-			// Verifying that each account has a balance of the native token equal to the transferred (bridged) amount (0.1 ETH).
-			for i := 0; i < numberOfAccounts; i++ {
-				balance, err := internalChainTxRelayer.Client().GetBalance(accounts[i].Address(), jsonrpc.LatestBlockNumberOrHash)
-				require.NoError(t, err)
-
-				logFunc("#%d - %s : %s Wei", i+1, accounts[i].Address().String(), balance.String())
-			}
-
-			// For each account, withdrawing (bridging back) 100000000000000000 WEI (0.1 ETH) from the internal to the external chain.
-			for i := 0; i < numberOfAccounts; i++ {
-				rawKey, err := accounts[i].MarshallPrivateKey()
-				require.NoError(t, err)
-
-				err = cluster.Bridges[bridgeNum].Withdraw(
-					common.ERC20,
-					hex.EncodeToString(rawKey),
-					accounts[i].Address().String(),
-					"100000000000000000",
-					"",
-					cluster.Servers[0].JSONRPCAddr(),
-					bridgeConfigs[bridgeNum].InternalERC20PredicateAddr,
-					contracts.NativeERC20TokenContract,
-					false)
-				require.NoError(t, err)
-
-				logFunc("The withdraw was made for the account %s", accounts[i].Address().String())
-			}
-
-			// Verifying that all events have been successfully processed on the external chain. The number of these events is equal
-			// to the number of withdraws (number of accounts).
-			require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
-				for i := range numberOfAccounts {
-					if !isEventProcessed(t, bridgeConfigs[bridgeNum].ExternalGatewayAddr, externalChainTxRelayers[bridgeNum], uint64(i+1), false) {
-						logFunc("Event %d still not processed", i+1)
-
-						return false
-					}
-				}
-
-				logFunc("All events are successfully processed")
-
-				return true
-			}))
-
-			logFunc("Balances of accounts on internal chain after withdraw:")
-
-			// Verifying that each account has a balance of native tokens on the internal chain equal to the balance before bridging.
-			for i := 0; i < numberOfAccounts; i++ {
-				balance, err := internalChainTxRelayer.Client().GetBalance(accounts[i].Address(), jsonrpc.LatestBlockNumberOrHash)
-				require.NoError(t, err)
-
-				logFunc("#%d - %s : %s Wei", i+1, accounts[i].Address().String(), balance.String())
-				require.Equal(t, balances[i], balance)
-			}
-		}(i)
-	}
-
-	wg.Wait()
 }
 
 // The purpose of this test is to verify the correctness of bridging native token of the internal chain between this chain and
@@ -1375,16 +1181,17 @@ func TestE2E_Multiple_Bridges_InternalToExternalNativeTokenTransfer(t *testing.T
 		// Necessary, since external chains do not have instant finality.
 		numBlockConfirmations = 2
 		// Number of blocks after which the validator set is changed.
-		epochSize = 40
+		epochSize = 10
 		// Number of bridges, and therefore the number of external chains.
 		numberOfBridges = 1
 	)
 
-	accounts := make([]*crypto.ECDSAKey, numberOfAccounts)
+	allAccountsNum := numberOfAccounts * numberOfBridges
+	accounts := make([]*crypto.ECDSAKey, allAccountsNum)
 
 	t.Logf("%d accounts were created with the following addresses:", numberOfAccounts)
 
-	for i := 0; i < numberOfAccounts; i++ {
+	for i := range allAccountsNum {
 		ecdsaKey, err := crypto.GenerateECDSAKey()
 		require.NoError(t, err)
 
@@ -1393,9 +1200,6 @@ func TestE2E_Multiple_Bridges_InternalToExternalNativeTokenTransfer(t *testing.T
 		t.Logf("#%d - %s", i+1, accounts[i].Address().String())
 	}
 
-	relayerPrivateKey, err := crypto.GenerateECDSAKey()
-	require.NoError(t, err)
-
 	// Creating a cluster with configuration parameters. Configuring and deploying the root native ERC20 smart contract on the
 	// internal chain is also part of this process (it is done by default). Validators (5) are pre-funded by default, allowing
 	// them to stake and participate in the consensus.
@@ -1403,7 +1207,6 @@ func TestE2E_Multiple_Bridges_InternalToExternalNativeTokenTransfer(t *testing.T
 		framework.WithTestRewardToken(),
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
 		framework.WithEpochSize(epochSize),
-		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithBridges(numberOfBridges),
 		framework.WithSecretsCallback(func(_ []types.Address, tcc *framework.TestClusterConfig) {
 			addresses := make([]string, len(accounts)+1)
@@ -1461,7 +1264,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalNativeTokenTransfer(t *testing.T
 	for i := range numberOfBridges {
 		wg.Add(1)
 
-		go func(bridgeNum int) {
+		go func(bridgeNum int, accounts []*crypto.ECDSAKey) {
 			defer wg.Done()
 
 			logFunc := func(format string, args ...any) {
@@ -1594,7 +1397,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalNativeTokenTransfer(t *testing.T
 				logFunc("#%d - %s : %s Wei", i+1, accounts[i].Address().String(), balance.String())
 				require.Equal(t, balances[i], balance)
 			}
-		}(i)
+		}(i, accounts[i*numberOfAccounts:(i+1)*numberOfAccounts])
 	}
 
 	wg.Wait()
