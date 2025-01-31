@@ -91,7 +91,6 @@ func NewBridge(runtime Runtime,
 
 	internalChainID := blockchain.GetChainID()
 	chainIDs := make([]uint64, 0, len(runtimeConfig.GenesisConfig.Bridge)+1)
-	chainIDs = append(chainIDs, internalChainID)
 
 	for chainID := range runtimeConfig.GenesisConfig.Bridge {
 		chainIDs = append(chainIDs, chainID)

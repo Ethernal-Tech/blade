@@ -66,11 +66,11 @@ type BridgeManagerStore struct {
 	chainIDs []uint64
 }
 
-func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, chainIDs []uint64,
+func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, externalChainsIDs []uint64,
 	internalChainID uint64) (*BridgeManagerStore, error) {
 	var err error
 
-	store := &BridgeManagerStore{db: db, chainIDs: chainIDs}
+	store := &BridgeManagerStore{db: db, chainIDs: externalChainsIDs}
 
 	initFn := func(tx *bolt.Tx) error {
 		var bridgeMessageBucket, bridgeBatchesBucket, epochBucket *bolt.Bucket
@@ -87,36 +87,50 @@ func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, chainIDs []uint64,
 			return fmt.Errorf("failed to create bucket=%s: %w", string(epochsBucket), err)
 		}
 
-		for _, chainID := range chainIDs {
-			chainIDBytes := common.EncodeUint64ToBytes(chainID)
+		// because we have multiple chains that can generate same events
+		// we need to create bridge message bucket for each pair of internal and external chains
+		createBucketsAndReturnBridgeMessageBucket := func(chainIDBytes []byte) (*bolt.Bucket, error) {
 
 			bridgeMessageChainIDBucket, err := bridgeMessageBucket.CreateBucketIfNotExists(chainIDBytes)
 			if err != nil {
-				return fmt.Errorf("failed to create bucket chainID=%s: %w", string(bridgeMessageEventsBucket), err)
-			}
-
-			if chainID == internalChainID {
-				for _, chainID := range chainIDs {
-					if chainID != internalChainID {
-						if _, err := bridgeMessageChainIDBucket.CreateBucketIfNotExists(common.EncodeUint64ToBytes(chainID)); err != nil {
-							return fmt.Errorf("failed to create bucket chainID=%s: %w", string(bridgeMessageEventsBucket), err)
-						}
-					}
-				}
-			} else {
-				if _, err := bridgeMessageChainIDBucket.CreateBucketIfNotExists(
-					common.EncodeUint64ToBytes(internalChainID)); err != nil {
-					return fmt.Errorf("failed to create bucket chainID=%s: %w", string(bridgeMessageEventsBucket), err)
-				}
+				return nil, fmt.Errorf("failed to create bucket chainID=%s: %w", string(bridgeMessageEventsBucket), err)
 			}
 
 			if _, err := bridgeBatchesBucket.CreateBucketIfNotExists(chainIDBytes); err != nil {
-				return fmt.Errorf("failed to create bucket chainID=%s: %w", string(bridgeBatchBucket), err)
+
+				return nil, fmt.Errorf("failed to create bucket chainID=%s: %w", string(bridgeBatchBucket), err)
 			}
 
 			if _, err := epochBucket.CreateBucketIfNotExists(chainIDBytes); err != nil {
-				return fmt.Errorf("failed to create bucket chainID=%s: %w", string(epochsBucket), err)
+				return nil, fmt.Errorf("failed to create bucket chainID=%s: %w", string(epochsBucket), err)
 			}
+
+			return bridgeMessageChainIDBucket, nil
+		}
+
+		internalChainIDBytes := common.EncodeUint64ToBytes(internalChainID)
+		internalBridgeMessageBucket, err := createBucketsAndReturnBridgeMessageBucket(internalChainIDBytes)
+		if err != nil {
+			return err
+		}
+
+		for _, chainID := range externalChainsIDs {
+			chainIDBytes := common.EncodeUint64ToBytes(chainID)
+			bridgeMessageChainIDBucket, err := createBucketsAndReturnBridgeMessageBucket(chainIDBytes)
+			if err != nil {
+				return err
+			}
+
+			// create bucket for internal chainID in external chainID bucket
+			if _, err := bridgeMessageChainIDBucket.CreateBucketIfNotExists(internalChainIDBytes); err != nil {
+				return fmt.Errorf("failed to create bucket chainID=%s: %w", string(bridgeMessageEventsBucket), err)
+			}
+
+			// create bucket for external chainID in internal chainID bucket
+			if _, err := internalBridgeMessageBucket.CreateBucketIfNotExists(chainIDBytes); err != nil {
+				return fmt.Errorf("failed to create bucket chainID=%s: %w", string(bridgeMessageEventsBucket), err)
+			}
+
 		}
 
 		return nil
