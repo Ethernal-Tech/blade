@@ -546,7 +546,7 @@ func newFileLogger(options *options) (hclog.Logger, error) {
 // newCLILogger returns minimal logger instance that sends all logs to standard output
 func newCLILogger(options *options) hclog.Logger {
 	return hclog.New(&hclog.LoggerOptions{
-		Name:       "bridge-relayer",
+		Name:       fmt.Sprintf("bridge-relayer-%d", *options.externalChainID),
 		Level:      options.logLevel,
 		JSONFormat: options.jsonLogFormat,
 	})

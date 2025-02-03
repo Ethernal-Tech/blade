@@ -841,17 +841,15 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		}
 
 		// add premine if token is non-mintable
-		if i == 0 {
-			err = bridge.mintNativeRootToken(addresses, tokenConfig, polybftConfig)
-			require.NoError(t, err)
+		err = bridge.mintNativeRootToken(addresses, tokenConfig, polybftConfig)
+		require.NoError(t, err)
 
-			err = bridge.premineNativeRootToken(genesisPath, tokenConfig, polybftConfig)
-			require.NoError(t, err)
+		err = bridge.premineNativeRootToken(genesisPath, tokenConfig, polybftConfig)
+		require.NoError(t, err)
 
-			// finalize genesis validators on the bridge chain
-			err = bridge.finalizeGenesis(genesisPath, tokenConfig)
-			require.NoError(t, err)
-		}
+		// finalize genesis validators on the bridge chain
+		err = bridge.finalizeGenesis(genesisPath, tokenConfig)
+		require.NoError(t, err)
 
 		bridgeJSONRPCs[i] = bridge.JSONRPCAddr()
 
@@ -870,16 +868,34 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		cluster.InitTestServer(t, dir, bridgeJSONRPCs, None)
 	}
 
-	for i := uint64(0); i < cluster.Config.NumberOfBridges; i++ {
+	if cluster.Config.NumberOfBridges == 1 && cluster.Config.RelayerPrivateKey != nil {
 		bridgeRelayer := NewTestBridgeRelayer(t,
 			cluster.Config,
-			i+1,
+			1,
 			cluster.Config.Dir("genesis.json"),
 			cluster.Config.RelayerPrivateKey,
 			cluster.Servers[0].JSONRPCAddr())
 
-		cluster.BridgeRelayers[i] = bridgeRelayer
+		cluster.BridgeRelayers[0] = bridgeRelayer
 		bridgeRelayer.Start()
+	} else {
+		for i := uint64(0); i < cluster.Config.NumberOfBridges; i++ {
+			key, err := crypto.GenerateECDSAKey()
+			require.NoError(t, err)
+
+			err = cluster.Bridges[i].fundRelayerAddressOnExternal(key.Address())
+			require.NoError(t, err)
+
+			bridgeRelayer := NewTestBridgeRelayer(t,
+				cluster.Config,
+				i+1,
+				cluster.Config.Dir("genesis.json"),
+				key,
+				cluster.Servers[0].JSONRPCAddr())
+
+			cluster.BridgeRelayers[i] = bridgeRelayer
+			bridgeRelayer.Start()
+		}
 	}
 	// Initialize Gateway contract with BLS, BN256G2 and validators
 	if config.RollbackMode != NoRollback {
