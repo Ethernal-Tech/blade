@@ -124,7 +124,7 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
 
 			// Initialize an empty BridgeMessageBatch
 				signedBatch.batch = BridgeMessageBatch({
-					messages: new BridgeMessage Empty array
+					messages: new BridgeMessage,
 					sourceChainId: 1,
 					destinationChainId: 2,
 					threshold: 1,
