@@ -1166,7 +1166,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalNativeTokenTransfer(t *testing.T
 		// Number of blocks after which the validator set is changed.
 		epochSize = 10
 		// Number of bridges, and therefore the number of external chains.
-		numberOfBridges = 1
+		numberOfBridges = 2
 	)
 
 	allAccountsNum := numberOfAccounts * numberOfBridges
@@ -1242,11 +1242,11 @@ func TestE2E_Multiple_Bridges_InternalToExternalNativeTokenTransfer(t *testing.T
 
 	t.Logf("Smart contract of the root native (mintable) token was successfully deployed on the internal chain %d at address %s", internalChainID, rootERC20Token.String())
 
-	balances := make([]*big.Int, numberOfAccounts)
+	balances := make([]*big.Int, allAccountsNum)
 
 	t.Log("Account balances on the internal chain before bridging:")
 
-	for i := range numberOfAccounts {
+	for i := range allAccountsNum {
 		balance, err := internalChainTxRelayer.Client().GetBalance(accounts[i].Address(), jsonrpc.LatestBlockNumberOrHash)
 		require.NoError(t, err)
 
@@ -1341,7 +1341,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalNativeTokenTransfer(t *testing.T
 		require.NoError(t, err)
 
 		bridgedAmount, _ := new(big.Int).SetString("100000000000000000", 10)
-		totalBridgedAmount := big.NewInt(0).Mul(bridgedAmount, big.NewInt(numberOfBridges))
+		totalBridgedAmount := big.NewInt(0).Mul(bridgedAmount, big.NewInt(1))
 		validBalance := big.NewInt(0).Sub(balances[i], totalBridgedAmount)
 
 		t.Logf("#%d - %s : %s Wei", i+1, accounts[i].Address().String(), balance.String())
