@@ -57,7 +57,7 @@ func newTestState(t *testing.T) *BridgeManagerStore {
 		chainIds = append(chainIds, i)
 	}
 
-	store, err := newBridgeManagerStore(db, nil, chainIds)
+	store, err := newBridgeManagerStore(db, nil, chainIds, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -471,7 +471,7 @@ func TestBridgeEventManager_AddLog_BuildBridgeBatches(t *testing.T) {
 		s := newTestBridgeManager(t, vals.GetValidator("0"), &mockRuntime{isActiveValidator: false}, nil)
 
 		// correct event log
-		data, err := abi.MustNewType("tuple(uint256 a, string b, string c)").Encode([]string{"1", "data2", "data3"})
+		data, err := abi.MustNewType("tuple(uint256 a, uint256 b, string c, string d)").Encode([]string{"1", "2", "data2", "data3"})
 		require.NoError(t, err)
 
 		var bridgeMessageEvent contractsapi.BridgeMsgEvent
@@ -489,7 +489,7 @@ func TestBridgeEventManager_AddLog_BuildBridgeBatches(t *testing.T) {
 		require.NoError(t, s.AddLog(big.NewInt(1), goodLog))
 
 		// node should have inserted given bridgeMsg event, but it shouldn't build any batch
-		bridgeMessages, err := s.state.getBridgeMessageEventsForBridgeBatch(0, 0, nil, 1, 0)
+		bridgeMessages, err := s.state.getBridgeMessageEventsForBridgeBatch(0, 0, nil, 1, 2)
 		require.NoError(t, err)
 		require.Len(t, bridgeMessages, 1)
 		require.Equal(t, uint64(0), bridgeMessages[0].ID.Uint64())
@@ -500,14 +500,15 @@ func TestBridgeEventManager_AddLog_BuildBridgeBatches(t *testing.T) {
 func createTestLogForBridgeMessageResultEvent(t *testing.T, bridgeMessageEventID uint64) *ethgo.Log {
 	t.Helper()
 
-	data, err := abi.MustNewType("tuple(uint256 a, string b, string c)").Encode([]string{"1", "data2", "data3"})
+	data, err := abi.MustNewType("tuple(uint256 a, uint256 b, string c, string d)").Encode([]string{"1", "2", "data2", "data3"})
 	require.NoError(t, err)
 
 	return &ethgo.Log{
 		Topics: []ethgo.Hash{
 			bridgeMessageResultEventSig,
 			ethgo.BytesToHash(common.EncodeUint64ToBytes(bridgeMessageEventID)),
-			ethgo.BytesToHash(common.EncodeUint64ToBytes(1))},
+			ethgo.BytesToHash(common.EncodeUint64ToBytes(1)),
+		},
 		Data: data,
 	}
 }

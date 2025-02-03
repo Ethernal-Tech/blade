@@ -91,13 +91,12 @@ func NewBridge(runtime Runtime,
 
 	internalChainID := blockchain.GetChainID()
 	chainIDs := make([]uint64, 0, len(runtimeConfig.GenesisConfig.Bridge)+1)
-	chainIDs = append(chainIDs, internalChainID)
 
 	for chainID := range runtimeConfig.GenesisConfig.Bridge {
 		chainIDs = append(chainIDs, chainID)
 	}
 
-	store, err := newBridgeManagerStore(state.DB(), dbTx, chainIDs)
+	store, err := newBridgeManagerStore(state.DB(), dbTx, chainIDs, internalChainID)
 	if err != nil {
 		return nil, fmt.Errorf("error creating bridge manager store, err: %w", err)
 	}
@@ -110,6 +109,7 @@ func NewBridge(runtime Runtime,
 	}
 
 	for externalChainID, cfg := range runtimeConfig.GenesisConfig.Bridge {
+		logger := logger.With("chainID", externalChainID)
 		bridgeManager := newBridgeManager(logger, store, &bridgeEventManagerConfig{
 			bridgeCfg:         cfg,
 			topic:             bridgeTopic,
