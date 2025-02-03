@@ -638,3 +638,5 @@ func (mbm *mockBridgeManager) BuildExitEventRoot(epoch uint64) (types.Hash, erro
 func (mbm *mockBridgeManager) BridgeBatch(pendingBlockNumber uint64) ([]*BridgeBatchSigned, error) {
 	return nil, nil
 }
+
+func (*mockBridgeManager) GetInternalGatewayAddr() types.Address { return [20]byte{} }

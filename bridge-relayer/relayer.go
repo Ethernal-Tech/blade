@@ -425,7 +425,11 @@ func (r *BridgeRelayer) Start() {
 				r.logger.Info("received new bridge batches", "total", len(batches))
 			}
 
+			batchNum := 0
+
 			for _, batch := range batches {
+				batchNum++
+
 				if batch.ValidatorSetBatchID.Cmp(big.NewInt(0)) > 0 {
 					r.logger.Info(fmt.Sprintf("getting new validator set batch with id > %s", lastBridged.String()))
 
@@ -442,9 +446,10 @@ func (r *BridgeRelayer) Start() {
 						continue
 					}
 				} else {
-					r.logger.Info("found batch", "events start-id", batch.Batch.Messages[0].ID.String(),
-						"events end-id", batch.Batch.Messages[len(batch.Batch.Messages)-1].ID.String(),
-						"is rollback batch", batch.Batch.IsRollback)
+					if batch.Batch.DestinationChainID.Cmp(r.externalChainID) != 0 ||
+						batch.Batch.SourceChainID.Cmp(r.externalChainID) != 0 && batch.Batch.IsRollback {
+						continue
+					}
 
 					if err := r.sendSignedBridgeMessageBatch(&batch); err != nil {
 						r.logger.Error("failed to send bridge batch on gateway", "err", err)
@@ -453,7 +458,7 @@ func (r *BridgeRelayer) Start() {
 					}
 				}
 
-				lastBridged.Add(lastBridged, big.NewInt(1))
+				lastBridged.Add(lastBridged, big.NewInt(int64(batchNum)))
 
 				r.logger.Info("batch has been successfully processed/sent", "batch id", lastBridged)
 
@@ -483,6 +488,8 @@ func (r *BridgeRelayer) Start() {
 				}
 
 				r.logger.Info("batch has been successfully saved into bolt DB", "batch id", lastBridged.String())
+
+				batchNum = 0
 			}
 		}
 	}
@@ -637,24 +644,6 @@ func (r *BridgeRelayer) sendCommitValidatorSet(newValidatorSet *contractsapi.Sig
 
 	r.logger.Debug("sent commit validator set transaction to external chain",
 		"gatewayAddr", r.externalGatewayAddr,
-		"status", types.ReceiptStatus(receipt.Status),
-		"txHash", receipt.TransactionHash,
-		"blockNumber", receipt.BlockNumber,
-	)
-
-	txn = types.NewTx(types.NewLegacyTx(
-		types.WithFrom(r.privateKey.Address()),
-		types.WithTo(&r.internalGatewayAddr),
-		types.WithInput(input),
-	))
-
-	receipt, err = r.internalClient.SendTransaction(txn, r.privateKey)
-	if err != nil {
-		return err
-	}
-
-	r.logger.Debug("sent commit validator set transaction to internal chain",
-		"gatewayAddr", r.internalGatewayAddr,
 		"status", types.ReceiptStatus(receipt.Status),
 		"txHash", receipt.TransactionHash,
 		"blockNumber", receipt.BlockNumber,

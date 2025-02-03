@@ -90,6 +90,11 @@ func (bbs *BridgeBatchSigned) ContainsBridgeMessage(bridgeMessageID uint64) bool
 		bbs.Messages[length-1].ID.Uint64() >= bridgeMessageID
 }
 
+func (bbs *BridgeBatchSigned) IsE2IBatch() bool {
+	return !bbs.IsRollback && bbs.SourceChainID.Cmp(big.NewInt(100)) != 0 ||
+		bbs.IsRollback && bbs.SourceChainID.Cmp(big.NewInt(100)) == 0
+}
+
 // EncodeAbi contains logic for encoding arbitrary data into ABI format
 func (bbs *BridgeBatchSigned) EncodeAbi() ([]byte, error) {
 	blsSignatrure, err := bls.UnmarshalSignature(bbs.AggSignature.AggregatedSignature)
@@ -102,16 +107,27 @@ func (bbs *BridgeBatchSigned) EncodeAbi() ([]byte, error) {
 		return nil, err
 	}
 
-	commit := &contractsapi.CommitBatchBridgeStorageFn{
-		SignedBatch: &contractsapi.SignedBridgeMessageBatch{
-			Batch:               bbs.BridgeMessageBatch,
-			Signature:           signature,
-			Bitmap:              bbs.AggSignature.Bitmap,
-			ValidatorSetBatchID: big.NewInt(0),
-		},
+	// currently it is hard-coded that the blade chain ID is 100,
+	// it should be updated to dynamically read the ID from the config
+	if bbs.IsE2IBatch() {
+		return (&contractsapi.ReceiveBatchGatewayFn{
+			SignedBatch: &contractsapi.SignedBridgeMessageBatch{
+				Batch:               bbs.BridgeMessageBatch,
+				Signature:           signature,
+				Bitmap:              bbs.AggSignature.Bitmap,
+				ValidatorSetBatchID: big.NewInt(0),
+			},
+		}).EncodeAbi()
+	} else {
+		return (&contractsapi.CommitBatchBridgeStorageFn{
+			SignedBatch: &contractsapi.SignedBridgeMessageBatch{
+				Batch:               bbs.BridgeMessageBatch,
+				Signature:           signature,
+				Bitmap:              bbs.AggSignature.Bitmap,
+				ValidatorSetBatchID: big.NewInt(0),
+			},
+		}).EncodeAbi()
 	}
-
-	return commit.EncodeAbi()
 }
 
 // DecodeAbi contains logic for decoding given ABI data

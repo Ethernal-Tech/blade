@@ -1916,6 +1916,25 @@ func (i *InitializeBridgeStorageFn) DecodeAbi(buf []byte) error {
 	return decodeMethod(BridgeStorage.Abi.Methods["initialize"], buf, i)
 }
 
+type InitializeBSBridgeStorageFn struct {
+	NewBls     types.Address   `abi:"newBls"`
+	NewBn256G2 types.Address   `abi:"newBn256G2"`
+	Validators []*Validator    `abi:"validators"`
+	Addresses  []types.Address `abi:"_addresses"`
+}
+
+func (i *InitializeBSBridgeStorageFn) Sig() []byte {
+	return BridgeStorage.Abi.Methods["initializeBS"].ID()
+}
+
+func (i *InitializeBSBridgeStorageFn) EncodeAbi() ([]byte, error) {
+	return BridgeStorage.Abi.Methods["initializeBS"].Encode(i)
+}
+
+func (i *InitializeBSBridgeStorageFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(BridgeStorage.Abi.Methods["initializeBS"], buf, i)
+}
+
 type BridgeMessage struct {
 	ID                 *big.Int      `abi:"id"`
 	SourceChainID      *big.Int      `abi:"sourceChainId"`
@@ -2125,6 +2144,25 @@ func (r *ReceiveBatchGatewayFn) EncodeAbi() ([]byte, error) {
 
 func (r *ReceiveBatchGatewayFn) DecodeAbi(buf []byte) error {
 	return decodeMethod(Gateway.Abi.Methods["receiveBatch"], buf, r)
+}
+
+type InitializeSCGatewayFn struct {
+	NewBls     types.Address `abi:"newBls"`
+	NewBn256G2 types.Address `abi:"newBn256G2"`
+	Validators []*Validator  `abi:"validators"`
+	BsAddress  types.Address `abi:"bsAddress"`
+}
+
+func (i *InitializeSCGatewayFn) Sig() []byte {
+	return Gateway.Abi.Methods["initializeSC"].ID()
+}
+
+func (i *InitializeSCGatewayFn) EncodeAbi() ([]byte, error) {
+	return Gateway.Abi.Methods["initializeSC"].Encode(i)
+}
+
+func (i *InitializeSCGatewayFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(Gateway.Abi.Methods["initializeSC"], buf, i)
 }
 
 type BridgeMessageResultEvent struct {

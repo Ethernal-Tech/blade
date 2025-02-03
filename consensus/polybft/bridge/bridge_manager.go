@@ -65,6 +65,7 @@ type BridgeManager interface {
 	PostBlock(req *oracle.PostBlockRequest) error
 	PostEpoch(req *oracle.PostEpochRequest) error
 	Close()
+	GetInternalGatewayAddr() types.Address
 }
 
 var _ BridgeManager = (*dummyBridgeEventManager)(nil)
@@ -81,6 +82,8 @@ func (d *dummyBridgeEventManager) PostBlock(req *oracle.PostBlockRequest) error 
 func (d *dummyBridgeEventManager) PostEpoch(req *oracle.PostEpochRequest) error {
 	return nil
 }
+
+func (d *dummyBridgeEventManager) GetInternalGatewayAddr() types.Address { return [20]byte{} }
 
 // EventSubscriber implementation
 func (d *dummyBridgeEventManager) GetLogFilters() map[types.Address][]types.Hash {
@@ -168,6 +171,10 @@ func (b *bridgeEventManager) Start(runtimeConfig *config.Runtime) error {
 	b.externalClient = *relayer.Client()
 
 	return nil
+}
+
+func (b *bridgeEventManager) GetInternalGatewayAddr() types.Address {
+	return b.config.bridgeCfg.InternalGatewayAddr
 }
 
 // internalChainRollbackHandler manages rollback logic for batches that have not been

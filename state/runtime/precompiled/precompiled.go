@@ -72,7 +72,7 @@ func (p *Precompiled) setupContracts() {
 	p.register("9", &blake2f{p})
 
 	// Console precompile
-	// p.register(contracts.ConsolePrecompile.String(), &console{})
+	p.register(contracts.ConsolePrecompile.String(), &console{})
 
 	// Native transfer precompile
 	p.register(contracts.NativeTransferPrecompile.String(), &nativeTransfer{})

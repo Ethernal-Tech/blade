@@ -364,10 +364,17 @@ func initBridgeStorageContract(cfg config.PolyBFT, transition *state.Transition)
 		return fmt.Errorf("error while converting validators for bridge storage contract: %w", err)
 	}
 
-	initFn := &contractsapi.InitializeBridgeStorageFn{
+	addresses := make([]types.Address, 0, len(cfg.Bridge))
+
+	for _, v := range cfg.Bridge {
+		addresses = append(addresses, v.InternalGatewayAddr)
+	}
+
+	initFn := &contractsapi.InitializeBSBridgeStorageFn{
 		NewBls:     contracts.BLSContract,
 		NewBn256G2: contracts.BLS256Contract,
 		Validators: validators,
+		Addresses:  addresses,
 	}
 
 	input, err := initFn.EncodeAbi()
@@ -394,10 +401,11 @@ func initGatewayContract(cfg config.PolyBFT, bridgeCfg *config.Bridge,
 		return fmt.Errorf("error while converting validators for gateway contract: %w", err)
 	}
 
-	initFn := &contractsapi.InitializeGatewayFn{
+	initFn := &contractsapi.InitializeSCGatewayFn{
 		NewBls:     contracts.BLSContract,
 		NewBn256G2: contracts.BLS256Contract,
 		Validators: validators,
+		BsAddress:  contracts.BridgeStorageContract,
 	}
 
 	input, err := initFn.EncodeAbi()

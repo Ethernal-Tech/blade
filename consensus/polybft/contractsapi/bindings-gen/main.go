@@ -372,6 +372,7 @@ func main() {
 			false,
 			[]string{
 				"initialize",
+				"initializeBS",
 				"commitBatch",
 				"commitValidatorSet",
 			},
@@ -388,6 +389,7 @@ func main() {
 			[]string{
 				"initialize",
 				"receiveBatch",
+				"initializeSC",
 			},
 			[]string{
 				"BridgeMessageResult",
