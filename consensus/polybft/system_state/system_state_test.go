@@ -121,6 +121,17 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
 			
 			function setBridgeMessage(uint256 _num) public payable {
 				SignedBridgeMessageBatch storage signedBatch = batches[_num];
+
+			// Initialize an empty BridgeMessageBatch
+				signedBatch.batch = BridgeMessageBatch({
+					messages: new BridgeMessage Empty array
+					sourceChainId: 1,
+					destinationChainId: 2,
+					threshold: 1,
+					isRollback: false
+				});
+
+
 				signedBatch.signature = [uint256(300), uint256(200)];
 				signedBatch.bitmap = "smth";
 				signedBatch.validatorSetBatchId = 1;
@@ -160,6 +171,11 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, &contractsapi.SignedBridgeMessageBatch{
+		Batch: &contractsapi.BridgeMessageBatch{
+			SourceChainID:      big.NewInt(1),
+			DestinationChainID: big.NewInt(2),
+			Threshold:          big.NewInt(1),
+			IsRollback:         false},
 		Signature:           [2]*big.Int{big.NewInt(300), big.NewInt(200)},
 		Bitmap:              []byte("smth"),
 		ValidatorSetBatchID: big.NewInt(1),
