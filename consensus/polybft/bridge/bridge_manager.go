@@ -251,8 +251,6 @@ func (b *bridgeEventManager) createRollbackBatches(blockNumber *big.Int,
 				)
 			}
 
-			b.logger.Error("ERR", "CREATE ROLLBACK BATCHES", b.unexecutedBatches[i].BridgeMessageBatch)
-
 			// gossip message
 			b.multicast(&BridgeBatchVote{
 				Hash: hashBytes,

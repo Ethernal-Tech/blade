@@ -226,6 +226,7 @@ func (b *bridge) VerifyTransactions(blockInfo oracle.NewBlockInfo, txs []*types.
 		commitValidatorSetExists bool
 		commitBatchFn            = new(contractsapi.CommitBatchBridgeStorageFn)
 		commitValidatorSetFn     = new(contractsapi.CommitValidatorSetBridgeStorageFn)
+		receiveBatchFn           = new(contractsapi.ReceiveBatchGatewayFn)
 	)
 
 	for _, tx := range txs {
@@ -241,7 +242,7 @@ func (b *bridge) VerifyTransactions(blockInfo oracle.NewBlockInfo, txs []*types.
 
 		sig := txData[:helpers.AbiMethodIDLength]
 
-		if bytes.Equal(sig, commitBatchFn.Sig()) {
+		if bytes.Equal(sig, commitBatchFn.Sig()) || bytes.Equal(sig, receiveBatchFn.Sig()) {
 			if !blockInfo.IsEndOfSprint {
 				return errBridgeBatchTxInNonSprintBlock
 			}

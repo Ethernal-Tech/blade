@@ -139,6 +139,8 @@ func TestGetTransactions(t *testing.T) {
 					AggSignature: *signature,
 				}}, nil)
 
+				bridgeManagerMock.On("GetInternalGatewayAddr").Return(nil)
+
 				bridge.bridgeManagers = map[uint64]BridgeManager{
 					1: bridgeManagerMock,
 				}

@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 
@@ -132,46 +133,86 @@ func (bbs *BridgeBatchSigned) EncodeAbi() ([]byte, error) {
 
 // DecodeAbi contains logic for decoding given ABI data
 func (bbs *BridgeBatchSigned) DecodeAbi(txData []byte) error {
+	receiveBatchFn := contractsapi.ReceiveBatchGatewayFn{}
+	commitBatchFn := contractsapi.CommitBatchBridgeStorageFn{}
 	if len(txData) < helpers.AbiMethodIDLength {
 		return fmt.Errorf("invalid batch data, len = %d", len(txData))
 	}
 
-	commit := contractsapi.CommitBatchBridgeStorageFn{}
+	sig := txData[:helpers.AbiMethodIDLength]
 
-	err := commit.DecodeAbi(txData)
-	if err != nil {
-		return err
-	}
+	if bytes.Equal(sig, receiveBatchFn.Sig()) {
+		err := receiveBatchFn.DecodeAbi(txData)
+		if err != nil {
+			return err
+		}
 
-	signature0 := commit.SignedBatch.Signature[0].Bytes()
-	signature1 := commit.SignedBatch.Signature[1].Bytes()
-	halfSignatureSize := bls.SignatureSize / 2
-	signature := make([]byte, bls.SignatureSize)
+		signature0 := receiveBatchFn.SignedBatch.Signature[0].Bytes()
+		signature1 := receiveBatchFn.SignedBatch.Signature[1].Bytes()
+		halfSignatureSize := bls.SignatureSize / 2
+		signature := make([]byte, bls.SignatureSize)
 
-	if len(signature0) < halfSignatureSize {
-		copy(signature[halfSignatureSize-len(signature0):halfSignatureSize], signature0)
-	} else {
-		copy(signature[:halfSignatureSize], signature0)
-	}
+		if len(signature0) < halfSignatureSize {
+			copy(signature[halfSignatureSize-len(signature0):halfSignatureSize], signature0)
+		} else {
+			copy(signature[:halfSignatureSize], signature0)
+		}
 
-	if len(signature1) < halfSignatureSize {
-		copy(signature[bls.SignatureSize-len(signature1):], signature1)
-	} else {
-		copy(signature[halfSignatureSize:], signature1)
-	}
+		if len(signature1) < halfSignatureSize {
+			copy(signature[bls.SignatureSize-len(signature1):], signature1)
+		} else {
+			copy(signature[halfSignatureSize:], signature1)
+		}
 
-	*bbs = BridgeBatchSigned{
-		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-			Messages:           commit.SignedBatch.Batch.Messages,
-			SourceChainID:      commit.SignedBatch.Batch.SourceChainID,
-			DestinationChainID: commit.SignedBatch.Batch.DestinationChainID,
-			Threshold:          commit.SignedBatch.Batch.Threshold,
-			IsRollback:         commit.SignedBatch.Batch.IsRollback,
-		},
-		AggSignature: polytypes.Signature{
-			AggregatedSignature: signature,
-			Bitmap:              commit.SignedBatch.Bitmap,
-		},
+		*bbs = BridgeBatchSigned{
+			BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
+				Messages:           receiveBatchFn.SignedBatch.Batch.Messages,
+				SourceChainID:      receiveBatchFn.SignedBatch.Batch.SourceChainID,
+				DestinationChainID: receiveBatchFn.SignedBatch.Batch.DestinationChainID,
+				Threshold:          receiveBatchFn.SignedBatch.Batch.Threshold,
+				IsRollback:         receiveBatchFn.SignedBatch.Batch.IsRollback,
+			},
+			AggSignature: polytypes.Signature{
+				AggregatedSignature: signature,
+				Bitmap:              receiveBatchFn.SignedBatch.Bitmap,
+			},
+		}
+	} else if bytes.Equal(sig, commitBatchFn.Sig()) {
+		err := commitBatchFn.DecodeAbi(txData)
+		if err != nil {
+			return err
+		}
+
+		signature0 := commitBatchFn.SignedBatch.Signature[0].Bytes()
+		signature1 := commitBatchFn.SignedBatch.Signature[1].Bytes()
+		halfSignatureSize := bls.SignatureSize / 2
+		signature := make([]byte, bls.SignatureSize)
+
+		if len(signature0) < halfSignatureSize {
+			copy(signature[halfSignatureSize-len(signature0):halfSignatureSize], signature0)
+		} else {
+			copy(signature[:halfSignatureSize], signature0)
+		}
+
+		if len(signature1) < halfSignatureSize {
+			copy(signature[bls.SignatureSize-len(signature1):], signature1)
+		} else {
+			copy(signature[halfSignatureSize:], signature1)
+		}
+
+		*bbs = BridgeBatchSigned{
+			BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
+				Messages:           commitBatchFn.SignedBatch.Batch.Messages,
+				SourceChainID:      commitBatchFn.SignedBatch.Batch.SourceChainID,
+				DestinationChainID: commitBatchFn.SignedBatch.Batch.DestinationChainID,
+				Threshold:          commitBatchFn.SignedBatch.Batch.Threshold,
+				IsRollback:         commitBatchFn.SignedBatch.Batch.IsRollback,
+			},
+			AggSignature: polytypes.Signature{
+				AggregatedSignature: signature,
+				Bitmap:              commitBatchFn.SignedBatch.Bitmap,
+			},
+		}
 	}
 
 	return nil
