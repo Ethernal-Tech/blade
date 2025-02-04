@@ -371,10 +371,10 @@ func initBridgeStorageContract(cfg config.PolyBFT, transition *state.Transition)
 	}
 
 	initFn := &contractsapi.InitializeBSBridgeStorageFn{
-		NewBls:     contracts.BLSContract,
-		NewBn256G2: contracts.BLS256Contract,
-		Validators: validators,
-		Addresses:  addresses,
+		NewBls:           contracts.BLSContract,
+		NewBn256G2:       contracts.BLS256Contract,
+		Validators:       validators,
+		AddressesGateway: addresses,
 	}
 
 	input, err := initFn.EncodeAbi()

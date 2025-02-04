@@ -1917,10 +1917,10 @@ func (i *InitializeBridgeStorageFn) DecodeAbi(buf []byte) error {
 }
 
 type InitializeBSBridgeStorageFn struct {
-	NewBls     types.Address   `abi:"newBls"`
-	NewBn256G2 types.Address   `abi:"newBn256G2"`
-	Validators []*Validator    `abi:"validators"`
-	Addresses  []types.Address `abi:"_addresses"`
+	NewBls           types.Address   `abi:"newBls"`
+	NewBn256G2       types.Address   `abi:"newBn256G2"`
+	Validators       []*Validator    `abi:"validators"`
+	AddressesGateway []types.Address `abi:"addressesGateway"`
 }
 
 func (i *InitializeBSBridgeStorageFn) Sig() []byte {
