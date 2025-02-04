@@ -135,6 +135,7 @@ func (bbs *BridgeBatchSigned) EncodeAbi() ([]byte, error) {
 func (bbs *BridgeBatchSigned) DecodeAbi(txData []byte) error {
 	receiveBatchFn := contractsapi.ReceiveBatchGatewayFn{}
 	commitBatchFn := contractsapi.CommitBatchBridgeStorageFn{}
+
 	if len(txData) < helpers.AbiMethodIDLength {
 		return fmt.Errorf("invalid batch data, len = %d", len(txData))
 	}
