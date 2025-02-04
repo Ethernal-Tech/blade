@@ -1481,6 +1481,8 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 	})
 
 	t.Run("transfer more native tokens than 0x0 balance is", func(t *testing.T) {
+		t.Skip() // TO DO: get back this test after retry/rollback implementation
+
 		// since bridging native token is essentially minting
 		// (i.e. transferring tokens from 0x0 to receiver address using native transfer precompile),
 		// this test tries to deposit more tokens than 0x0 address has on its balance

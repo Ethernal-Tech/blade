@@ -446,9 +446,11 @@ func (r *BridgeRelayer) Start() {
 						continue
 					}
 				} else {
-					if batch.Batch.DestinationChainID.Cmp(r.externalChainID) != 0 ||
-						batch.Batch.SourceChainID.Cmp(r.externalChainID) != 0 && batch.Batch.IsRollback {
-						continue
+					if batch.Batch.DestinationChainID.Cmp(r.externalChainID) != 0 &&
+						batch.Batch.SourceChainID.Cmp(r.externalChainID) != 0 {
+						continue // skip batches from other bridges
+					} else if batch.Batch.SourceChainID.Cmp(r.externalChainID) == 0 && !batch.Batch.IsRollback {
+						continue // skip it if not rollback
 					}
 
 					if err := r.sendSignedBridgeMessageBatch(&batch); err != nil {
