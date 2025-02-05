@@ -3,6 +3,7 @@ package polybft
 import (
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/0xPolygon/polygon-edge/bls"
 	"github.com/0xPolygon/polygon-edge/chain"
@@ -369,6 +370,10 @@ func initBridgeStorageContract(cfg config.PolyBFT, transition *state.Transition)
 	for _, v := range cfg.Bridge {
 		addresses = append(addresses, v.InternalGatewayAddr)
 	}
+
+	slices.SortFunc(addresses, func(a, b types.Address) int {
+		return a.Compare(b)
+	})
 
 	initFn := &contractsapi.InitializeBSBridgeStorageFn{
 		NewBls:           contracts.BLSContract,
