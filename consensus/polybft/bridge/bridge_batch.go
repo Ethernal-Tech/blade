@@ -143,19 +143,21 @@ func (bbs *BridgeBatchSigned) DecodeAbi(txData []byte) error {
 	sig := txData[:helpers.AbiMethodIDLength]
 
 	if bytes.Equal(sig, receiveBatchFn.Sig()) {
-		err := receiveBatchFn.DecodeAbi(txData)
-		if err != nil {
+		if err := receiveBatchFn.DecodeAbi(txData); err != nil {
 			return err
 		}
 
-		bbs.constructFromSignedBatch(receiveBatchFn.SignedBatch)
+		if err := bbs.constructFromSignedBatch(receiveBatchFn.SignedBatch); err != nil {
+			return err
+		}
 	} else if bytes.Equal(sig, commitBatchFn.Sig()) {
-		err := commitBatchFn.DecodeAbi(txData)
-		if err != nil {
+		if err := commitBatchFn.DecodeAbi(txData); err != nil {
 			return err
 		}
 
-		bbs.constructFromSignedBatch(commitBatchFn.SignedBatch)
+		if err := bbs.constructFromSignedBatch(commitBatchFn.SignedBatch); err != nil {
+			return err
+		}
 	}
 
 	return nil
