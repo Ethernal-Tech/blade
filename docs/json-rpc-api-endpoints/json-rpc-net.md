@@ -15,7 +15,7 @@ None
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"net_listening","params":[],"id":1}'
+curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"net_listening","params":[],"id":1}'
 ```
 
 <details>
@@ -49,7 +49,7 @@ None
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}'
+curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}'
 ```
 
 <details>
@@ -83,7 +83,7 @@ None
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":1}'
+curl https://rpc-endpoint.io:8545 --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":1}'
 ```
 
 <details>

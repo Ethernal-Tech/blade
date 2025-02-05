@@ -3,6 +3,7 @@
 * [Getting Started](README.md)
 * [CLI configuration](cli.md)
 * [JSON RPC API endpoints](json-rpc-api-endpoints/README.md)
+  * [debug](json-rpc-api-endpoints/json-rpc-debug.md)
   * [eth](json-rpc-api-endpoints/json-rpc-eth.md)
   * [net](json-rpc-api-endpoints/json-rpc-net.md)
   * [txpool](json-rpc-api-endpoints/json-rpc-txpool.md)

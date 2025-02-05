@@ -15,7 +15,7 @@ None
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"web3_clientVersion","params":[],"id":1}'
+curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"web3_clientVersion","params":[],"id":1}'
 ```
 
 <details>
@@ -49,7 +49,7 @@ Returns Keccak-256 (not the standardized SHA3-256) of the given data.
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"web3_sha3","params":["0x68656c6c6f20776f726c64"],"id":1}'
+curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"web3_sha3","params":["0x68656c6c6f20776f726c64"],"id":1}'
 ```
 
 <details>

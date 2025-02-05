@@ -42,18 +42,18 @@ Executes a new message call immediately without creating a transaction on the bl
 
 Object - The transaction call object
 
-* from: DATA, 20 Bytes - (optional) The address the transaction is sent from.
-* to: DATA, 20 Bytes - The address the transaction is directed to.
-* gas: QUANTITY - (optional) Integer of the gas provided for the transaction execution. eth\_call consumes zero gas, but this parameter may be needed by some executions.
-* gasPrice: QUANTITY - (optional) Integer of the gasPrice used for each paid gas.
-* maxPriorityFeePerGas: QUANTITY - (optional) Maximum fee, in Wei, the sender is willing to pay per gas above the base fee. Can be used only in EIP1559 transactions. If used, must specify maxFeePerGas.
-* maxFeePerGas: QUANTITY - (optional) Maximum total fee (base fee + priority fee), in Wei, the sender is willing to pay per gas. Can be used only in EIP1559 transactions. If used, must specify maxPriorityFeePerGas.
-* value: QUANTITY - (optional) Integer of the value sent with this transaction.
-* data: DATA - (optional) Hash of the method signature and encoded parameters. For details see Ethereum Contract ABI in the Solidity documentation.
-* nonce: QUANTITY - (optional) Transaction nonce.
-* type: QUANTITY - (optional) Transaction type.
-* chainId: QUANTITY - (optional) Chain ID.
-* accessList: Array - (optional) List of addresses and storage keys that the transaction plans to access. Used only in non-frontier transactions.
+* from: DATA, 20 Bytes - (optional) the address the transaction is sent from.
+* to: DATA, 20 Bytes - the address the transaction is directed to.
+* gas: QUANTITY - (optional) integer of the gas provided for the transaction execution. eth\_call consumes zero gas, but this parameter may be needed by some executions.
+* gasPrice: QUANTITY - (optional) integer of the gasPrice used for each paid gas.
+* maxPriorityFeePerGas: QUANTITY - (optional) maximum fee, in Wei, the sender is willing to pay per gas above the base fee. Can be used only in EIP1559 transactions. If used, must specify maxFeePerGas.
+* maxFeePerGas: QUANTITY - (optional) maximum total fee (base fee + priority fee), in Wei, the sender is willing to pay per gas. Can be used only in EIP1559 transactions. If used, must specify maxPriorityFeePerGas.
+* value: QUANTITY - (optional) integer of the value sent with this transaction.
+* data: DATA - (optional) hash of the method signature and encoded parameters. For details see Ethereum Contract ABI in the Solidity documentation.
+* nonce: QUANTITY - (optional) transaction nonce.
+* type: QUANTITY - (optional) transaction type.
+* chainId: QUANTITY - (optional) chain ID.
+* accessList: Array - (optional) list of addresses and storage keys that the transaction plans to access. Used only in non-frontier transactions.
 * QUANTITY|TAG - integer block number, or the string "latest"
 
 #### Returns
@@ -88,7 +88,7 @@ Returns the currently configured chain id, a value used in replay-protected tran
 
 #### Parameters
 
-* None
+None
 
 #### Returns
 
@@ -124,18 +124,18 @@ Creates an EIP-2930 access list that you can include in a transaction.
 
 Object - The transaction call object
 
-* from: DATA, 20 Bytes - (optional) The address the transaction is sent from.
-* to: DATA, 20 Bytes - The address the transaction is directed to.
-* gas: QUANTITY - (optional) Integer of the gas provided for the transaction execution. eth\_call consumes zero gas, but this parameter may be needed by some executions.
-* gasPrice: QUANTITY - (optional) Integer of the gasPrice used for each paid gas.
-* maxPriorityFeePerGas: QUANTITY - (optional) Maximum fee, in Wei, the sender is willing to pay per gas above the base fee. Can be used only in EIP1559 transactions. If used, must specify maxFeePerGas.
-* maxFeePerGas: QUANTITY - (optional) Maximum total fee (base fee + priority fee), in Wei, the sender is willing to pay per gas. Can be used only in EIP1559 transactions. If used, must specify maxPriorityFeePerGas.
-* value: QUANTITY - (optional) Integer of the value sent with this transaction.
-* data: DATA - (optional) Hash of the method signature and encoded parameters. For details see Ethereum Contract ABI in the Solidity documentation.
-* nonce: QUANTITY - (optional) Transaction nonce.
-* type: QUANTITY - (optional) Transaction type.
-* chainId: QUANTITY - (optional) Chain ID.
-* accessList: Array - (optional) List of addresses and storage keys that the transaction plans to access. Used only in non-frontier transactions.
+* from: DATA, 20 Bytes - (optional) the address the transaction is sent from.
+* to: DATA, 20 Bytes - the address the transaction is directed to.
+* gas: QUANTITY - (optional) integer of the gas provided for the transaction execution. eth\_call consumes zero gas, but this parameter may be needed by some executions.
+* gasPrice: QUANTITY - (optional) integer of the gasPrice used for each paid gas.
+* maxPriorityFeePerGas: QUANTITY - (optional) maximum fee, in Wei, the sender is willing to pay per gas above the base fee. Can be used only in EIP1559 transactions. If used, must specify maxFeePerGas.
+* maxFeePerGas: QUANTITY - (optional) maximum total fee (base fee + priority fee), in Wei, the sender is willing to pay per gas. Can be used only in EIP1559 transactions. If used, must specify maxPriorityFeePerGas.
+* value: QUANTITY - (optional) integer of the value sent with this transaction.
+* data: DATA - (optional) hash of the method signature and encoded parameters. For details see Ethereum Contract ABI in the Solidity documentation.
+* nonce: QUANTITY - (optional) transaction nonce.
+* type: QUANTITY - (optional) transaction type.
+* chainId: QUANTITY - (optional) chain ID.
+* accessList: Array - (optional) list of addresses and storage keys that the transaction plans to access. Used only in non-frontier transactions.
 * QUANTITY|TAG - integer block number, or the string "latest"
 
 #### Returns
@@ -207,7 +207,7 @@ Object - The transaction call object
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth_estimateGas","params":[{"from":"0x85da99c8a7c2c95964c8efd687e95e632fc533d6","to":"0xe14Ad69a09C174E33FCaEFEB209D86A2a4F40fb7","value":"1"},"latest"],"id":1}'
+curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth_estimateGas","params":[{"from":"0x85da99c8a7c2c95964c8efd687e95e632fc533d6","to":"0xe14Ad69a09C174E33FCaEFEB209D86A2a4F40fb7","value":"1"},"latest"],"id":1}'
 ```
 
 <details>
@@ -236,7 +236,7 @@ As of EIP-4844, this method tracks transaction blob gas fees as well.
 
 * blockCount: QUANTITY - number of blocks in the requested range. Between 1 and 1024 blocks can be requested in a single query. If blocks in the specified block range are not available, then only the fee history for available blocks is returned. Accepts hexadecimal or integer values.
 * newestBlock: QUANTITY|TAG - integer block number, or the string "latest"
-* rewardPercentiles: QUANTITY - (optional) A monotonically increasing list of decimal percentile values to sample from each block's effective priority fees per gas in ascending order, weighted by gas used.
+* rewardPercentiles: QUANTITY - (optional) a monotonically increasing list of decimal percentile values to sample from each block's effective priority fees per gas in ascending order, weighted by gas used.
 
 #### Returns
 
@@ -252,7 +252,7 @@ Object - A fee history object:
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth_feeHistory","params":["0x5", "latest",[20,30]],"id":1}'
+curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth_feeHistory","params":["0x5", "latest",[20,30]],"id":1}'
 ```
 
 <details>
@@ -370,8 +370,8 @@ Returns block information by hash.
 
 #### Parameters
 
-* DATA , 32 Bytes - Hash of a block.
-* Boolean - If true it returns the full transaction objects, if false only the hashes of the transactions.
+* DATA , 32 Bytes - hash of a block.
+* Boolean - if true it returns the full transaction objects, if false only the hashes of the transactions.
 
 #### Returns
 
@@ -396,8 +396,8 @@ Object - A block object, or null when no block was found:
 * hash: DATA, 32 Bytes - hash of the block.
 * baseFeePerGas: QUANTITY - base fee per gas.
 * size: QUANTITY - integer the size of this block in bytes.
-* transactions: Array - Array of transaction objects, or 32 Bytes transaction hashes depending on the last given parameter.
-* uncles: Array - Array of uncle hashes.
+* transactions: Array - array of transaction objects, or 32 Bytes transaction hashes depending on the last given parameter.
+* uncles: Array - array of uncle hashes.
 
 #### Example
 
@@ -475,8 +475,8 @@ Object - A block object, or null when no block was found:
 * hash: DATA, 32 Bytes - hash of the block.
 * baseFeePerGas: QUANTITY - base fee per gas.
 * size: QUANTITY - integer the size of this block in bytes.
-* transactions: Array - Array of transaction objects, or 32 Bytes transaction hashes depending on the last given parameter.
-* uncles: Array - Array of uncle hashes.
+* transactions: Array - array of transaction objects, or 32 Bytes transaction hashes depending on the last given parameter.
+* uncles: Array - array of uncle hashes.
 
 #### Example
 
@@ -536,15 +536,15 @@ Returns all transaction receipts for a given block. Transaction receipts provide
 
 Object - A transaction receipt object:
 
-* cumulativeGasUsed : QUANTITY - The total amount of gas used when this transaction was executed in the block.
-* logsBloom: DATA, 256 Bytes - Bloom filter for light clients to quickly retrieve related logs.
-* logs: Array - Array of log objects, which this transaction generated.
+* cumulativeGasUsed : QUANTITY - the total amount of gas used when this transaction was executed in the block.
+* logsBloom: DATA, 256 Bytes - bloom filter for light clients to quickly retrieve related logs.
+* logs: Array - array of log objects, which this transaction generated.
 * transactionHash : DATA, 32 Bytes - hash of the transaction.
 * transactionIndex: QUANTITY - integer of the transactions index position in the block.
 * blockHash: DATA, 32 Bytes - hash of the block where this transaction was in.
 * blockNumber: QUANTITY - block number where this transaction was in.
 * gasUsed : QUANTITY - The amount of gas used by this specific transaction alone.
-* contractAddress : DATA, 20 Bytes - The contract address created, if the transaction was a contract creation, otherwise null.
+* contractAddress : DATA, 20 Bytes - the contract address created, if the transaction was a contract creation, otherwise null.
 * from: DATA, 20 Bytes - address of the sender.
 * to: DATA, 20 Bytes - address of the receiver. null when its a contract creation transaction.
 * type: QUANTITY - transaction type.
@@ -722,7 +722,7 @@ Returns code at a given address.
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth_getCode","params":["0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b", "0x2"],"id":1}'
+curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth_getCode","params":["0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b", "0x2"],"id":1}'
 ```
 
 <details>
@@ -763,12 +763,12 @@ Array - Array of log objects, or an empty array if nothing has changed since las
   * transactionIndex: QUANTITY - integer of the transactions index position log was created from. null when its pending log.
   * address: DATA, 20 Bytes - address from which this log originated.
   * data: DATA - contains one or more 32 Bytes non-indexed arguments of the log.
-  * topics: Array of DATA - Array of 0 to 4 32 Bytes DATA of indexed log arguments. (In solidity: The first topic is the hash of the signature of the event (e.g. Deposit(address,bytes32,uint256)), except you declared the event with the anonymous specifier.)
+  * topics: Array of DATA - array of 0 to 4 32 Bytes DATA of indexed log arguments. (In solidity: The first topic is the hash of the signature of the event (e.g. Deposit(address,bytes32,uint256)), except you declared the event with the anonymous specifier.)
 
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth_getFilterChanges","params":["0x16"],"id":1}'
+curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth_getFilterChanges","params":["0x16"],"id":1}'
 ```
 
 <details>
@@ -843,12 +843,12 @@ Array - Array of log objects, or an empty array
   * transactionIndex: QUANTITY - integer of the transactions index position log was created from. null when its pending log.
   * address: DATA, 20 Bytes - address from which this log originated.
   * data: DATA - contains one or more 32 Bytes non-indexed arguments of the log.
-  * topics: Array of DATA - Array of 0 to 4 32 Bytes DATA of indexed log arguments. (In solidity: The first topic is the hash of the signature of the event (e.g. Deposit(address,bytes32,uint256)), except you declared the event with the anonymous specifier.)
+  * topics: Array of DATA - array of 0 to 4 32 Bytes DATA of indexed log arguments. (In solidity: The first topic is the hash of the signature of the event (e.g. Deposit(address,bytes32,uint256)), except you declared the event with the anonymous specifier.)
 
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth_getFilterLogs","params":["0x16"],"id":1}'
+curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth_getFilterLogs","params":["0x16"],"id":1}'
 ```
 
 <details>
@@ -1046,11 +1046,11 @@ Returns an array of all logs matching a given filter object.
 
 Object - The filter options:
 
-* fromBlock: QUANTITY|TAG - (optional, default: "latest") Integer block number, or "latest" for the last mined block
-* toBlock: QUANTITY|TAG - (optional, default: "latest") Integer block number, or "latest" for the last mined block
-* address: DATA|Array, 20 Bytes - (optional) Contract address or a list of addresses from which logs should originate.
-* topics: Array of DATA - (optional) Array of 32 Bytes DATA topics. Topics are order-dependent. Each topic can also be an array of DATA with “or” options.
-* blockhash: DATA, 32 Bytes - (optional) With the addition of EIP-234, blockHash will be a new filter option which restricts the logs returned to the single block with the 32-byte hash blockHash. Using blockHash is equivalent to fromBlock = toBlock = the block number with hash blockHash. If blockHash is present in the filter criteria, then neither fromBlock nor toBlock is allowed.
+* fromBlock: QUANTITY|TAG - (optional, default: "latest") integer block number, or "latest" for the last mined block
+* toBlock: QUANTITY|TAG - (optional, default: "latest") integer block number, or "latest" for the last mined block
+* address: DATA|Array, 20 Bytes - (optional) contract address or a list of addresses from which logs should originate.
+* topics: Array of DATA - (optional) array of 32 Bytes DATA topics. Topics are order-dependent. Each topic can also be an array of DATA with “or” options.
+* blockhash: DATA, 32 Bytes - (optional) with the addition of EIP-234, blockHash will be a new filter option which restricts the logs returned to the single block with the 32-byte hash blockHash. Using blockHash is equivalent to fromBlock = toBlock = the block number with hash blockHash. If blockHash is present in the filter criteria, then neither fromBlock nor toBlock is allowed.
 
 #### Returns
 
@@ -1134,7 +1134,7 @@ Returns the value from a storage position at a given address.
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth_getStorageAt","params":["0x295a70b2de5e3953354a6a8344e616ed314d7251", "0x0", "latest"],"id":1}'
+curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth_getStorageAt","params":["0x295a70b2de5e3953354a6a8344e616ed314d7251", "0x0", "latest"],"id":1}'
 ```
 
 <details>
@@ -1411,15 +1411,15 @@ Note That the receipt is not available for pending transactions.
 
 Object - A transaction receipt object, or null when no receipt was found:
 
-* cumulativeGasUsed : QUANTITY - The total amount of gas used when this transaction was executed in the block.
-* logsBloom: DATA, 256 Bytes - Bloom filter for light clients to quickly retrieve related logs.
-* logs: Array - Array of log objects, which this transaction generated.
+* cumulativeGasUsed : QUANTITY - the total amount of gas used when this transaction was executed in the block.
+* logsBloom: DATA, 256 Bytes - bloom filter for light clients to quickly retrieve related logs.
+* logs: Array - array of log objects, which this transaction generated.
 * transactionHash : DATA, 32 Bytes - hash of the transaction.
 * transactionIndex: QUANTITY - integer of the transactions index position in the block.
 * blockHash: DATA, 32 Bytes - hash of the block where this transaction was in.
 * blockNumber: QUANTITY - block number where this transaction was in.
-* gasUsed : QUANTITY - The amount of gas used by this specific transaction alone.
-* contractAddress : DATA, 20 Bytes - The contract address created, if the transaction was a contract creation, otherwise null.
+* gasUsed : QUANTITY - the amount of gas used by this specific transaction alone.
+* contractAddress : DATA, 20 Bytes - the contract address created, if the transaction was a contract creation, otherwise null.
 * from: DATA, 20 Bytes - address of the sender.
 * to: DATA, 20 Bytes - address of the receiver. null when its a contract creation transaction.
 * type: QUANTITY - transaction type.
@@ -1517,7 +1517,7 @@ Returns an estimate of how much priority fee, in Wei, you can pay to get a trans
 
 #### Parameters
 
-* None
+None
 
 #### Returns
 
@@ -1560,7 +1560,7 @@ None
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth_newBlockFilter","params":[],"id":1}'
+curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth_newBlockFilter","params":[],"id":1}'
 ```
 
 <details>
@@ -1587,10 +1587,10 @@ Creates a filter object, based on filter options. To get all matching logs for s
 
 Object - The filter options:
 
-* fromBlock: QUANTITY|TAG - (optional, default: "latest") Integer block number, or "latest" for the last mined block
-* toBlock: QUANTITY|TAG - (optional, default: "latest") Integer block number, or "latest" for the last mined block
-* address: DATA|Array, 20 Bytes - (optional) Contract address or a list of addresses from which logs should originate.
-* topics: Array of DATA - (optional) Array of 32 Bytes DATA topics. Topics are order-dependent. Each topic can also be an array of DATA with “or” options.
+* fromBlock: QUANTITY|TAG - (optional, default: "latest") integer block number, or "latest" for the last mined block
+* toBlock: QUANTITY|TAG - (optional, default: "latest") integer block number, or "latest" for the last mined block
+* address: DATA|Array, 20 Bytes - (optional) contract address or a list of addresses from which logs should originate.
+* topics: Array of DATA - (optional) array of 32 Bytes DATA topics. Topics are order-dependent. Each topic can also be an array of DATA with “or” options.
 
 #### Returns
 
@@ -1599,7 +1599,7 @@ Object - The filter options:
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X --data '{"jsonrpc":"2.0","method":"eth_newFilter","params":[{"topics":["0x12341234"]}],"id":1}'
+curl https://rpc-endpoint.io:8545 -X --data '{"jsonrpc":"2.0","method":"eth_newFilter","params":[{"topics":["0x12341234"]}],"id":1}'
 ```
 
 <details>
@@ -1624,7 +1624,7 @@ Creates new message call transaction or a contract creation for signed transacti
 
 #### Parameters
 
-* DATA - The signed transaction data.
+* DATA - the signed transaction data.
 
 #### Returns
 
@@ -1658,7 +1658,7 @@ Returns information about the sync status of the node
 
 #### Parameters
 
-* None
+None
 
 #### Returns
 
@@ -1666,9 +1666,9 @@ Returns information about the sync status of the node
 
 \* Object - an object with sync status data if the node is syncing
 
-* startingBlock: QUANTITY - The block at which the import started (will only be reset, after the sync reached his head)
-* currentBlock: QUANTITY - The current block, same as eth\_blockNumber
-* highestBlock: QUANTITY - The estimated highest block
+* startingBlock: QUANTITY - the block at which the import started (will only be reset, after the sync reached his head)
+* currentBlock: QUANTITY - the current block, same as eth\_blockNumber
+* highestBlock: QUANTITY - the estimated highest block
 
 #### Example
 
@@ -1698,7 +1698,7 @@ Uninstalls a filter with a given id. Should always be called when a watch is no 
 
 #### Parameters
 
-* QUANTITY - The filter id.
+* QUANTITY - the filter id.
 
 #### Returns
 
@@ -1707,7 +1707,7 @@ Uninstalls a filter with a given id. Should always be called when a watch is no 
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth_uninstallFilter","params":["0xb"],"id":1}'
+curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"eth_uninstallFilter","params":["0xb"],"id":1}'
 ```
 
 <details>
@@ -1741,7 +1741,7 @@ Subscriptions are cancelled with a regular RPC call with eth\_unsubscribe as a m
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_unsubscribe","params":["0x9cef478923ff08bf67fde6c64013158d"],"id":1}'
+curl https://rpc-endpoint.io:8545 -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_unsubscribe","params":["0x9cef478923ff08bf67fde6c64013158d"],"id":1}'
 ```
 
 <details>

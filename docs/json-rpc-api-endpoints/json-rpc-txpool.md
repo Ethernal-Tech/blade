@@ -11,7 +11,7 @@ None
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"txpool_content","params":[],"id":1}'
+curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"txpool_content","params":[],"id":1}'
 ```
 
 <details>
@@ -44,7 +44,7 @@ Returns a list with the exact details of all the transactions sent from the addr
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"txpool_contentFrom","params":["0x85da99c8a7c2c95964c8efd687e95e632fc533d6"],"id":1}'
+curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"txpool_contentFrom","params":["0x85da99c8a7c2c95964c8efd687e95e632fc533d6"],"id":1}'
 ```
 
 <details>
@@ -77,7 +77,7 @@ None
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"txpool_inspect","params":[],"id":1}'
+curl https://rpc-endpoint.io:8545 -X POST --data '{"jsonrpc":"2.0","method":"txpool_inspect","params":[],"id":1}'
 ```
 
 <details>
@@ -112,7 +112,7 @@ None
 #### Example
 
 ```bash
-curl  https://rpc-endpoint.io:8545 -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"txpool_status","params":[],"id":1}'
+curl https://rpc-endpoint.io:8545 -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"txpool_status","params":[],"id":1}'
 ```
 
 <details>
