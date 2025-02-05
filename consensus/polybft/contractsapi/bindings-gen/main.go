@@ -389,7 +389,7 @@ func main() {
 			[]string{
 				"initialize",
 				"receiveBatch",
-				"initializeSC",
+				"initializeGW",
 			},
 			[]string{
 				"BridgeMessageResult",

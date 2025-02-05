@@ -36,7 +36,7 @@ func initInternalContracts(chainCfg *chain.Chain, isInternalGatewayPredeployed b
 			return err
 		}
 
-		inputParams := &contractsapi.InitializeSCGatewayFn{
+		inputParams := &contractsapi.InitializeGWGatewayFn{
 			NewBls:     contracts.BLSContract,
 			NewBn256G2: contracts.BLS256Contract,
 			Validators: validatorSet,

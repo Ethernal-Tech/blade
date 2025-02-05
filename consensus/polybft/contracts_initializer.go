@@ -406,7 +406,7 @@ func initGatewayContract(cfg config.PolyBFT, bridgeCfg *config.Bridge,
 		return fmt.Errorf("error while converting validators for gateway contract: %w", err)
 	}
 
-	initFn := &contractsapi.InitializeSCGatewayFn{
+	initFn := &contractsapi.InitializeGWGatewayFn{
 		NewBls:     contracts.BLSContract,
 		NewBn256G2: contracts.BLS256Contract,
 		Validators: validators,

@@ -2146,23 +2146,23 @@ func (r *ReceiveBatchGatewayFn) DecodeAbi(buf []byte) error {
 	return decodeMethod(Gateway.Abi.Methods["receiveBatch"], buf, r)
 }
 
-type InitializeSCGatewayFn struct {
+type InitializeGWGatewayFn struct {
 	NewBls     types.Address `abi:"newBls"`
 	NewBn256G2 types.Address `abi:"newBn256G2"`
 	Validators []*Validator  `abi:"validators"`
 	BsAddress  types.Address `abi:"bsAddress"`
 }
 
-func (i *InitializeSCGatewayFn) Sig() []byte {
-	return Gateway.Abi.Methods["initializeSC"].ID()
+func (i *InitializeGWGatewayFn) Sig() []byte {
+	return Gateway.Abi.Methods["initializeGW"].ID()
 }
 
-func (i *InitializeSCGatewayFn) EncodeAbi() ([]byte, error) {
-	return Gateway.Abi.Methods["initializeSC"].Encode(i)
+func (i *InitializeGWGatewayFn) EncodeAbi() ([]byte, error) {
+	return Gateway.Abi.Methods["initializeGW"].Encode(i)
 }
 
-func (i *InitializeSCGatewayFn) DecodeAbi(buf []byte) error {
-	return decodeMethod(Gateway.Abi.Methods["initializeSC"], buf, i)
+func (i *InitializeGWGatewayFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(Gateway.Abi.Methods["initializeGW"], buf, i)
 }
 
 type BridgeMessageResultEvent struct {
