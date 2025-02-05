@@ -148,72 +148,49 @@ func (bbs *BridgeBatchSigned) DecodeAbi(txData []byte) error {
 			return err
 		}
 
-		signature0 := receiveBatchFn.SignedBatch.Signature[0].Bytes()
-		signature1 := receiveBatchFn.SignedBatch.Signature[1].Bytes()
-		halfSignatureSize := bls.SignatureSize / 2
-		signature := make([]byte, bls.SignatureSize)
-
-		if len(signature0) < halfSignatureSize {
-			copy(signature[halfSignatureSize-len(signature0):halfSignatureSize], signature0)
-		} else {
-			copy(signature[:halfSignatureSize], signature0)
-		}
-
-		if len(signature1) < halfSignatureSize {
-			copy(signature[bls.SignatureSize-len(signature1):], signature1)
-		} else {
-			copy(signature[halfSignatureSize:], signature1)
-		}
-
-		*bbs = BridgeBatchSigned{
-			BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-				Messages:           receiveBatchFn.SignedBatch.Batch.Messages,
-				SourceChainID:      receiveBatchFn.SignedBatch.Batch.SourceChainID,
-				DestinationChainID: receiveBatchFn.SignedBatch.Batch.DestinationChainID,
-				Threshold:          receiveBatchFn.SignedBatch.Batch.Threshold,
-				IsRollback:         receiveBatchFn.SignedBatch.Batch.IsRollback,
-			},
-			AggSignature: polytypes.Signature{
-				AggregatedSignature: signature,
-				Bitmap:              receiveBatchFn.SignedBatch.Bitmap,
-			},
-		}
+		bbs.constructFromSignedBatch(receiveBatchFn.SignedBatch)
 	} else if bytes.Equal(sig, commitBatchFn.Sig()) {
 		err := commitBatchFn.DecodeAbi(txData)
 		if err != nil {
 			return err
 		}
 
-		signature0 := commitBatchFn.SignedBatch.Signature[0].Bytes()
-		signature1 := commitBatchFn.SignedBatch.Signature[1].Bytes()
-		halfSignatureSize := bls.SignatureSize / 2
-		signature := make([]byte, bls.SignatureSize)
+		bbs.constructFromSignedBatch(commitBatchFn.SignedBatch)
+	}
 
-		if len(signature0) < halfSignatureSize {
-			copy(signature[halfSignatureSize-len(signature0):halfSignatureSize], signature0)
-		} else {
-			copy(signature[:halfSignatureSize], signature0)
-		}
+	return nil
+}
 
-		if len(signature1) < halfSignatureSize {
-			copy(signature[bls.SignatureSize-len(signature1):], signature1)
-		} else {
-			copy(signature[halfSignatureSize:], signature1)
-		}
+func (bbs *BridgeBatchSigned) constructFromSignedBatch(signedBatch *contractsapi.SignedBridgeMessageBatch) error {
+	signature0 := signedBatch.Signature[0].Bytes()
+	signature1 := signedBatch.Signature[1].Bytes()
+	halfSignatureSize := bls.SignatureSize / 2
+	signature := make([]byte, bls.SignatureSize)
 
-		*bbs = BridgeBatchSigned{
-			BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-				Messages:           commitBatchFn.SignedBatch.Batch.Messages,
-				SourceChainID:      commitBatchFn.SignedBatch.Batch.SourceChainID,
-				DestinationChainID: commitBatchFn.SignedBatch.Batch.DestinationChainID,
-				Threshold:          commitBatchFn.SignedBatch.Batch.Threshold,
-				IsRollback:         commitBatchFn.SignedBatch.Batch.IsRollback,
-			},
-			AggSignature: polytypes.Signature{
-				AggregatedSignature: signature,
-				Bitmap:              commitBatchFn.SignedBatch.Bitmap,
-			},
-		}
+	if len(signature0) < halfSignatureSize {
+		copy(signature[halfSignatureSize-len(signature0):halfSignatureSize], signature0)
+	} else {
+		copy(signature[:halfSignatureSize], signature0)
+	}
+
+	if len(signature1) < halfSignatureSize {
+		copy(signature[bls.SignatureSize-len(signature1):], signature1)
+	} else {
+		copy(signature[halfSignatureSize:], signature1)
+	}
+
+	*bbs = BridgeBatchSigned{
+		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
+			Messages:           signedBatch.Batch.Messages,
+			SourceChainID:      signedBatch.Batch.SourceChainID,
+			DestinationChainID: signedBatch.Batch.DestinationChainID,
+			Threshold:          signedBatch.Batch.Threshold,
+			IsRollback:         signedBatch.Batch.IsRollback,
+		},
+		AggSignature: polytypes.Signature{
+			AggregatedSignature: signature,
+			Bitmap:              signedBatch.Bitmap,
+		},
 	}
 
 	return nil
