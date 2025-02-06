@@ -543,7 +543,7 @@ func (b *bridgeEventManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSign
 				largestBridgeBatch = &BridgeBatchSigned{
 					BridgeMessageBatch: pendingBatch.BridgeMessageBatch,
 					AggSignature:       aggregatedSignature,
-					InternalChainId:    b.internalChainID,
+					InternalChainID:    b.internalChainID,
 				}
 
 				break

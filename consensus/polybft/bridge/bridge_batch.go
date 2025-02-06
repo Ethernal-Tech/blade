@@ -68,7 +68,7 @@ var _ contractsapi.ABIEncoder = &BridgeBatchSigned{}
 type BridgeBatchSigned struct {
 	*contractsapi.BridgeMessageBatch
 	AggSignature    polytypes.Signature
-	InternalChainId uint64
+	InternalChainID uint64
 }
 
 // Hash calculates hash value for BridgeBatchSigned object.
@@ -93,8 +93,8 @@ func (bbs *BridgeBatchSigned) ContainsBridgeMessage(bridgeMessageID uint64) bool
 }
 
 func (bbs *BridgeBatchSigned) IsE2IBatch() bool {
-	return !bbs.IsRollback && bbs.SourceChainID.Cmp(big.NewInt(int64(bbs.InternalChainId))) != 0 ||
-		bbs.IsRollback && bbs.SourceChainID.Cmp(big.NewInt(int64(bbs.InternalChainId))) == 0
+	return !bbs.IsRollback && bbs.SourceChainID.Cmp(big.NewInt(int64(bbs.InternalChainID))) != 0 ||
+		bbs.IsRollback && bbs.SourceChainID.Cmp(big.NewInt(int64(bbs.InternalChainID))) == 0
 }
 
 // EncodeAbi contains logic for encoding arbitrary data into ABI format
