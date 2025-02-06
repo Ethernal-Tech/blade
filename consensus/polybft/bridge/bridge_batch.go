@@ -67,7 +67,8 @@ var _ contractsapi.ABIEncoder = &BridgeBatchSigned{}
 // BridgeBatchSigned encapsulates bridge batch with aggregated signatures
 type BridgeBatchSigned struct {
 	*contractsapi.BridgeMessageBatch
-	AggSignature polytypes.Signature
+	AggSignature    polytypes.Signature
+	InternalChainId uint64
 }
 
 // Hash calculates hash value for BridgeBatchSigned object.
@@ -92,8 +93,8 @@ func (bbs *BridgeBatchSigned) ContainsBridgeMessage(bridgeMessageID uint64) bool
 }
 
 func (bbs *BridgeBatchSigned) IsE2IBatch() bool {
-	return !bbs.IsRollback && bbs.SourceChainID.Cmp(big.NewInt(100)) != 0 ||
-		bbs.IsRollback && bbs.SourceChainID.Cmp(big.NewInt(100)) == 0
+	return !bbs.IsRollback && bbs.SourceChainID.Cmp(big.NewInt(int64(bbs.InternalChainId))) != 0 ||
+		bbs.IsRollback && bbs.SourceChainID.Cmp(big.NewInt(int64(bbs.InternalChainId))) == 0
 }
 
 // EncodeAbi contains logic for encoding arbitrary data into ABI format
@@ -108,8 +109,6 @@ func (bbs *BridgeBatchSigned) EncodeAbi() ([]byte, error) {
 		return nil, err
 	}
 
-	// currently it is hard-coded that the blade chain ID is 100,
-	// it should be updated to dynamically read the ID from the config
 	if bbs.IsE2IBatch() {
 		return (&contractsapi.ReceiveBatchGatewayFn{
 			SignedBatch: &contractsapi.SignedBridgeMessageBatch{

@@ -1898,24 +1898,6 @@ func (v *Validator) DecodeAbi(buf []byte) error {
 	return decodeStruct(ValidatorABIType, buf, &v)
 }
 
-type InitializeBridgeStorageFn struct {
-	NewBls     types.Address `abi:"newBls"`
-	NewBn256G2 types.Address `abi:"newBn256G2"`
-	Validators []*Validator  `abi:"validators"`
-}
-
-func (i *InitializeBridgeStorageFn) Sig() []byte {
-	return BridgeStorage.Abi.Methods["initialize"].ID()
-}
-
-func (i *InitializeBridgeStorageFn) EncodeAbi() ([]byte, error) {
-	return BridgeStorage.Abi.Methods["initialize"].Encode(i)
-}
-
-func (i *InitializeBridgeStorageFn) DecodeAbi(buf []byte) error {
-	return decodeMethod(BridgeStorage.Abi.Methods["initialize"], buf, i)
-}
-
 type InitializeBSBridgeStorageFn struct {
 	NewBls           types.Address   `abi:"newBls"`
 	NewBn256G2       types.Address   `abi:"newBn256G2"`
