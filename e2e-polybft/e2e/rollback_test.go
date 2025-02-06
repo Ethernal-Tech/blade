@@ -339,6 +339,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 		framework.WithBridgeBlockListAdmin(adminAddr),
 		framework.WithRollback(framework.I2ERollback),
 		framework.WithRelayerPrivateKey(relayerKey),
+		framework.WithBlockGasLimit(100000000),
 		framework.WithPremine(append(depositors, adminAddr)...))
 	defer cluster.Stop()
 
