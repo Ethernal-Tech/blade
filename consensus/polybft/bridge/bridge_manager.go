@@ -614,7 +614,8 @@ func (b *bridgeEventManager) getRollbackBatch(blockNumber uint64) ([]*BridgeBatc
 
 			result = append(result,
 				&BridgeBatchSigned{BridgeMessageBatch: p.BridgeMessageBatch,
-					AggSignature: aggregatedSignature})
+					AggSignature:    aggregatedSignature,
+					InternalChainID: b.internalChainID})
 		}
 	}
 
