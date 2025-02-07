@@ -446,12 +446,12 @@ func (r *BridgeRelayer) Start() {
 						continue
 					}
 				} else {
-					if batch.DestinationChainID.Cmp(r.externalChainID) != 0 && batch.SourceChainID.Cmp(r.externalChainID) != 0 {
-						continue
+					if batch.Batch.DestinationChainID.Cmp(r.externalChainID) != 0 &&
+						batch.Batch.SourceChainID.Cmp(r.externalChainID) != 0 {
+						continue // skip batches from other bridges
+					} else if batch.Batch.SourceChainID.Cmp(r.externalChainID) == 0 && !batch.Batch.IsRollback {
+						continue // skip it if not rollback
 					}
-
-					r.logger.Info("found batch", "events start-id", batch.StartID.String(),
-						"events end-id", batch.EndID.String(), "is rollback batch", batch.IsRollback)
 
 					if err := r.sendSignedBridgeMessageBatch(&batch); err != nil {
 						r.logger.Error("failed to send bridge batch on gateway", "err", err)
@@ -572,44 +572,30 @@ func newLoggerFromConfig(options *options) (hclog.Logger, error) {
 
 func (r *BridgeRelayer) sendSignedBridgeMessageBatch(batch *contractsapi.SignedBridgeMessageBatch) error {
 	var (
-		sourceRelayer      txrelayer.TxRelayer
-		sourceGateway      types.Address
 		destinationRelayer txrelayer.TxRelayer
 		destinationGateway types.Address
 	)
 
-	if batch.SourceChainID.Cmp(r.externalChainID) == 0 {
-		sourceGateway = r.externalGatewayAddr
-		sourceRelayer = r.externalClient
-
+	if batch.Batch.SourceChainID.Cmp(r.externalChainID) == 0 {
 		destinationGateway = r.internalGatewayAddr
 		destinationRelayer = r.internalClient
 
-		if batch.IsRollback {
+		if batch.Batch.IsRollback {
 			destinationGateway = r.externalGatewayAddr
 			destinationRelayer = r.externalClient
 		}
 	} else {
-		sourceGateway = r.internalGatewayAddr
-		sourceRelayer = r.internalClient
-
 		destinationGateway = r.externalGatewayAddr
 		destinationRelayer = r.externalClient
 
-		if batch.IsRollback {
+		if batch.Batch.IsRollback {
 			destinationGateway = r.internalGatewayAddr
 			destinationRelayer = r.internalClient
 		}
 	}
 
-	messages, err := GetBridgeMessagesInRange(batch.StartID, batch.EndID, sourceRelayer, sourceGateway)
-	if err != nil {
-		return fmt.Errorf("failed to get messages from source gateway contract, err: %w", err)
-	}
-
 	input, err := (&contractsapi.ReceiveBatchGatewayFn{
-		BatchMessages:     messages,
-		SignedBridgeBatch: batch,
+		SignedBatch: batch,
 	}).EncodeAbi()
 	if err != nil {
 		return fmt.Errorf("failed to encode abi, err: %w", err)
@@ -660,24 +646,6 @@ func (r *BridgeRelayer) sendCommitValidatorSet(newValidatorSet *contractsapi.Sig
 
 	r.logger.Debug("sent commit validator set transaction to external chain",
 		"gatewayAddr", r.externalGatewayAddr,
-		"status", types.ReceiptStatus(receipt.Status),
-		"txHash", receipt.TransactionHash,
-		"blockNumber", receipt.BlockNumber,
-	)
-
-	txn = types.NewTx(types.NewLegacyTx(
-		types.WithFrom(r.privateKey.Address()),
-		types.WithTo(&r.internalGatewayAddr),
-		types.WithInput(input),
-	))
-
-	receipt, err = r.internalClient.SendTransaction(txn, r.privateKey)
-	if err != nil {
-		return err
-	}
-
-	r.logger.Debug("sent commit validator set transaction to internal chain",
-		"gatewayAddr", r.internalGatewayAddr,
 		"status", types.ReceiptStatus(receipt.Status),
 		"txHash", receipt.TransactionHash,
 		"blockNumber", receipt.BlockNumber,

@@ -3,6 +3,7 @@ package polybft
 import (
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/0xPolygon/polygon-edge/bls"
 	"github.com/0xPolygon/polygon-edge/chain"
@@ -364,10 +365,21 @@ func initBridgeStorageContract(cfg config.PolyBFT, transition *state.Transition)
 		return fmt.Errorf("error while converting validators for bridge storage contract: %w", err)
 	}
 
-	initFn := &contractsapi.InitializeBridgeStorageFn{
-		NewBls:     contracts.BLSContract,
-		NewBn256G2: contracts.BLS256Contract,
-		Validators: validators,
+	addresses := make([]types.Address, 0, len(cfg.Bridge))
+
+	for _, v := range cfg.Bridge {
+		addresses = append(addresses, v.InternalGatewayAddr)
+	}
+
+	slices.SortFunc(addresses, func(a, b types.Address) int {
+		return a.Compare(b)
+	})
+
+	initFn := &contractsapi.InitializeBSBridgeStorageFn{
+		NewBls:           contracts.BLSContract,
+		NewBn256G2:       contracts.BLS256Contract,
+		Validators:       validators,
+		AddressesGateway: addresses,
 	}
 
 	input, err := initFn.EncodeAbi()
@@ -394,10 +406,11 @@ func initGatewayContract(cfg config.PolyBFT, bridgeCfg *config.Bridge,
 		return fmt.Errorf("error while converting validators for gateway contract: %w", err)
 	}
 
-	initFn := &contractsapi.InitializeGatewayFn{
+	initFn := &contractsapi.InitializeGWGatewayFn{
 		NewBls:     contracts.BLSContract,
 		NewBn256G2: contracts.BLS256Contract,
 		Validators: validators,
+		BsAddress:  contracts.BridgeStorageContract,
 	}
 
 	input, err := initFn.EncodeAbi()

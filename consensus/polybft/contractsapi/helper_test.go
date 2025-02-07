@@ -24,15 +24,15 @@ func TestEncoding_SignedTypes(t *testing.T) {
 			},
 		},
 		&SignedBridgeMessageBatch{
-			RootHash:            types.StringToHash("0x1555ad6149fc39abc7852aad5c3df6b9df7964ac90ffbbcf6206b1eda846c881"),
-			StartID:             big.NewInt(1),
-			EndID:               big.NewInt(5),
-			SourceChainID:       big.NewInt(2),
-			DestinationChainID:  big.NewInt(3),
+			Batch: &BridgeMessageBatch{
+				Messages:           []*BridgeMessage{},
+				SourceChainID:      big.NewInt(2),
+				DestinationChainID: big.NewInt(3),
+				Threshold:          big.NewInt(1),
+				IsRollback:         false,
+			},
 			Signature:           [2]*big.Int{big.NewInt(300), big.NewInt(200)},
 			Bitmap:              []byte("smth"),
-			Threshold:           big.NewInt(1),
-			IsRollback:          false,
 			ValidatorSetBatchID: big.NewInt(1),
 		},
 	}

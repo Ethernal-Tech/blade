@@ -883,8 +883,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 			key, err := crypto.GenerateECDSAKey()
 			require.NoError(t, err)
 
-			err = cluster.Bridges[i].fundRelayerAddressOnExternal(key.Address())
-			require.NoError(t, err)
+			require.NoError(t, cluster.Bridges[i].fundRelayerAddressOnExternal(key.Address()))
 
 			bridgeRelayer := NewTestBridgeRelayer(t,
 				cluster.Config,

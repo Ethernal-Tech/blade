@@ -167,6 +167,53 @@ func (_c *BridgeManagerMock_Close_Call) RunAndReturn(run func()) *BridgeManagerM
 	return _c
 }
 
+// GetInternalGatewayAddr provides a mock function with given fields:
+func (_m *BridgeManagerMock) GetInternalGatewayAddr() types.Address {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetInternalGatewayAddr")
+	}
+
+	var r0 types.Address
+	if rf, ok := ret.Get(0).(func() types.Address); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(types.Address)
+		}
+	}
+
+	return r0
+}
+
+// BridgeManagerMock_GetInternalGatewayAddr_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetInternalGatewayAddr'
+type BridgeManagerMock_GetInternalGatewayAddr_Call struct {
+	*mock.Call
+}
+
+// GetInternalGatewayAddr is a helper method to define mock.On call
+func (_e *BridgeManagerMock_Expecter) GetInternalGatewayAddr() *BridgeManagerMock_GetInternalGatewayAddr_Call {
+	return &BridgeManagerMock_GetInternalGatewayAddr_Call{Call: _e.mock.On("GetInternalGatewayAddr")}
+}
+
+func (_c *BridgeManagerMock_GetInternalGatewayAddr_Call) Run(run func()) *BridgeManagerMock_GetInternalGatewayAddr_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *BridgeManagerMock_GetInternalGatewayAddr_Call) Return(_a0 types.Address) *BridgeManagerMock_GetInternalGatewayAddr_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *BridgeManagerMock_GetInternalGatewayAddr_Call) RunAndReturn(run func() types.Address) *BridgeManagerMock_GetInternalGatewayAddr_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetLogFilters provides a mock function with given fields:
 func (_m *BridgeManagerMock) GetLogFilters() map[types.Address][]types.Hash {
 	ret := _m.Called()

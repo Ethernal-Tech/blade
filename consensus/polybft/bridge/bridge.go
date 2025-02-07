@@ -207,7 +207,7 @@ func (b *bridge) GetTransactions(blockInfo oracle.NewBlockInfo) ([]*types.Transa
 			}
 
 			for _, batch := range bridgeBatches {
-				tx, err := createBridgeBatchTx(batch)
+				tx, err := createBridgeBatchTx(bridgeManager.GetInternalGatewayAddr(), batch)
 				if err != nil {
 					return nil, fmt.Errorf("error while creating bridge batch tx for chainID: %d, err: %w", chainID, err)
 				}
@@ -226,6 +226,7 @@ func (b *bridge) VerifyTransactions(blockInfo oracle.NewBlockInfo, txs []*types.
 		commitValidatorSetExists bool
 		commitBatchFn            = new(contractsapi.CommitBatchBridgeStorageFn)
 		commitValidatorSetFn     = new(contractsapi.CommitValidatorSetBridgeStorageFn)
+		receiveBatchFn           = new(contractsapi.ReceiveBatchGatewayFn)
 	)
 
 	for _, tx := range txs {
@@ -241,7 +242,7 @@ func (b *bridge) VerifyTransactions(blockInfo oracle.NewBlockInfo, txs []*types.
 
 		sig := txData[:helpers.AbiMethodIDLength]
 
-		if bytes.Equal(sig, commitBatchFn.Sig()) {
+		if bytes.Equal(sig, commitBatchFn.Sig()) || bytes.Equal(sig, receiveBatchFn.Sig()) {
 			if !blockInfo.IsEndOfSprint {
 				return errBridgeBatchTxInNonSprintBlock
 			}
@@ -292,10 +293,15 @@ func (b *bridge) VerifyTransactions(blockInfo oracle.NewBlockInfo, txs []*types.
 }
 
 // createBridgeBatchTx builds bridge batch commit transaction
-func createBridgeBatchTx(signedBridgeBatch *BridgeBatchSigned) (*types.Transaction, error) {
+func createBridgeBatchTx(internalGatewayAddr types.Address,
+	signedBridgeBatch *BridgeBatchSigned) (*types.Transaction, error) {
 	inputData, err := signedBridgeBatch.EncodeAbi()
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode input data for bridge batch registration: %w", err)
+	}
+
+	if signedBridgeBatch.IsE2IBatch() {
+		return helpers.CreateStateTransactionWithData(internalGatewayAddr, inputData), nil
 	}
 
 	return helpers.CreateStateTransactionWithData(contracts.BridgeStorageContract, inputData), nil

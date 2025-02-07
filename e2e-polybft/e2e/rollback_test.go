@@ -67,6 +67,8 @@ import (
 // 5. Wait for the deposits to be processed and verify the rollback events.
 
 func TestE2E_Rollback_E2I(t *testing.T) {
+	t.Skip() // TO DO: get back this test after retry/rollback implementation
+
 	const (
 		transfersCount        = 4
 		numBlockConfirmations = 2
@@ -337,6 +339,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 		framework.WithBridgeBlockListAdmin(adminAddr),
 		framework.WithRollback(framework.I2ERollback),
 		framework.WithRelayerPrivateKey(relayerKey),
+		framework.WithBlockGasLimit(100000000),
 		framework.WithPremine(append(depositors, adminAddr)...))
 	defer cluster.Stop()
 

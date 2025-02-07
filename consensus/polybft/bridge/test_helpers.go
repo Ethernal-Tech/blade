@@ -27,7 +27,7 @@ func BuildBridgeBatchAndBridgeEvents(t *testing.T, bridgeMessageCount int,
 	blsKey, err := bls.GenerateBlsKey()
 	require.NoError(t, err)
 
-	data, err := pendingBridgeBatch.BridgeBatch.EncodeAbi()
+	data, err := pendingBridgeBatch.BridgeMessageBatch.EncodeAbi()
 	require.NoError(t, err)
 
 	signature, err := blsKey.Sign(data, TestDomain)
@@ -39,7 +39,7 @@ func BuildBridgeBatchAndBridgeEvents(t *testing.T, bridgeMessageCount int,
 	require.NoError(t, err)
 
 	bridgeBatchSigned := &BridgeBatchSigned{
-		BridgeBatch: pendingBridgeBatch.BridgeBatch,
+		BridgeMessageBatch: pendingBridgeBatch.BridgeMessageBatch,
 		AggSignature: polytypes.Signature{
 			AggregatedSignature: aggSig,
 			Bitmap:              []byte{},
@@ -70,9 +70,20 @@ func generateBridgeMessageEvents(t *testing.T, eventsCount int, startIdx uint64)
 func CreateTestBridgeBatchMessage(t *testing.T, numberOfMessages, firstIndex uint64) *BridgeBatchSigned {
 	t.Helper()
 
-	msg := contractsapi.BridgeBatch{
-		StartID:            new(big.Int).SetUint64(firstIndex),
-		EndID:              new(big.Int).SetUint64(firstIndex + numberOfMessages),
+	messages := make([]*contractsapi.BridgeMessage, numberOfMessages)
+
+	for i := firstIndex; i < firstIndex+numberOfMessages; i++ {
+		messages[i-firstIndex] = &contractsapi.BridgeMessage{
+			ID:                 new(big.Int).SetUint64(i),
+			SourceChainID:      big.NewInt(1),
+			DestinationChainID: big.NewInt(0),
+			Sender:             types.Address{},
+			Receiver:           types.Address{},
+			Payload:            []byte{}}
+	}
+
+	msg := contractsapi.BridgeMessageBatch{
+		Messages:           messages,
 		SourceChainID:      big.NewInt(1),
 		DestinationChainID: big.NewInt(0),
 	}
@@ -91,7 +102,7 @@ func CreateTestBridgeBatchMessage(t *testing.T, numberOfMessages, firstIndex uin
 	require.NoError(t, err)
 
 	return &BridgeBatchSigned{
-		BridgeBatch:  &msg,
-		AggSignature: polytypes.Signature{AggregatedSignature: aggSig},
+		BridgeMessageBatch: &msg,
+		AggSignature:       polytypes.Signature{AggregatedSignature: aggSig},
 	}
 }

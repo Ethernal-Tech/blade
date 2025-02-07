@@ -93,16 +93,27 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
 	cc := &testutil.Contract{}
 	cc.AddCallback(func() string {
 		return `
-			struct SignedBridgeMessageBatch {
-    			bytes32 rootHash;
-    			uint256 startId;
-    			uint256 endId;
+			struct BridgeMessage {
+				uint256 id;
+				uint256 sourceChainId;
+				uint256 destinationChainId;
+				address sender;
+				address receiver;
+				bytes payload;
+			}
+
+			struct BridgeMessageBatch {
+    			BridgeMessage[] messages;
     			uint256 sourceChainId;
     			uint256 destinationChainId;
-    			uint256[2] signature;
-    			bytes bitmap;
-				uint256 threshold;
-				bool isRollback;
+    			uint256 threshold;
+    			bool isRollback;
+			}
+
+			struct SignedBridgeMessageBatch {
+				BridgeMessageBatch batch;
+				uint256[2] signature;
+				bytes bitmap;
 				uint256 validatorSetBatchId;
 			}
 
@@ -110,15 +121,9 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
 			
 			function setBridgeMessage(uint256 _num) public payable {
 				SignedBridgeMessageBatch storage signedBatch = batches[_num];
-				signedBatch.rootHash = 0x1555ad6149fc39abc7852aad5c3df6b9df7964ac90ffbbcf6206b1eda846c881;
-				signedBatch.startId = 1;
-				signedBatch.endId = 5;
-				signedBatch.sourceChainId = 2;
-				signedBatch.destinationChainId = 3;
+
 				signedBatch.signature = [uint256(300), uint256(200)];
 				signedBatch.bitmap = "smth";
-				signedBatch.threshold = 1;
-				signedBatch.isRollback = false;
 				signedBatch.validatorSetBatchId = 1;
 				batches[_num] = signedBatch;
 			}
@@ -155,16 +160,11 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
 	sbmb, err := systemState.GetBridgeBatchByNumber(batchID)
 	require.NoError(t, err)
 
+	sbmb.Batch = nil
+
 	require.EqualValues(t, &contractsapi.SignedBridgeMessageBatch{
-		RootHash:            types.StringToHash("0x1555ad6149fc39abc7852aad5c3df6b9df7964ac90ffbbcf6206b1eda846c881"),
-		StartID:             big.NewInt(1),
-		EndID:               big.NewInt(5),
-		SourceChainID:       big.NewInt(2),
-		DestinationChainID:  big.NewInt(3),
 		Signature:           [2]*big.Int{big.NewInt(300), big.NewInt(200)},
 		Bitmap:              []byte("smth"),
-		Threshold:           big.NewInt(1),
-		IsRollback:          false,
 		ValidatorSetBatchID: big.NewInt(1),
 	}, sbmb)
 }

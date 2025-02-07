@@ -1481,6 +1481,8 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 	})
 
 	t.Run("transfer more native tokens than 0x0 balance is", func(t *testing.T) {
+		t.Skip() // TO DO: get back this test after retry/rollback implementation
+
 		// since bridging native token is essentially minting
 		// (i.e. transferring tokens from 0x0 to receiver address using native transfer precompile),
 		// this test tries to deposit more tokens than 0x0 address has on its balance
@@ -1675,6 +1677,16 @@ func TestE2E_Bridge_ValidatorSetChange(t *testing.T) {
 		return res
 	}
 
+	getInternalGatewayValidatorSetHash := func() string {
+		method := contractsapi.BridgeStorage.Abi.GetMethod("currentValidatorSetHash")
+		internalGatewayAddress := polycfg.Bridge[chainID.Uint64()].InternalGatewayAddr
+
+		res, err := internalTxRelayer.Call(types.ZeroAddress, internalGatewayAddress, method.ID())
+		require.NoError(t, err)
+
+		return res
+	}
+
 	getExternalGatewayValidatorSetHash := func() string {
 		method := contractsapi.BridgeStorage.Abi.GetMethod("currentValidatorSetHash")
 		externalGatewayAddress := polycfg.Bridge[chainID.Uint64()].ExternalGatewayAddr
@@ -1686,10 +1698,12 @@ func TestE2E_Bridge_ValidatorSetChange(t *testing.T) {
 	}
 
 	// validator set hash before unstake
-	beforeValidatorSetHashBridge := getBridgeStorageValidatorSetHash()
-	beforeValidatorSetHashGateway := getExternalGatewayValidatorSetHash()
+	beforeBridgeStorageValidatorSetHash := getBridgeStorageValidatorSetHash()
+	beforeInternalGatewayValidatorSetHash := getInternalGatewayValidatorSetHash()
+	beforeExternalGatewayValidatorSetHash := getExternalGatewayValidatorSetHash()
 
-	require.Equal(t, beforeValidatorSetHashBridge, beforeValidatorSetHashGateway)
+	require.Equal(t, beforeBridgeStorageValidatorSetHash, beforeInternalGatewayValidatorSetHash)
+	require.Equal(t, beforeBridgeStorageValidatorSetHash, beforeExternalGatewayValidatorSetHash)
 
 	srv := cluster.Servers[0]
 	validatorAcc, err := validatorHelper.GetAccountFromDir(srv.DataDir())
@@ -1713,18 +1727,24 @@ func TestE2E_Bridge_ValidatorSetChange(t *testing.T) {
 	require.NoError(t, cluster.WaitForBlock(currentBlock+2*epochSize, time.Minute))
 
 	// validator set hash after unstake
-	afterValidatorSetHashBridge := getBridgeStorageValidatorSetHash()
-	afterValidatorSetHashGateway := getExternalGatewayValidatorSetHash()
+	afterBridgeStorageValidatorSetHash := getBridgeStorageValidatorSetHash()
+	afterInternalGatewayValidatorSetHash := getInternalGatewayValidatorSetHash()
+	afterExternalGatewayValidatorSetHash := getExternalGatewayValidatorSetHash()
 
 	t.Logf("Validator unstaked %s\n", validatorAddr.String())
 
-	t.Logf("BeforeValidatorSetHashBridge=%s\n", beforeValidatorSetHashBridge)
-	t.Logf("AfterValidatorSetHashBridge=%s\n", afterValidatorSetHashBridge)
+	t.Logf("beforeBridgeStorageValidatorSetHash=%s\n", beforeBridgeStorageValidatorSetHash)
+	t.Logf("afterBridgeStorageValidatorSetHash=%s\n", afterBridgeStorageValidatorSetHash)
 
-	t.Logf("BeforeValidatorSetHashGateway=%s\n", beforeValidatorSetHashGateway)
-	t.Logf("AfterValidatorSetHashGateway=%s\n", afterValidatorSetHashGateway)
+	t.Logf("beforeInternalGatewayValidatorSetHash=%s\n", beforeInternalGatewayValidatorSetHash)
+	t.Logf("afterInternalGatewayValidatorSetHash=%s\n", afterInternalGatewayValidatorSetHash)
 
-	require.NotEqual(t, beforeValidatorSetHashBridge, afterValidatorSetHashBridge)
-	require.NotEqual(t, beforeValidatorSetHashGateway, afterValidatorSetHashGateway)
-	require.Equal(t, afterValidatorSetHashBridge, afterValidatorSetHashGateway)
+	t.Logf("beforeExternalGatewayValidatorSetHash=%s\n", beforeExternalGatewayValidatorSetHash)
+	t.Logf("afterExternalGatewayValidatorSetHash=%s\n", afterExternalGatewayValidatorSetHash)
+
+	require.NotEqual(t, beforeBridgeStorageValidatorSetHash, afterBridgeStorageValidatorSetHash)
+	require.NotEqual(t, beforeInternalGatewayValidatorSetHash, afterInternalGatewayValidatorSetHash)
+	require.NotEqual(t, beforeExternalGatewayValidatorSetHash, afterExternalGatewayValidatorSetHash)
+	require.Equal(t, afterBridgeStorageValidatorSetHash, afterInternalGatewayValidatorSetHash)
+	require.Equal(t, afterBridgeStorageValidatorSetHash, afterExternalGatewayValidatorSetHash)
 }

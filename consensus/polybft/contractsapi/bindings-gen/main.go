@@ -371,7 +371,7 @@ func main() {
 			gensc.BridgeStorage,
 			false,
 			[]string{
-				"initialize",
+				"initializeBS",
 				"commitBatch",
 				"commitValidatorSet",
 			},
@@ -388,6 +388,7 @@ func main() {
 			[]string{
 				"initialize",
 				"receiveBatch",
+				"initializeGW",
 			},
 			[]string{
 				"BridgeMessageResult",

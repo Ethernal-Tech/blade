@@ -177,20 +177,19 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 
 				// For each account, depositing (bridging) 100000000000000000 WEI (0.1 ETH) from the external to the internal chain.
 				for i := range numberOfAccounts {
-					err := cluster.Bridges[bridgeNum].Deposit(
-						common.ERC20,
-						rootERC20Token,
-						bridgeConfigs[bridgeNum].ExternalERC20PredicateAddr,
-						bridgeHelper.TestAccountPrivKey,
-						accounts[i].Address().String(),
-						"100000000000000000",
-						"",
-						cluster.Bridges[bridgeNum].JSONRPCAddr(),
-						bridgeHelper.TestAccountPrivKey,
-						false,
-					)
-
-					require.NoError(t, err)
+					require.NoError(t,
+						cluster.Bridges[bridgeNum].Deposit(
+							common.ERC20,
+							rootERC20Token,
+							bridgeConfigs[bridgeNum].ExternalERC20PredicateAddr,
+							bridgeHelper.TestAccountPrivKey,
+							accounts[i].Address().String(),
+							"100000000000000000",
+							"",
+							cluster.Bridges[bridgeNum].JSONRPCAddr(),
+							bridgeHelper.TestAccountPrivKey,
+							false,
+						))
 
 					logFunc("The deposit was made for the account %s", accounts[i].Address().String())
 				}
@@ -233,17 +232,18 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 					rawKey, err := accounts[i].MarshallPrivateKey()
 					require.NoError(t, err)
 
-					err = cluster.Bridges[bridgeNum].Withdraw(
-						common.ERC20,
-						hex.EncodeToString(rawKey),
-						accounts[i].Address().String(),
-						"100000000000000000",
-						"",
-						cluster.Servers[0].JSONRPCAddr(),
-						bridgeConfigs[bridgeNum].InternalERC20PredicateAddr,
-						childERC20Token,
-						false)
-					require.NoError(t, err)
+					require.NoError(t,
+						cluster.Bridges[bridgeNum].Withdraw(
+							common.ERC20,
+							hex.EncodeToString(rawKey),
+							accounts[i].Address().String(),
+							"100000000000000000",
+							"",
+							cluster.Servers[0].JSONRPCAddr(),
+							bridgeConfigs[bridgeNum].InternalERC20PredicateAddr,
+							childERC20Token,
+							false,
+						))
 
 					logFunc("The withdraw was made for the account %s", accounts[i].Address().String())
 				}
@@ -312,20 +312,19 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 
 				// For each account, depositing (bridging) ERC721 token from the external to the internal chain.
 				for i := range numberOfAccounts {
-					err := cluster.Bridges[bridgeNum].Deposit(
-						common.ERC721,
-						rootERC721Token,
-						bridgeConfigs[bridgeNum].ExternalERC721PredicateAddr,
-						bridgeHelper.TestAccountPrivKey,
-						accounts[i].Address().String(),
-						"",
-						fmt.Sprintf("%d", i),
-						cluster.Bridges[bridgeNum].JSONRPCAddr(),
-						bridgeHelper.TestAccountPrivKey,
-						false,
-					)
-
-					require.NoError(t, err)
+					require.NoError(t,
+						cluster.Bridges[bridgeNum].Deposit(
+							common.ERC721,
+							rootERC721Token,
+							bridgeConfigs[bridgeNum].ExternalERC721PredicateAddr,
+							bridgeHelper.TestAccountPrivKey,
+							accounts[i].Address().String(),
+							"",
+							fmt.Sprintf("%d", i),
+							cluster.Bridges[bridgeNum].JSONRPCAddr(),
+							bridgeHelper.TestAccountPrivKey,
+							false,
+						))
 
 					logFunc("The deposit was made for the account %s", accounts[i].Address().String())
 				}
@@ -365,17 +364,18 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 					rawKey, err := accounts[i].MarshallPrivateKey()
 					require.NoError(t, err)
 
-					err = cluster.Bridges[bridgeNum].Withdraw(
-						common.ERC721,
-						hex.EncodeToString(rawKey),
-						accounts[i].Address().String(),
-						"",
-						fmt.Sprintf("%d", i),
-						cluster.Servers[0].JSONRPCAddr(),
-						bridgeConfigs[bridgeNum].InternalERC721PredicateAddr,
-						childERC721Token,
-						false)
-					require.NoError(t, err)
+					require.NoError(t,
+						cluster.Bridges[bridgeNum].Withdraw(
+							common.ERC721,
+							hex.EncodeToString(rawKey),
+							accounts[i].Address().String(),
+							"",
+							fmt.Sprintf("%d", i),
+							cluster.Servers[0].JSONRPCAddr(),
+							bridgeConfigs[bridgeNum].InternalERC721PredicateAddr,
+							childERC721Token,
+							false,
+						))
 
 					logFunc("The withdraw was made for the account %s", accounts[i].Address().String())
 				}
@@ -441,20 +441,19 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 
 				// For each account, depositing (bridging) ERC1155 (0.5 ETH) token from the external to the internal chain.
 				for i := range numberOfAccounts {
-					err := cluster.Bridges[bridgeNum].Deposit(
-						common.ERC1155,
-						rootERC1155Token,
-						bridgeConfigs[bridgeNum].ExternalERC1155PredicateAddr,
-						bridgeHelper.TestAccountPrivKey,
-						accounts[i].Address().String(),
-						"500000000000000000",
-						fmt.Sprintf("%d", i),
-						cluster.Bridges[bridgeNum].JSONRPCAddr(),
-						bridgeHelper.TestAccountPrivKey,
-						false,
-					)
-
-					require.NoError(t, err)
+					require.NoError(t,
+						cluster.Bridges[bridgeNum].Deposit(
+							common.ERC1155,
+							rootERC1155Token,
+							bridgeConfigs[bridgeNum].ExternalERC1155PredicateAddr,
+							bridgeHelper.TestAccountPrivKey,
+							accounts[i].Address().String(),
+							"500000000000000000",
+							fmt.Sprintf("%d", i),
+							cluster.Bridges[bridgeNum].JSONRPCAddr(),
+							bridgeHelper.TestAccountPrivKey,
+							false,
+						))
 
 					logFunc("The deposit was made for the account %s", accounts[i].Address().String())
 				}
@@ -510,17 +509,18 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 					rawKey, err := accounts[i].MarshallPrivateKey()
 					require.NoError(t, err)
 
-					err = cluster.Bridges[bridgeNum].Withdraw(
-						common.ERC1155,
-						hex.EncodeToString(rawKey),
-						accounts[i].Address().String(),
-						"500000000000000000",
-						fmt.Sprintf("%d", i),
-						cluster.Servers[0].JSONRPCAddr(),
-						bridgeConfigs[bridgeNum].InternalERC1155PredicateAddr,
-						childERC1155Token,
-						false)
-					require.NoError(t, err)
+					require.NoError(t,
+						cluster.Bridges[bridgeNum].Withdraw(
+							common.ERC1155,
+							hex.EncodeToString(rawKey),
+							accounts[i].Address().String(),
+							"500000000000000000",
+							fmt.Sprintf("%d", i),
+							cluster.Servers[0].JSONRPCAddr(),
+							bridgeConfigs[bridgeNum].InternalERC1155PredicateAddr,
+							childERC1155Token,
+							false,
+						))
 
 					logFunc("The withdraw was made for the account %s", accounts[i].Address().String())
 				}
@@ -735,20 +735,19 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 				key := hex.EncodeToString(pk)
 				// For each account, depositing (bridging) 100000000000000000 WEI (0.1 ETH) from the internal to the external chain.
 				for i := range numberOfAccounts {
-					err := cluster.Bridges[bridgeNum].Deposit(
-						common.ERC20,
-						rootERC20Token,
-						bridgeConfigs[bridgeNum].InternalMintableERC20PredicateAddr,
-						key,
-						accounts[i].Address().String(),
-						"100000000000000000",
-						"",
-						cluster.Servers[0].JSONRPCAddr(),
-						key,
-						false,
-					)
-
-					require.NoError(t, err)
+					require.NoError(t,
+						cluster.Bridges[bridgeNum].Deposit(
+							common.ERC20,
+							rootERC20Token,
+							bridgeConfigs[bridgeNum].InternalMintableERC20PredicateAddr,
+							key,
+							accounts[i].Address().String(),
+							"100000000000000000",
+							"",
+							cluster.Servers[0].JSONRPCAddr(),
+							key,
+							false,
+						))
 
 					logFunc("The deposit was made for the account %s", accounts[i].Address().String())
 				}
@@ -791,17 +790,17 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 					rawKey, err := accounts[i].MarshallPrivateKey()
 					require.NoError(t, err)
 
-					err = cluster.Bridges[bridgeNum].Withdraw(
-						common.ERC20,
-						hex.EncodeToString(rawKey),
-						accounts[i].Address().String(),
-						"100000000000000000",
-						"",
-						cluster.Bridges[bridgeNum].JSONRPCAddr(),
-						bridgeConfigs[bridgeNum].ExternalMintableERC20PredicateAddr,
-						childERC20Token,
-						false)
-					require.NoError(t, err)
+					require.NoError(t,
+						cluster.Bridges[bridgeNum].Withdraw(
+							common.ERC20,
+							hex.EncodeToString(rawKey),
+							accounts[i].Address().String(),
+							"100000000000000000",
+							"",
+							cluster.Bridges[bridgeNum].JSONRPCAddr(),
+							bridgeConfigs[bridgeNum].ExternalMintableERC20PredicateAddr,
+							childERC20Token,
+							false))
 
 					logFunc("The withdraw was made for the account %s", accounts[i].Address().String())
 				}
@@ -877,20 +876,19 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 
 				// For each account, depositing (bridging) ERC721 token from the internal to the external chain.
 				for i := range numberOfAccounts {
-					err := cluster.Bridges[bridgeNum].Deposit(
-						common.ERC721,
-						rootERC721Token,
-						bridgeConfigs[bridgeNum].InternalMintableERC721PredicateAddr,
-						key,
-						accounts[i].Address().String(),
-						"",
-						fmt.Sprintf("%d", i),
-						cluster.Servers[0].JSONRPCAddr(),
-						key,
-						false,
-					)
-
-					require.NoError(t, err)
+					require.NoError(t,
+						cluster.Bridges[bridgeNum].Deposit(
+							common.ERC721,
+							rootERC721Token,
+							bridgeConfigs[bridgeNum].InternalMintableERC721PredicateAddr,
+							key,
+							accounts[i].Address().String(),
+							"",
+							fmt.Sprintf("%d", i),
+							cluster.Servers[0].JSONRPCAddr(),
+							key,
+							false,
+						))
 
 					logFunc("The deposit was made for the account %s", accounts[i].Address().String())
 				}
@@ -930,17 +928,17 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 					rawKey, err := accounts[i].MarshallPrivateKey()
 					require.NoError(t, err)
 
-					err = cluster.Bridges[bridgeNum].Withdraw(
-						common.ERC721,
-						hex.EncodeToString(rawKey),
-						accounts[i].Address().String(),
-						"",
-						fmt.Sprintf("%d", i),
-						cluster.Bridges[bridgeNum].JSONRPCAddr(),
-						bridgeConfigs[bridgeNum].ExternalMintableERC721PredicateAddr,
-						childERC721Token,
-						false)
-					require.NoError(t, err)
+					require.NoError(t,
+						cluster.Bridges[bridgeNum].Withdraw(
+							common.ERC721,
+							hex.EncodeToString(rawKey),
+							accounts[i].Address().String(),
+							"",
+							fmt.Sprintf("%d", i),
+							cluster.Bridges[bridgeNum].JSONRPCAddr(),
+							bridgeConfigs[bridgeNum].ExternalMintableERC721PredicateAddr,
+							childERC721Token,
+							false))
 
 					logFunc("The withdraw was made for the account %s", accounts[i].Address().String())
 				}
@@ -1013,20 +1011,19 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 
 				// For each account, depositing (bridging) ERC1155 (0.5 ETH) token from the internal to the external chain.
 				for i := range numberOfAccounts {
-					err := cluster.Bridges[bridgeNum].Deposit(
-						common.ERC1155,
-						rootERC1155Token,
-						bridgeConfigs[bridgeNum].InternalMintableERC1155PredicateAddr,
-						key,
-						accounts[i].Address().String(),
-						"500000000000000000",
-						fmt.Sprintf("%d", i),
-						cluster.Servers[0].JSONRPCAddr(),
-						key,
-						false,
-					)
-
-					require.NoError(t, err)
+					require.NoError(t,
+						cluster.Bridges[bridgeNum].Deposit(
+							common.ERC1155,
+							rootERC1155Token,
+							bridgeConfigs[bridgeNum].InternalMintableERC1155PredicateAddr,
+							key,
+							accounts[i].Address().String(),
+							"500000000000000000",
+							fmt.Sprintf("%d", i),
+							cluster.Servers[0].JSONRPCAddr(),
+							key,
+							false,
+						))
 
 					logFunc("The deposit was made for the account %s", accounts[i].Address().String())
 				}
@@ -1082,17 +1079,17 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 					rawKey, err := accounts[i].MarshallPrivateKey()
 					require.NoError(t, err)
 
-					err = cluster.Bridges[bridgeNum].Withdraw(
-						common.ERC1155,
-						hex.EncodeToString(rawKey),
-						accounts[i].Address().String(),
-						"500000000000000000",
-						fmt.Sprintf("%d", i),
-						cluster.Bridges[bridgeNum].JSONRPCAddr(),
-						bridgeConfigs[bridgeNum].ExternalMintableERC1155PredicateAddr,
-						childERC1155Token,
-						false)
-					require.NoError(t, err)
+					require.NoError(t,
+						cluster.Bridges[bridgeNum].Withdraw(
+							common.ERC1155,
+							hex.EncodeToString(rawKey),
+							accounts[i].Address().String(),
+							"500000000000000000",
+							fmt.Sprintf("%d", i),
+							cluster.Bridges[bridgeNum].JSONRPCAddr(),
+							bridgeConfigs[bridgeNum].ExternalMintableERC1155PredicateAddr,
+							childERC1155Token,
+							false))
 
 					logFunc("The withdraw was made for the account %s", accounts[i].Address().String())
 				}
@@ -1172,7 +1169,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalNativeTokenTransfer(t *testing.T
 	allAccountsNum := numberOfAccounts * numberOfBridges
 	accounts := make([]*crypto.ECDSAKey, allAccountsNum)
 
-	t.Logf("%d accounts were created with the following addresses:", numberOfAccounts)
+	t.Logf("%d accounts were created with the following addresses:", allAccountsNum)
 
 	for i := range allAccountsNum {
 		ecdsaKey, err := crypto.GenerateECDSAKey()
@@ -1192,7 +1189,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalNativeTokenTransfer(t *testing.T
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithSecretsCallback(func(_ []types.Address, tcc *framework.TestClusterConfig) {
-			addresses := make([]string, len(accounts)+1)
+			addresses := make([]string, len(accounts))
 			for i := range len(accounts) {
 				addresses[i] = accounts[i].Address().String()
 			}
@@ -1277,20 +1274,19 @@ func TestE2E_Multiple_Bridges_InternalToExternalNativeTokenTransfer(t *testing.T
 				rawKey, err := accounts[i].MarshallPrivateKey()
 				require.NoError(t, err)
 
-				err = cluster.Bridges[bridgeNum].Deposit(
-					common.ERC20,
-					rootERC20Token,
-					bridgeConfigs[bridgeNum].InternalMintableERC20PredicateAddr,
-					hex.EncodeToString(rawKey),
-					accounts[i].Address().String(),
-					"100000000000000000",
-					"",
-					cluster.Servers[0].JSONRPCAddr(),
-					"",
-					true,
-				)
-
-				require.NoError(t, err)
+				require.NoError(t,
+					cluster.Bridges[bridgeNum].Deposit(
+						common.ERC20,
+						rootERC20Token,
+						bridgeConfigs[bridgeNum].InternalMintableERC20PredicateAddr,
+						hex.EncodeToString(rawKey),
+						accounts[i].Address().String(),
+						"100000000000000000",
+						"",
+						cluster.Servers[0].JSONRPCAddr(),
+						"",
+						true,
+					))
 
 				logFunc("The deposit was made for the account %s", accounts[i].Address().String())
 			}
@@ -1367,17 +1363,17 @@ func TestE2E_Multiple_Bridges_InternalToExternalNativeTokenTransfer(t *testing.T
 				rawKey, err := accounts[i].MarshallPrivateKey()
 				require.NoError(t, err)
 
-				err = cluster.Bridges[bridgeNum].Withdraw(
-					common.ERC20,
-					hex.EncodeToString(rawKey),
-					accounts[i].Address().String(),
-					"100000000000000000",
-					"",
-					cluster.Bridges[bridgeNum].JSONRPCAddr(),
-					bridgeConfigs[bridgeNum].ExternalMintableERC20PredicateAddr,
-					childERC20Tokens[bridgeNum],
-					false)
-				require.NoError(t, err)
+				require.NoError(t,
+					cluster.Bridges[bridgeNum].Withdraw(
+						common.ERC20,
+						hex.EncodeToString(rawKey),
+						accounts[i].Address().String(),
+						"100000000000000000",
+						"",
+						cluster.Bridges[bridgeNum].JSONRPCAddr(),
+						bridgeConfigs[bridgeNum].ExternalMintableERC20PredicateAddr,
+						childERC20Tokens[bridgeNum],
+						false))
 
 				logFunc("The withdraw was made for the account %s", accounts[i].Address().String())
 			}
