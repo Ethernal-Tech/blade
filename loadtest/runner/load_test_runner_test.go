@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -36,5 +37,5 @@ func TestLoadRunner(t *testing.T) {
 
 	runner := &LoadTestRunner{}
 
-	require.NoError(t, runner.Run(cfg))
+	require.NoError(t, runner.Run(context.Background(), cfg))
 }

@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"time"
@@ -43,7 +44,7 @@ func NewERC721Runner(cfg LoadTestConfig) (*ERC721Runner, error) {
 // 6. Waits for transaction receipts.
 // 7. Calculates the transactions per second (TPS) based on block information and transaction statistics.
 // Returns an error if any of the steps fail.
-func (e *ERC721Runner) Run() error {
+func (e *ERC721Runner) Run(ctx context.Context) error {
 	fmt.Println("Running ERC721 load test", e.cfg.LoadTestName)
 
 	if err := e.createVUs(); err != nil {
@@ -57,6 +58,12 @@ func (e *ERC721Runner) Run() error {
 	if err := e.deployERC21Token(); err != nil {
 		return err
 	}
+
+	cancelableCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go e.readState(cancelableCtx)
+	go e.readTxPool(cancelableCtx)
 
 	if !e.cfg.WaitForTxPoolToEmpty {
 		go e.waitForReceiptsParallel()

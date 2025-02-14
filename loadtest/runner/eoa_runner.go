@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 
@@ -33,7 +34,7 @@ func NewEOARunner(cfg LoadTestConfig) (*EOARunner, error) {
 // 5. Waits for transaction receipts.
 // 6. Calculates the transactions per second (TPS) based on block information and transaction statistics.
 // Returns an error if any of the steps fail.
-func (e *EOARunner) Run() error {
+func (e *EOARunner) Run(ctx context.Context) error {
 	fmt.Println("Running EOA load test", e.cfg.LoadTestName)
 
 	if err := e.createVUs(); err != nil {
@@ -43,6 +44,12 @@ func (e *EOARunner) Run() error {
 	if err := e.fundVUs(); err != nil {
 		return err
 	}
+
+	cancelableCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go e.readState(cancelableCtx)
+	go e.readTxPool(cancelableCtx)
 
 	if !e.cfg.WaitForTxPoolToEmpty {
 		go e.waitForReceiptsParallel()

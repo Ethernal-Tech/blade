@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"strings"
@@ -78,7 +79,7 @@ type LoadTestRunner struct{}
 // It determines the load test type from the configuration and creates
 // the corresponding runner. Then, it runs the load test using the
 // created runner and returns any error encountered during the process.
-func (r *LoadTestRunner) Run(cfg LoadTestConfig) error {
+func (r *LoadTestRunner) Run(ctx context.Context, cfg LoadTestConfig) error {
 	switch strings.ToLower(cfg.LoadTestType) {
 	case EOATestType:
 		eoaRunner, err := NewEOARunner(cfg)
@@ -86,28 +87,28 @@ func (r *LoadTestRunner) Run(cfg LoadTestConfig) error {
 			return err
 		}
 
-		return eoaRunner.Run()
+		return eoaRunner.Run(ctx)
 	case ERC20TestType:
 		erc20Runner, err := NewERC20Runner(cfg)
 		if err != nil {
 			return err
 		}
 
-		return erc20Runner.Run()
+		return erc20Runner.Run(ctx)
 	case ERC721TestType:
 		erc721Runner, err := NewERC721Runner(cfg)
 		if err != nil {
 			return err
 		}
 
-		return erc721Runner.Run()
+		return erc721Runner.Run(ctx)
 	case MixedTestType:
 		mixedTxRunner, err := NewMixedTxRunner(cfg)
 		if err != nil {
 			return err
 		}
 
-		return mixedTxRunner.Run()
+		return mixedTxRunner.Run(ctx)
 	default:
 		return fmt.Errorf("unknown load test type %s", cfg.LoadTestType)
 	}

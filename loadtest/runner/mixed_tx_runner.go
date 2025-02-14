@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"math/big"
@@ -57,7 +58,7 @@ func NewMixedTxRunner(cfg LoadTestConfig) (*MixedTxRunner, error) {
 // 8. Waits for transaction receipts.
 // 9. Calculates the transactions per second (TPS) based on block information and transaction statistics.
 // Returns an error if any of the steps fail.
-func (m *MixedTxRunner) Run() error {
+func (m *MixedTxRunner) Run(ctx context.Context) error {
 	fmt.Println("Running mixed load test", m.cfg.LoadTestName)
 
 	if err := m.createVUs(); err != nil {
@@ -83,6 +84,12 @@ func (m *MixedTxRunner) Run() error {
 	if err := m.estimateGas(); err != nil {
 		return err
 	}
+
+	cancelableCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go m.readState(cancelableCtx)
+	go m.readTxPool(cancelableCtx)
 
 	if !m.cfg.WaitForTxPoolToEmpty {
 		go m.waitForReceiptsParallel()

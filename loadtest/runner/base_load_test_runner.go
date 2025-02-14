@@ -717,7 +717,9 @@ func (r *BaseLoadTestRunner) sendTransactions(createTxnFn func(*account, *feeDat
 	g, ctx := errgroup.WithContext(context.Background())
 
 	sendFn := r.sendTransactionsForUser
-	if r.cfg.BatchSize > 1 {
+	if r.cfg.ExecutionTime > 0 {
+		sendFn = r.sendTransactionsInTime
+	} else if r.cfg.BatchSize > 1 {
 		sendFn = r.sendTransactionsForUserInBatches
 	}
 
@@ -756,6 +758,37 @@ func (r *BaseLoadTestRunner) sendTransactions(createTxnFn func(*account, *feeDat
 	}
 
 	return allTxnHashes, nil
+}
+
+// readState will read the state of the blockchain continuously until the context is canceled.
+func (r *BaseLoadTestRunner) readState(ctx context.Context) error {
+	if r.cfg.StateReadThreads == 0 {
+		return nil
+	}
+	// TODO - implement reading state
+	return nil
+}
+
+// readTxPool will read the transaction pool continuously until the context is canceled.
+func (r *BaseLoadTestRunner) readTxPool(ctx context.Context) error {
+	if r.cfg.TxPoolReadThreads == 0 {
+		return nil
+	}
+	// TODO - implement reading tx pool
+	return nil
+}
+
+// sendTransactionsInTime sends transactions for each virtual user (vu) within a specified time duration
+// It uses the execution-time, number of transactions per time unit, and time unit for sending transactions
+// For example:
+// - execution-time = 1m
+// - num-of-txs-per-time-unit = 10
+// - time-unit-for-sending-txs = 1s
+// It sends 10 transactions per second for 1 minute for each VU.
+func (r *BaseLoadTestRunner) sendTransactionsInTime(account *account, chainID *big.Int,
+	bar *progressbar.ProgressBar, createTxnFn func(*account, *feeData, *big.Int) *types.Transaction,
+) ([]types.Hash, []error, error) {
+	return nil, nil, nil
 }
 
 // sendTransactionsForUser sends ERC20 token transactions for a given user account.

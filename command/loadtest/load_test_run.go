@@ -152,7 +152,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 
 	loadTestRunner := &runner.LoadTestRunner{}
 
-	err := loadTestRunner.Run(runner.LoadTestConfig{
+	err := loadTestRunner.Run(cmd.Context(), runner.LoadTestConfig{
 		Mnemonnic:             params.mnemonic,
 		LoadTestType:          params.loadTestType,
 		LoadTestName:          params.loadTestName,
