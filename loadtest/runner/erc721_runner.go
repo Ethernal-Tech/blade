@@ -62,8 +62,8 @@ func (e *ERC721Runner) Run(ctx context.Context) error {
 	cancelableCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	go e.readState(cancelableCtx)
-	go e.readTxPool(cancelableCtx)
+	e.readState(cancelableCtx)
+	e.readTxPool(cancelableCtx)
 
 	if !e.cfg.WaitForTxPoolToEmpty {
 		go e.waitForReceiptsParallel()

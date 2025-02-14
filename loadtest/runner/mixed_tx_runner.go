@@ -88,8 +88,8 @@ func (m *MixedTxRunner) Run(ctx context.Context) error {
 	cancelableCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	go m.readState(cancelableCtx)
-	go m.readTxPool(cancelableCtx)
+	m.readState(cancelableCtx)
+	m.readTxPool(cancelableCtx)
 
 	if !m.cfg.WaitForTxPoolToEmpty {
 		go m.waitForReceiptsParallel()

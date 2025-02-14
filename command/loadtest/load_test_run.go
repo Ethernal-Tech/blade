@@ -144,6 +144,8 @@ func setFlags(cmd *cobra.Command) {
 	_ = cmd.MarkFlagRequired(loadTestTypeFlag)
 
 	cmd.MarkFlagsRequiredTogether(executionTimeFlag, txsPerTimeUnitFlag)
+	cmd.MarkFlagsMutuallyExclusive(executionTimeFlag, txsPerUserFlag)
+	cmd.MarkFlagsMutuallyExclusive(executionTimeFlag, batchSizeFlag)
 }
 
 func runCommand(cmd *cobra.Command, _ []string) {
