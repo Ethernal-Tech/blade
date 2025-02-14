@@ -70,6 +70,7 @@ var (
 	TestWriteBlockMetadata *contracts.Artifact
 	RootERC20              *contracts.Artifact
 	TestSimple             *contracts.Artifact
+	TestPerformance        *contracts.Artifact
 	TestRewardToken        *contracts.Artifact
 	Wrapper                *contracts.Artifact
 	NumberPersister        *contracts.Artifact
@@ -267,6 +268,11 @@ func init() {
 		log.Fatal(err)
 	}
 
+	TestPerformance, err = contracts.DecodeArtifact(readTestContractContent("TestPerformanceContract.json"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	TestRewardToken, err = contracts.DecodeArtifact(readTestContractContent("TestRewardToken.json"))
 	if err != nil {
 		log.Fatal(err)
@@ -392,6 +398,7 @@ func init() {
 		"TestWriteBlockMetadata":          TestWriteBlockMetadata,
 		"RootERC20":                       RootERC20,
 		"TestSimple":                      TestSimple,
+		"TestPerformance":                 TestPerformance,
 		"TestRewardToken":                 TestRewardToken,
 		"ZexCoinERC20":                    ZexCoinERC20,
 		"ZexNFT":                          ZexNFT,
