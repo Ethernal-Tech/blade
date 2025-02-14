@@ -62,6 +62,13 @@ type LoadTestConfig struct {
 	ResultsToJSON        bool // ResultsToJSON indicates whether the results should be written in JSON format.
 	WaitForTxPoolToEmpty bool // WaitForTxPoolToEmpty indicates whether the load test
 	// should wait for the tx pool to empty before gathering results
+
+	// Performance parameters
+	ExecutionTime         time.Duration // ExecutionTime is the duration for which the load test should run.
+	NumOfTxsPerTimeUnit   int64         // NumOfTxsPerTimeUnit is the number of transactions per time unit.
+	TimeUnitForSendingTxs time.Duration // TimeUnitForSendingTxs is the time unit for sending transactions.
+	StateReadThreads      uint32        // StateReadThreads is the number of threads to read state.
+	TxPoolReadThreads     uint32        // TxPoolReadThreads is the number of threads to read tx pool.
 }
 
 // LoadTestRunner represents a runner for load tests.
