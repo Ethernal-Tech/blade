@@ -26,10 +26,10 @@ type confirmedBatch struct {
 
 func newConfirmedBatch(mp map[string]interface{}) *confirmedBatch {
 	return &confirmedBatch{
-		BatchID:    mp["batchID"].(*big.Int),    //nolint
-		Bitmap:     mp["bitmap"].(*big.Int),     //nolint
-		Counter:    mp["counter"].(*big.Int),    //nolint
-		Signatures: mp["signatures"].([][]byte), //nolint
+		BatchID:    mp["batchID"].(*big.Int),
+		Bitmap:     mp["bitmap"].(*big.Int),
+		Counter:    mp["counter"].(*big.Int),
+		Signatures: mp["signatures"].([][]byte),
 	}
 }
 
@@ -125,12 +125,12 @@ func TestE2E_ApexBridge_TestCardanoVerifySignaturePrecompile(t *testing.T) {
 		decoded, err := fn.Outputs.Decode(byteResponse)
 		require.NoError(t, err)
 
-		base := decoded.(map[string]interface{}) //nolint
+		base := decoded.(map[string]interface{})
 		if len(base) == 0 {
 			return nil
 		}
 
-		items := base["0"].([]map[string]interface{}) //nolint
+		items := base["0"].([]map[string]interface{})
 		result := make([]*confirmedBatch, len(items))
 
 		for i, x := range items {
