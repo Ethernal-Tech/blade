@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.24;
 
-// import "hardhat/// console.sol";
+// import "hardhat/console.sol";
 // import "@openzeppelin/contracts/utils/Strings.sol";
 
 contract TestPerformanceContract {
@@ -31,10 +31,22 @@ contract TestPerformanceContract {
 
     ConfirmedBatch[] private confirmedBatches;
 
+    uint256 private lastBatchID;
+
     uint256 private quorumCnt;
 
-    constructor(uint256 _quorumCnt) {
+    bool private checkBatchID;
+
+    bool private deleteTemporaryMappingsAfterQuorum;
+
+    constructor(
+        uint256 _quorumCnt,
+        bool _checkBatchID,
+        bool _deleteTemporaryMappingsAfterQuorum
+    ) {
         quorumCnt = _quorumCnt;
+        checkBatchID = _checkBatchID;
+        deleteTemporaryMappingsAfterQuorum = _deleteTemporaryMappingsAfterQuorum;
     }
 
     function submitSignedBatch(SignedBatch calldata _signedBatch) external {
@@ -47,10 +59,17 @@ contract TestPerformanceContract {
         uint256 _batchID = _signedBatch.batchID;
         uint256 _counter = _signedBatch.counter;
 
+        if (checkBatchID && lastBatchID + 1 != _batchID) {
+            // console.log("Invalid batch ID!");
+            // console.log(Strings.toString(lastBatchID + 1));
+            return;
+        }
+
         bytes32 _sbHash = keccak256(abi.encodePacked(_batchID, _counter));
 
         // check if caller already voted for same hash
         if (hasVoted[_sbHash][_validatorID]) {
+            // console.log("Validator already voted!");
             return;
         }
 
@@ -87,9 +106,13 @@ contract TestPerformanceContract {
                 )
             );
 
-            // remove from storage but for that exactly hash
-            delete signatures[_sbHash];
-            delete bitmap[_sbHash];
+            lastBatchID = _batchID;
+
+            if (deleteTemporaryMappingsAfterQuorum) {
+                // remove from storage but for that exactly hash
+                delete signatures[_sbHash];
+                delete bitmap[_sbHash];
+            }
         }
     }
 
@@ -111,5 +134,9 @@ contract TestPerformanceContract {
 
     function getHashesCount() external view returns (uint256) {
         return hashesCount;
+    }
+
+    function getLastBatchID() external view returns (uint256) {
+        return lastBatchID;
     }
 }

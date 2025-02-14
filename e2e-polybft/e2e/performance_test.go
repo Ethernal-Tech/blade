@@ -48,7 +48,11 @@ func (cb confirmedBatch) String() string {
 }
 
 func TestE2E_ApexBridge_TestCardanoVerifySignaturePrecompile(t *testing.T) {
-	const quorumCnt = 5
+	const (
+		quorumCnt                          = 5
+		checkBatchID                       = true
+		deleteTemporaryMappingsAfterQuorum = true
+	)
 
 	admin, err := wallet.GenerateAccount()
 	require.NoError(t, err)
@@ -63,7 +67,9 @@ func TestE2E_ApexBridge_TestCardanoVerifySignaturePrecompile(t *testing.T) {
 	txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(cluster.Servers[0].JSONRPC()))
 	require.NoError(t, err)
 
-	input, err := contractsapi.TestPerformance.Abi.Constructor.Inputs.Encode([]interface{}{big.NewInt(quorumCnt)})
+	input, err := contractsapi.TestPerformance.Abi.Constructor.Inputs.Encode([]interface{}{
+		big.NewInt(quorumCnt), checkBatchID, deleteTemporaryMappingsAfterQuorum,
+	})
 	require.NoError(t, err)
 
 	// deploy contract
@@ -156,11 +162,29 @@ func TestE2E_ApexBridge_TestCardanoVerifySignaturePrecompile(t *testing.T) {
 		return result
 	}
 
-	submitBatch(t, 1, 10, 100, rndBytes(64))
-	submitBatch(t, 2, 10, 100, rndBytes(64))
-	submitBatch(t, 3, 10, 100, rndBytes(64))
-	submitBatch(t, 4, 10, 100, rndBytes(64))
-	submitBatch(t, 5, 10, 100, rndBytes(64))
+	getLastBatchID := func(t *testing.T) uint64 {
+		t.Helper()
+
+		fn := contractsapi.TestPerformance.Abi.GetMethod("getLastBatchID")
+		input, err := fn.Encode([]interface{}{})
+		require.NoError(t, err)
+
+		response, err := txRelayer.Call(types.ZeroAddress, contractAddr, input)
+		require.NoError(t, err)
+
+		result, err := common.ParseUint64orHex(&response)
+		require.NoError(t, err)
+
+		return result
+	}
+
+	require.Equal(t, uint64(0), getLastBatchID(t))
+
+	submitBatch(t, 1, 1, 100, rndBytes(64))
+	submitBatch(t, 2, 1, 100, rndBytes(64))
+	submitBatch(t, 3, 1, 100, rndBytes(64))
+	submitBatch(t, 4, 1, 100, rndBytes(64))
+	submitBatch(t, 5, 1, 100, rndBytes(64))
 
 	submitBatch(t, 1, 2, 100, rndBytes(64))
 	submitBatch(t, 2, 2, 100, rndBytes(64))
@@ -168,13 +192,15 @@ func TestE2E_ApexBridge_TestCardanoVerifySignaturePrecompile(t *testing.T) {
 	submitBatch(t, 4, 2, 100, rndBytes(64))
 	submitBatch(t, 5, 2, 100, rndBytes(64))
 
-	submitBatch(t, 5, 12, 100, rndBytes(64))
-	submitBatch(t, 3, 42, 200, rndBytes(64))
+	submitBatch(t, 5, 3, 100, rndBytes(64))
+	submitBatch(t, 3, 3, 200, rndBytes(64))
+	submitBatch(t, 6, 1, 100, rndBytes(64))
 
 	confirmedBatches := getConfirmedBatches(t)
 
 	require.Len(t, confirmedBatches, 2)
 	require.Equal(t, uint64(4), getHashesCount(t))
+	require.Equal(t, uint64(2), getLastBatchID(t))
 
 	for _, x := range confirmedBatches {
 		fmt.Println(x)
