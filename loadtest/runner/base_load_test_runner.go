@@ -760,13 +760,61 @@ func (r *BaseLoadTestRunner) sendTransactions(createTxnFn func(*account, *feeDat
 	return allTxnHashes, nil
 }
 
-// readState will read the state of the blockchain continuously until the context is canceled.
+// readState continuously reads nonce and balance from blockchain
+// for each account, with a max of StateReadThreads concurrent workers.
 func (r *BaseLoadTestRunner) readState(ctx context.Context) error {
 	if r.cfg.StateReadThreads == 0 {
 		return nil
 	}
-	// TODO - implement reading state
+
+	accountCh := make(chan types.Address)
+
+	g, ctx := errgroup.WithContext(ctx)
+	// Spawn worker goroutines (max: StateReadThreads)
+	for i := uint32(0); i < r.cfg.StateReadThreads; i++ {
+		g.Go(func() error {
+			for addr := range accountCh {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+
+				default:
+					for {
+						// TODO: @Stefan-Ethernal what to do with the balance and nonce values?
+						// Shall we report it, have some kind of assertions...?
+						_, err := r.client.GetBalance(addr, jsonrpc.LatestBlockNumberOrHash)
+						if err != nil {
+							return err
+						}
+
+						_, err = r.client.GetNonce(addr, jsonrpc.LatestBlockNumberOrHash)
+						if err != nil {
+							return err
+						}
+
+						// TODO: @Stefan-Ethernal should we include some time.Sleep?
+					}
+				}
+			}
 	return nil
+		})
+	}
+
+	// Distribute work: Send account addresses to workers
+	g.Go(func() error {
+		defer close(accountCh)
+		for _, a := range r.vus {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+
+			case accountCh <- a.key.Address():
+			}
+		}
+		return nil
+	})
+
+	return g.Wait()
 }
 
 // readTxPool will read the transaction pool continuously until the context is canceled.
