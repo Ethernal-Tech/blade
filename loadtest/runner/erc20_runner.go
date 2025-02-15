@@ -72,7 +72,7 @@ func (e *ERC20Runner) Run(ctx context.Context) error {
 	e.readTxPool(cancelableCtx)
 
 	if !e.cfg.WaitForTxPoolToEmpty {
-		go e.waitForReceiptsParallel()
+		go e.waitForReceiptsParallel(cancelableCtx)
 		go e.calculateResultsParallel()
 
 		_, err := e.sendTransactions(e.createERC20Transaction)

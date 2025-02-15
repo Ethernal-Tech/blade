@@ -92,7 +92,7 @@ func (m *MixedTxRunner) Run(ctx context.Context) error {
 	m.readTxPool(cancelableCtx)
 
 	if !m.cfg.WaitForTxPoolToEmpty {
-		go m.waitForReceiptsParallel()
+		go m.waitForReceiptsParallel(cancelableCtx)
 		go m.calculateResultsParallel()
 
 		_, err := m.sendTransactions(m.createTransaction)

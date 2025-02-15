@@ -241,7 +241,7 @@ func (r *BaseLoadTestRunner) waitForTxPoolToEmpty() error {
 // If the receipts are found, it sends the transaction statistics to the resultsCollectedCh channel.
 // If the timeout is reached before the receipts are found, it returns.
 // if there is a predefined number of empty blocks, it stops the results gathering before the timer.
-func (r *BaseLoadTestRunner) waitForReceiptsParallel() {
+func (r *BaseLoadTestRunner) waitForReceiptsParallel(ctx context.Context) {
 	startBlock, err := r.client.BlockNumber()
 	if err != nil {
 		fmt.Println("Error getting start block on gathering block info:", err)
@@ -267,10 +267,16 @@ func (r *BaseLoadTestRunner) waitForReceiptsParallel() {
 
 	for {
 		select {
+		case <-ctx.Done():
+			fmt.Println("Context has been cancelled, aborting receipts retrieval...")
+
+			return
+
 		case <-timer.C:
 			fmt.Println("Timeout while gathering block info")
 
 			return
+
 		case <-ticker.C:
 			if sequentialEmptyBlocks >= emptyBlocksNum {
 				return
@@ -796,7 +802,7 @@ func (r *BaseLoadTestRunner) readState(ctx context.Context) error {
 					}
 				}
 			}
-	return nil
+			return nil
 		})
 	}
 
