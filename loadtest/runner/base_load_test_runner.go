@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"math/rand"
 	"os"
 	"sort"
 	"sync"
@@ -777,40 +776,40 @@ func (r *BaseLoadTestRunner) readState(ctx context.Context) error {
 		return nil
 	}
 
-	vusAddresses := make([]types.Address, 0, len(r.vus))
+	senderAddrs := make([]types.Address, len(r.vus))
 
-	for _, vu := range r.vus {
-		vusAddresses = append(vusAddresses, vu.key.Address())
+	for i, sender := range r.vus {
+		senderAddrs[i] = sender.key.Address()
 	}
 
 	for i := uint32(0); i < r.cfg.StateReadThreads; i++ {
-		go func() {
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				default:
-					randomIndex := rand.Intn(len(vusAddresses))
-					randomAddress := vusAddresses[randomIndex]
+		for _, senderAddr := range senderAddrs {
+			go func(senderAddr types.Address) {
+				for {
+					select {
+					case <-ctx.Done():
+						return
 
-					_, err := r.client.GetBalance(randomAddress, jsonrpc.LatestBlockNumberOrHash)
-					if err != nil {
-						r.resultsCollector.BalanceReadErrorCh <- err
-						continue
+					default:
+						_, err := r.client.GetBalance(senderAddr, jsonrpc.LatestBlockNumberOrHash)
+						if err != nil {
+							r.resultsCollector.BalanceReadErrorCh <- err
+							continue
+						}
+
+						r.resultsCollector.BalanceReadCountCh <- struct{}{}
+
+						_, err = r.client.GetNonce(senderAddr, jsonrpc.LatestBlockNumberOrHash)
+						if err != nil {
+							r.resultsCollector.NonceReadErrorCh <- err
+							continue
+						}
+
+						r.resultsCollector.NonceReadCountCh <- struct{}{}
 					}
-
-					r.resultsCollector.BalanceReadCountCh <- 1
-
-					_, err = r.client.GetNonce(randomAddress, jsonrpc.LatestBlockNumberOrHash)
-					if err != nil {
-						r.resultsCollector.NonceReadErrorCh <- err
-						continue
-					}
-
-					r.resultsCollector.NonceReadCountCh <- 1
 				}
-			}
-		}()
+			}(senderAddr)
+		}
 	}
 
 	return nil
@@ -821,7 +820,27 @@ func (r *BaseLoadTestRunner) readTxPool(ctx context.Context) error {
 	if r.cfg.TxPoolReadThreads == 0 {
 		return nil
 	}
-	// TODO - implement reading tx pool
+
+	for i := uint32(0); i < r.cfg.TxPoolReadThreads; i++ {
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+
+				default:
+					_, err := r.client.TxPoolStatus()
+					if err != nil {
+						r.resultsCollector.TxPoolStatusReadErrorCh <- err
+						continue
+					}
+
+					r.resultsCollector.TxPoolStatusReadCountCh <- struct{}{}
+				}
+			}
+		}()
+	}
+
 	return nil
 }
 
