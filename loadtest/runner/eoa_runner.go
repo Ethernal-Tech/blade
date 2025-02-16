@@ -46,10 +46,15 @@ func (e *EOARunner) Run(ctx context.Context) error {
 	}
 
 	cancelableCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	defer func() {
+		cancel()
 
-	e.readState(cancelableCtx)
-	e.readTxPool(cancelableCtx)
+		e.resultsCollector.PrintResults()
+	}()
+
+	go e.resultsCollector.CollectResults(ctx)
+	go e.readState(cancelableCtx)
+	go e.readTxPool(cancelableCtx)
 
 	if !e.cfg.WaitForTxPoolToEmpty {
 		go e.waitForReceiptsParallel(ctx)

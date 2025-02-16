@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"math/rand"
 	"os"
 	"sort"
 	"sync"
@@ -51,6 +52,8 @@ type BaseLoadTestRunner struct {
 	done               chan error
 
 	batchSender *TransactionBatchSender
+
+	resultsCollector *ResultCollector
 }
 
 // NewBaseLoadTestRunner creates a new instance of BaseLoadTestRunner with the provided LoadTestConfig.
@@ -86,6 +89,7 @@ func NewBaseLoadTestRunner(cfg LoadTestConfig) (*BaseLoadTestRunner, error) {
 		resultsCollectedCh: make(chan *stats),
 		done:               make(chan error),
 		batchSender:        newTransactionBatchSender(cfg.JSONRPCUrl),
+		resultsCollector:   NewResultCollector(),
 	}, nil
 }
 
@@ -773,54 +777,43 @@ func (r *BaseLoadTestRunner) readState(ctx context.Context) error {
 		return nil
 	}
 
-	accountCh := make(chan types.Address)
+	vusAddresses := make([]types.Address, 0, len(r.vus))
 
-	g, ctx := errgroup.WithContext(ctx)
-	// Spawn worker goroutines (max: StateReadThreads)
-	for i := uint32(0); i < r.cfg.StateReadThreads; i++ {
-		g.Go(func() error {
-			for addr := range accountCh {
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-
-				default:
-					for {
-						// TODO: @Stefan-Ethernal what to do with the balance and nonce values?
-						// Shall we report it, have some kind of assertions...?
-						_, err := r.client.GetBalance(addr, jsonrpc.LatestBlockNumberOrHash)
-						if err != nil {
-							return err
-						}
-
-						_, err = r.client.GetNonce(addr, jsonrpc.LatestBlockNumberOrHash)
-						if err != nil {
-							return err
-						}
-
-						// TODO: @Stefan-Ethernal should we include some time.Sleep?
-					}
-				}
-			}
-			return nil
-		})
+	for _, vu := range r.vus {
+		vusAddresses = append(vusAddresses, vu.key.Address())
 	}
 
-	// Distribute work: Send account addresses to workers
-	g.Go(func() error {
-		defer close(accountCh)
-		for _, a := range r.vus {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
+	for i := uint32(0); i < r.cfg.StateReadThreads; i++ {
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					randomIndex := rand.Intn(len(vusAddresses))
+					randomAddress := vusAddresses[randomIndex]
 
-			case accountCh <- a.key.Address():
+					_, err := r.client.GetBalance(randomAddress, jsonrpc.LatestBlockNumberOrHash)
+					if err != nil {
+						r.resultsCollector.BalanceReadErrorCh <- err
+						continue
+					}
+
+					r.resultsCollector.BalanceReadCountCh <- 1
+
+					_, err = r.client.GetNonce(randomAddress, jsonrpc.LatestBlockNumberOrHash)
+					if err != nil {
+						r.resultsCollector.NonceReadErrorCh <- err
+						continue
+					}
+
+					r.resultsCollector.NonceReadCountCh <- 1
+				}
 			}
-		}
-		return nil
-	})
+		}()
+	}
 
-	return g.Wait()
+	return nil
 }
 
 // readTxPool will read the transaction pool continuously until the context is canceled.
