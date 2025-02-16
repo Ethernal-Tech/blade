@@ -708,9 +708,9 @@ func (r *BaseLoadTestRunner) sendTransactions(createTxnFn func(*account, *feeDat
 	}
 
 	start := time.Now().UTC()
-	totalTxs := r.cfg.VUs * r.cfg.TxsPerUser
+	totalTxs := r.calculateTotalTxs()
 	foundErrs := make([]error, 0)
-	bar := progressbar.Default(int64(totalTxs), "Sending transactions")
+	bar := progressbar.Default(totalTxs, "Sending transactions")
 
 	defer func() {
 		_ = bar.Close()
@@ -718,7 +718,7 @@ func (r *BaseLoadTestRunner) sendTransactions(createTxnFn func(*account, *feeDat
 		fmt.Println("Sending transactions took", time.Since(start))
 	}()
 
-	allTxnHashes := make([]types.Hash, 0, totalTxs)
+	allTxnHashes := make([]types.Hash, 0)
 
 	g, ctx := errgroup.WithContext(context.Background())
 
@@ -842,10 +842,39 @@ func (r *BaseLoadTestRunner) readTxPool(ctx context.Context) error {
 func (r *BaseLoadTestRunner) sendTransactionsInTime(account *account, chainID *big.Int,
 	bar *progressbar.ProgressBar, createTxnFn func(*account, *feeData, *big.Int) *types.Transaction,
 ) ([]types.Hash, []error, error) {
-	return nil, nil, nil
+	executionTimer := time.NewTimer(r.cfg.ExecutionTime)
+	defer executionTimer.Stop()
+
+	var (
+		txnHashes  []types.Hash
+		sendErrors []error
+	)
+
+	numOfTxns := 1
+	if r.cfg.BatchSize > 0 {
+		numOfTxns = r.cfg.BatchSize
+	}
+
+	for {
+		h, se, err := r.sendTransactionsForUserInBatchesInternal(numOfTxns,
+			account, chainID, bar, createTxnFn)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		txnHashes = append(txnHashes, h...)
+		sendErrors = append(sendErrors, se...)
+
+		select {
+		case <-executionTimer.C:
+			return txnHashes, sendErrors, nil
+		default:
+			continue
+		}
+	}
 }
 
-// sendTransactionsForUser sends ERC20 token transactions for a given user account.
+// sendTransactionsForUser sends transactions for a given user account.
 // It takes an account pointer and a chainID as input parameters.
 // It returns a slice of transaction hashes and an error if any.
 func (r *BaseLoadTestRunner) sendTransactionsForUser(account *account, chainID *big.Int,
@@ -895,10 +924,16 @@ func (r *BaseLoadTestRunner) sendTransactionsForUser(account *account, chainID *
 func (r *BaseLoadTestRunner) sendTransactionsForUserInBatches(account *account, chainID *big.Int,
 	bar *progressbar.ProgressBar, createTxnFn func(*account, *feeData, *big.Int) *types.Transaction,
 ) ([]types.Hash, []error, error) {
+	return r.sendTransactionsForUserInBatchesInternal(r.cfg.TxsPerUser, account, chainID, bar, createTxnFn)
+}
+
+func (r *BaseLoadTestRunner) sendTransactionsForUserInBatchesInternal(numOfTxns int, account *account, chainID *big.Int,
+	bar *progressbar.ProgressBar, createTxnFn func(*account, *feeData, *big.Int) *types.Transaction,
+) ([]types.Hash, []error, error) {
 	signer := crypto.NewLondonSigner(chainID.Uint64())
 
-	numOfBatches := int(math.Ceil(float64(r.cfg.TxsPerUser) / float64(r.cfg.BatchSize)))
-	txHashes := make([]types.Hash, 0, r.cfg.TxsPerUser)
+	numOfBatches := int(math.Ceil(float64(numOfTxns) / float64(r.cfg.BatchSize)))
+	txHashes := make([]types.Hash, 0, numOfTxns)
 	sendErrs := make([]error, 0)
 	totalTxs := 0
 
@@ -931,7 +966,7 @@ func (r *BaseLoadTestRunner) sendTransactionsForUserInBatches(account *account, 
 		}
 
 		for j := 0; j < r.cfg.BatchSize; j++ {
-			if totalTxs >= r.cfg.TxsPerUser {
+			if totalTxs >= numOfTxns {
 				break
 			}
 
@@ -965,6 +1000,21 @@ func (r *BaseLoadTestRunner) sendTransactionsForUserInBatches(account *account, 
 	}
 
 	return txHashes, sendErrs, nil
+}
+
+// calculateTotalTxs calculates the total number of transactions to be sent based on the load test configuration.
+func (r *BaseLoadTestRunner) calculateTotalTxs() int64 {
+	var totalTxs int64
+
+	if r.cfg.ExecutionTime > 0 {
+		// we can not be sure how many txns we will send in this case
+		// so we will use a spinner instead of a progress bar
+		totalTxs = -1
+	} else {
+		totalTxs = int64(r.cfg.TxsPerUser * r.cfg.VUs)
+	}
+
+	return totalTxs
 }
 
 // getFeeData retrieves fee data based on the provided JSON-RPC Ethereum client and dynamicTxs flag.

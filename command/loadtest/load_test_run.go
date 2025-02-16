@@ -119,13 +119,6 @@ func setFlags(cmd *cobra.Command) {
 		"the duration of the load test expressed in time. When set, the load test will run for the specified duration",
 	)
 
-	cmd.Flags().StringVar(
-		&params.txsPerTimeUnit,
-		txsPerTimeUnitFlag,
-		"",
-		"number of txs sent per time unit in format 1:1s, 10:1m, 100:1h, etc. Works in correlation with execution-time flag",
-	)
-
 	cmd.Flags().Uint32Var(
 		&params.stateReadThreads,
 		stateReadThreadsFlag,
@@ -143,9 +136,7 @@ func setFlags(cmd *cobra.Command) {
 	_ = cmd.MarkFlagRequired(MnemonicFlag)
 	_ = cmd.MarkFlagRequired(loadTestTypeFlag)
 
-	cmd.MarkFlagsRequiredTogether(executionTimeFlag, txsPerTimeUnitFlag)
 	cmd.MarkFlagsMutuallyExclusive(executionTimeFlag, txsPerUserFlag)
-	cmd.MarkFlagsMutuallyExclusive(executionTimeFlag, batchSizeFlag)
 }
 
 func runCommand(cmd *cobra.Command, _ []string) {
@@ -155,23 +146,21 @@ func runCommand(cmd *cobra.Command, _ []string) {
 	loadTestRunner := &runner.LoadTestRunner{}
 
 	err := loadTestRunner.Run(cmd.Context(), runner.LoadTestConfig{
-		Mnemonnic:             params.mnemonic,
-		LoadTestType:          params.loadTestType,
-		LoadTestName:          params.loadTestName,
-		JSONRPCUrl:            params.jsonRPCAddress,
-		ReceiptsTimeout:       params.receiptsTimeout,
-		TxPoolTimeout:         params.txPoolTimeout,
-		VUs:                   params.vus,
-		TxsPerUser:            params.txsPerUser,
-		BatchSize:             params.batchSize,
-		DynamicTxs:            params.dynamicTxs,
-		ResultsToJSON:         params.toJSON,
-		WaitForTxPoolToEmpty:  params.waitForTxPoolToEmpty,
-		ExecutionTime:         params.executionTime,
-		NumOfTxsPerTimeUnit:   params.numTxsPerTimeUnit,
-		TimeUnitForSendingTxs: params.numTimeUnits,
-		StateReadThreads:      params.stateReadThreads,
-		TxPoolReadThreads:     params.txpoolReadThreads,
+		Mnemonnic:            params.mnemonic,
+		LoadTestType:         params.loadTestType,
+		LoadTestName:         params.loadTestName,
+		JSONRPCUrl:           params.jsonRPCAddress,
+		ReceiptsTimeout:      params.receiptsTimeout,
+		TxPoolTimeout:        params.txPoolTimeout,
+		VUs:                  params.vus,
+		TxsPerUser:           params.txsPerUser,
+		BatchSize:            params.batchSize,
+		DynamicTxs:           params.dynamicTxs,
+		ResultsToJSON:        params.toJSON,
+		WaitForTxPoolToEmpty: params.waitForTxPoolToEmpty,
+		ExecutionTime:        params.executionTime,
+		StateReadThreads:     params.stateReadThreads,
+		TxPoolReadThreads:    params.txpoolReadThreads,
 	})
 
 	if err != nil {
