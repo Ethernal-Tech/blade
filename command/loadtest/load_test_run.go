@@ -1,11 +1,13 @@
 package loadtest
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/command"
 	"github.com/0xPolygon/polygon-edge/command/helper"
 	"github.com/0xPolygon/polygon-edge/loadtest/runner"
+	"github.com/0xPolygon/polygon-edge/server"
 	"github.com/spf13/cobra"
 )
 
@@ -21,20 +23,23 @@ func GetCommand() *cobra.Command {
 		Run:     runCommand,
 	}
 
-	helper.RegisterJSONRPCFlag(loadTestCmd)
-
 	setFlags(loadTestCmd)
 
 	return loadTestCmd
 }
 
 func preRunCommand(cmd *cobra.Command, _ []string) error {
-	params.jsonRPCAddress = helper.GetJSONRPCAddress(cmd)
-
 	return params.validateFlags()
 }
 
 func setFlags(cmd *cobra.Command) {
+	cmd.Flags().StringSliceVar(
+		&params.jsonRPCAddresses,
+		command.JSONRPCFlag,
+		[]string{fmt.Sprintf("%s:%d", helper.AllInterfacesBinding, server.DefaultJSONRPCPort)},
+		"the JSON-RPC interface addresses",
+	)
+
 	cmd.Flags().StringVar(
 		&params.mnemonic,
 		MnemonicFlag,
@@ -149,7 +154,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 		Mnemonnic:            params.mnemonic,
 		LoadTestType:         params.loadTestType,
 		LoadTestName:         params.loadTestName,
-		JSONRPCUrl:           params.jsonRPCAddress,
+		JSONRPCUrls:          params.jsonRPCAddresses,
 		ReceiptsTimeout:      params.receiptsTimeout,
 		TxPoolTimeout:        params.txPoolTimeout,
 		VUs:                  params.vus,

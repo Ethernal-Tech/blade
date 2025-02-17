@@ -77,7 +77,7 @@ func NewBaseLoadTestRunner(cfg LoadTestConfig) (*BaseLoadTestRunner, error) {
 		return nil, err
 	}
 
-	client, err := jsonrpc.NewEthClient(cfg.JSONRPCUrl)
+	client, err := jsonrpc.NewEthClient(cfg.JSONRPCUrls[0])
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func NewBaseLoadTestRunner(cfg LoadTestConfig) (*BaseLoadTestRunner, error) {
 		client:             client,
 		resultsCollectedCh: make(chan *stats),
 		done:               make(chan error),
-		batchSender:        newTransactionBatchSender(cfg.JSONRPCUrl),
+		batchSender:        newTransactionBatchSender(cfg.JSONRPCUrls[0]),
 		resultsCollector:   NewResultCollector(),
 	}, nil
 }

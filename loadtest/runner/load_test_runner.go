@@ -51,7 +51,7 @@ type LoadTestConfig struct {
 	LoadTestType string // LoadTestType is the type of load test.
 	LoadTestName string // LoadTestName is the name of the load test.
 
-	JSONRPCUrl      string        // JSONRPCUrl is the URL of the JSON-RPC server.
+	JSONRPCUrls     []string      // JSONRPCUrls is the URL list of the JSON-RPC servers.
 	ReceiptsTimeout time.Duration // ReceiptsTimeout is the timeout for waiting for transaction receipts.
 	TxPoolTimeout   time.Duration // TxPoolTimeout is the timeout for waiting for tx pool to empty.
 

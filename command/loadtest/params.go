@@ -2,8 +2,10 @@ package loadtest
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
+	"github.com/0xPolygon/polygon-edge/command/helper"
 	"github.com/0xPolygon/polygon-edge/loadtest/runner"
 )
 
@@ -39,13 +41,14 @@ var (
 		"and less or equal to txs-per-user")
 	errInvalidExecutionTime                 = errors.New("when set execution-time must be at least 1s or greater")
 	errInvalidExecutionTimeAndTxPoolTimeout = errors.New("txpool-timeout must be greater than execution-time")
+	errInvalidNumOfJsonRPCAddresses         = errors.New("at least one JSON-RPC address must be provided")
 )
 
 type loadTestParams struct {
-	mnemonic       string
-	loadTestType   string
-	loadTestName   string
-	jsonRPCAddress string
+	mnemonic         string
+	loadTestType     string
+	loadTestName     string
+	jsonRPCAddresses []string
 
 	receiptsTimeout time.Duration
 	txPoolTimeout   time.Duration
@@ -86,6 +89,17 @@ func (ltp *loadTestParams) validateFlags() error {
 
 	if ltp.batchSize < 1 || (ltp.batchSize > ltp.txsPerUser && ltp.executionTime == 0) {
 		return errInvalidBatchSize
+	}
+
+	if len(ltp.jsonRPCAddresses) == 0 {
+		return errInvalidNumOfJsonRPCAddresses
+	} else {
+		// validate each address
+		for _, addr := range ltp.jsonRPCAddresses {
+			if _, err := helper.ParseJSONRPCAddress(addr); err != nil {
+				return fmt.Errorf("failed to parse json rpc address: %s. Error: %w", addr, err)
+			}
+		}
 	}
 
 	if ltp.executionTime > 0 {
