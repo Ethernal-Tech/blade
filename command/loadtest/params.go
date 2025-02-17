@@ -41,7 +41,7 @@ var (
 		"and less or equal to txs-per-user")
 	errInvalidExecutionTime                 = errors.New("when set execution-time must be at least 1s or greater")
 	errInvalidExecutionTimeAndTxPoolTimeout = errors.New("txpool-timeout must be greater than execution-time")
-	errInvalidNumOfJsonRPCAddresses         = errors.New("at least one JSON-RPC address must be provided")
+	errInvalidNumOfJSONRPCAddresses         = errors.New("at least one JSON-RPC address must be provided")
 )
 
 type loadTestParams struct {
@@ -92,7 +92,7 @@ func (ltp *loadTestParams) validateFlags() error {
 	}
 
 	if len(ltp.jsonRPCAddresses) == 0 {
-		return errInvalidNumOfJsonRPCAddresses
+		return errInvalidNumOfJSONRPCAddresses
 	} else {
 		// validate each address
 		for _, addr := range ltp.jsonRPCAddresses {
