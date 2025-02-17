@@ -783,14 +783,14 @@ func (r *BaseLoadTestRunner) readState(ctx context.Context) {
 	}
 
 	for i := uint32(0); i < r.cfg.StateReadThreads; i++ {
-		for _, senderAddr := range senderAddrs {
-			go func(senderAddr types.Address) {
-				for {
-					select {
-					case <-ctx.Done():
-						return
-
-					default:
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					// read non stop the state of the accounts
+					for _, senderAddr := range senderAddrs {
 						_, err := r.client.GetBalance(senderAddr, jsonrpc.LatestBlockNumberOrHash)
 						if err != nil {
 							r.resultsCollector.BalanceReadErrorCh <- fmt.Errorf("failed to read balance for %s account: %w",
@@ -812,8 +812,8 @@ func (r *BaseLoadTestRunner) readState(ctx context.Context) {
 						r.resultsCollector.NonceReadCountCh <- struct{}{}
 					}
 				}
-			}(senderAddr)
-		}
+			}
+		}()
 	}
 }
 
@@ -846,12 +846,11 @@ func (r *BaseLoadTestRunner) readTxPool(ctx context.Context) {
 }
 
 // sendTransactionsInTime sends transactions for each virtual user (vu) within a specified time duration
-// It uses the execution-time, number of transactions per time unit, and time unit for sending transactions
-// For example:
-// - execution-time = 1m
-// - num-of-txs-per-time-unit = 10
-// - time-unit-for-sending-txs = 1s
-// It sends 10 transactions per second for 1 minute for each VU.
+// It uses the execution-time, and batch-size parameters to determine how many transactions per iteration
+// to send for each user. The function runs concurrently for each user using errgroup.
+// - if batch-size is 0 or 1, it sends transactions one by one
+// - if batch-size is greater than 1, it sends transactions in batches
+// (for example, 5 txns in batch each iteration)
 func (r *BaseLoadTestRunner) sendTransactionsInTime(account *account, chainID *big.Int,
 	bar *progressbar.ProgressBar, createTxnFn func(*account, *feeData, *big.Int) *types.Transaction,
 ) ([]types.Hash, []error, error) {
@@ -863,8 +862,9 @@ func (r *BaseLoadTestRunner) sendTransactionsInTime(account *account, chainID *b
 		sendErrors []error
 	)
 
-	numOfTxns := 1
+	numOfTxns := 1 // by default we will send transaction per transaction
 	if r.cfg.BatchSize > 0 {
+		// if batch size is set, then we send batch per batch
 		numOfTxns = r.cfg.BatchSize
 	}
 
