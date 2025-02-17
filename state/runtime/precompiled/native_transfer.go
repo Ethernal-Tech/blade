@@ -16,7 +16,7 @@ func (c *nativeTransfer) gas(input []byte, _ *chain.ForksInTime) uint64 {
 }
 
 func (c *nativeTransfer) run(input []byte, caller types.Address, host runtime.Host) ([]byte, error) {
-	if len(input) < 96 {
+	if len(input) < 3*types.HashLength {
 		return abiBoolFalse, runtime.ErrInvalidInputData
 	}
 
@@ -25,9 +25,9 @@ func (c *nativeTransfer) run(input []byte, caller types.Address, host runtime.Ho
 		return abiBoolFalse, runtime.ErrUnauthorizedCaller
 	}
 
-	from := types.BytesToAddress(input[0:32])
-	to := types.BytesToAddress(input[32:64])
-	amount := new(big.Int).SetBytes(input[64:96])
+	from := types.BytesToAddress(input[0:types.HashLength])
+	to := types.BytesToAddress(input[types.HashLength : 2*types.HashLength])
+	amount := new(big.Int).SetBytes(input[2*types.HashLength : 3*types.HashLength])
 
 	// state changes
 	if err := host.Transfer(from, to, amount); err != nil {

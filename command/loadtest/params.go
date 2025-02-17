@@ -30,12 +30,13 @@ const (
 )
 
 var (
-	ErrNoMnemonicProvided                   = errors.New("no mnemonic provided")
-	errNoLoadTestTypeProvided               = errors.New("no load test type provided")
-	errUnsupportedLoadTestType              = errors.New("unsupported load test type")
-	errInvalidVUs                           = errors.New("vus must be greater than 0")
-	errInvalidTxsPerUser                    = errors.New("txs-per-user must be greater than 0")
-	errInvalidBatchSize                     = errors.New("batch-size must be greater than 0 and less or equal to txs-per-user")
+	ErrNoMnemonicProvided      = errors.New("no mnemonic provided")
+	errNoLoadTestTypeProvided  = errors.New("no load test type provided")
+	errUnsupportedLoadTestType = errors.New("unsupported load test type")
+	errInvalidVUs              = errors.New("vus must be greater than 0")
+	errInvalidTxsPerUser       = errors.New("txs-per-user must be greater than 0")
+	errInvalidBatchSize        = errors.New("batch-size must be greater than 0 " +
+		"and less or equal to txs-per-user")
 	errInvalidExecutionTime                 = errors.New("when set execution-time must be at least 1s or greater")
 	errInvalidExecutionTimeAndTxPoolTimeout = errors.New("txpool-timeout must be greater than execution-time")
 )
