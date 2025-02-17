@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/helper/common"
 	"github.com/0xPolygon/polygon-edge/jsonrpc"
@@ -776,6 +777,7 @@ func (r *BaseLoadTestRunner) readState(ctx context.Context) {
 		return
 	}
 
+	contractMap := contracts.GetProxyImplementationMapping()
 	senderAddrs := make([]types.Address, len(r.vus))
 
 	for i, sender := range r.vus {
@@ -810,6 +812,18 @@ func (r *BaseLoadTestRunner) readState(ctx context.Context) {
 						}
 
 						r.resultsCollector.NonceReadCountCh <- struct{}{}
+					}
+
+					for _, contractAddr := range contractMap {
+						_, err := r.client.GetCode(contractAddr, jsonrpc.LatestBlockNumberOrHash)
+						if err != nil {
+							r.resultsCollector.CodeReadErrorCh <- fmt.Errorf("failed to read code for %s contract: %w",
+								contractAddr, err)
+
+							continue
+						}
+
+						r.resultsCollector.CodeReadCountCh <- struct{}{}
 					}
 				}
 			}

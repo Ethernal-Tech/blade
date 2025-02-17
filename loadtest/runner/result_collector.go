@@ -21,6 +21,11 @@ type ResultCollector struct {
 	TxPoolStatusReadErrorCh chan error
 	TxPoolStatusReadCount   int
 	TxPoolStatusReadErrors  []error
+
+	CodeReadCountCh chan struct{}
+	CodeReadErrorCh chan error
+	CodeReadCount   int
+	CodeReadErrors  []error
 }
 
 // NewResultCollector creates a new ResultCollector instance.
@@ -32,6 +37,8 @@ func NewResultCollector() *ResultCollector {
 		NonceReadErrorCh:        make(chan error, 3000),
 		TxPoolStatusReadCountCh: make(chan struct{}, 3000),
 		TxPoolStatusReadErrorCh: make(chan error, 3000),
+		CodeReadCountCh:         make(chan struct{}, 3000),
+		CodeReadErrorCh:         make(chan error, 3000),
 	}
 }
 
@@ -53,6 +60,10 @@ func (r *ResultCollector) CollectResults(ctx context.Context) {
 			r.TxPoolStatusReadCount++
 		case err := <-r.TxPoolStatusReadErrorCh:
 			r.TxPoolStatusReadErrors = append(r.TxPoolStatusReadErrors, err)
+		case <-r.CodeReadCountCh:
+			r.CodeReadCount++
+		case err := <-r.CodeReadErrorCh:
+			r.CodeReadErrors = append(r.CodeReadErrors, err)
 		}
 	}
 }
@@ -62,6 +73,7 @@ func (r *ResultCollector) PrintResults() {
 	fmt.Println("Total balance read count:", r.BalanceReadCount)
 	fmt.Println("Total nonce read count:", r.NonceReadCount)
 	fmt.Println("Total tx pool status read count:", r.TxPoolStatusReadCount)
+	fmt.Println("Total code read count:", r.CodeReadCount)
 
 	if len(r.BalanceReadErrors) > 0 {
 		fmt.Println("====================================")
@@ -86,6 +98,15 @@ func (r *ResultCollector) PrintResults() {
 		fmt.Println("Tx pool status read errors:")
 
 		for i, err := range r.TxPoolStatusReadErrors {
+			fmt.Printf("%d: %v\n", i, err)
+		}
+	}
+
+	if len(r.CodeReadErrors) > 0 {
+		fmt.Println("====================================")
+		fmt.Println("Code read errors:")
+
+		for i, err := range r.CodeReadErrors {
 			fmt.Printf("%d: %v\n", i, err)
 		}
 	}
