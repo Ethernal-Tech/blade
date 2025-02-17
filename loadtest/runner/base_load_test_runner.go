@@ -771,9 +771,9 @@ func (r *BaseLoadTestRunner) sendTransactions(createTxnFn func(*account, *feeDat
 
 // readState continuously reads nonce and balance from blockchain
 // for each account, with a max of StateReadThreads concurrent workers.
-func (r *BaseLoadTestRunner) readState(ctx context.Context) error {
+func (r *BaseLoadTestRunner) readState(ctx context.Context) {
 	if r.cfg.StateReadThreads == 0 {
-		return nil
+		return
 	}
 
 	senderAddrs := make([]types.Address, len(r.vus))
@@ -793,7 +793,9 @@ func (r *BaseLoadTestRunner) readState(ctx context.Context) error {
 					default:
 						_, err := r.client.GetBalance(senderAddr, jsonrpc.LatestBlockNumberOrHash)
 						if err != nil {
-							r.resultsCollector.BalanceReadErrorCh <- err
+							r.resultsCollector.BalanceReadErrorCh <- fmt.Errorf("failed to read balance for %s account: %w",
+								senderAddr, err)
+
 							continue
 						}
 
@@ -801,7 +803,9 @@ func (r *BaseLoadTestRunner) readState(ctx context.Context) error {
 
 						_, err = r.client.GetNonce(senderAddr, jsonrpc.LatestBlockNumberOrHash)
 						if err != nil {
-							r.resultsCollector.NonceReadErrorCh <- err
+							r.resultsCollector.NonceReadErrorCh <- fmt.Errorf("failed to read nonce for %s account: %w",
+								senderAddr, err)
+
 							continue
 						}
 
@@ -811,14 +815,12 @@ func (r *BaseLoadTestRunner) readState(ctx context.Context) error {
 			}(senderAddr)
 		}
 	}
-
-	return nil
 }
 
 // readTxPool will read the transaction pool continuously until the context is canceled.
-func (r *BaseLoadTestRunner) readTxPool(ctx context.Context) error {
+func (r *BaseLoadTestRunner) readTxPool(ctx context.Context) {
 	if r.cfg.TxPoolReadThreads == 0 {
-		return nil
+		return
 	}
 
 	for i := uint32(0); i < r.cfg.TxPoolReadThreads; i++ {
@@ -832,6 +834,7 @@ func (r *BaseLoadTestRunner) readTxPool(ctx context.Context) error {
 					_, err := r.client.TxPoolStatus()
 					if err != nil {
 						r.resultsCollector.TxPoolStatusReadErrorCh <- err
+
 						continue
 					}
 
@@ -840,8 +843,6 @@ func (r *BaseLoadTestRunner) readTxPool(ctx context.Context) error {
 			}
 		}()
 	}
-
-	return nil
 }
 
 // sendTransactionsInTime sends transactions for each virtual user (vu) within a specified time duration

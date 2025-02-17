@@ -62,9 +62,11 @@ func (r *ResultCollector) PrintResults() {
 	fmt.Println("Total balance read count:", r.BalanceReadCount)
 	fmt.Println("Total nonce read count:", r.NonceReadCount)
 	fmt.Println("Total tx pool status read count:", r.TxPoolStatusReadCount)
+
 	if len(r.BalanceReadErrors) > 0 {
 		fmt.Println("====================================")
 		fmt.Println("Balance read errors:")
+
 		for i, err := range r.BalanceReadErrors {
 			fmt.Printf("%d: %v\n", i, err)
 		}
@@ -73,6 +75,7 @@ func (r *ResultCollector) PrintResults() {
 	if len(r.NonceReadErrors) > 0 {
 		fmt.Println("====================================")
 		fmt.Println("Nonce read errors:")
+
 		for i, err := range r.NonceReadErrors {
 			fmt.Printf("%d: %v\n", i, err)
 		}
@@ -81,6 +84,7 @@ func (r *ResultCollector) PrintResults() {
 	if len(r.TxPoolStatusReadErrors) > 0 {
 		fmt.Println("====================================")
 		fmt.Println("Tx pool status read errors:")
+
 		for i, err := range r.TxPoolStatusReadErrors {
 			fmt.Printf("%d: %v\n", i, err)
 		}
