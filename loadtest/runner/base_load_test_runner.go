@@ -791,14 +791,17 @@ func (r *BaseLoadTestRunner) readState(ctx context.Context) {
 
 	contractMap := contracts.GetProxyImplementationMapping()
 	senderAddrs := make([]types.Address, len(r.vus))
-	client := r.clients.getClient()
 
 	for i, sender := range r.vus {
 		senderAddrs[i] = sender.key.Address()
 	}
 
-	for i := uint32(0); i < r.cfg.StateReadThreads; i++ {
+	for i := 0; i < r.cfg.StateReadThreads; i++ {
+		i := i
+
 		go func() {
+			client := r.clients.getClientForAccount(i)
+
 			for {
 				select {
 				case <-ctx.Done():
@@ -812,6 +815,7 @@ func (r *BaseLoadTestRunner) readState(ctx context.Context) {
 
 					for _, receiver := range r.receivers {
 						r.readBalance(client, receiver)
+						r.readNonce(client, receiver)
 					}
 
 					for _, contractAddr := range contractMap {
@@ -829,10 +833,12 @@ func (r *BaseLoadTestRunner) readTxPool(ctx context.Context) {
 		return
 	}
 
-	client := r.clients.getClient()
+	for i := 0; i < r.cfg.TxPoolReadThreads; i++ {
+		i := i
 
-	for i := uint32(0); i < r.cfg.TxPoolReadThreads; i++ {
 		go func() {
+			client := r.clients.getClientForAccount(i)
+
 			for {
 				select {
 				case <-ctx.Done():

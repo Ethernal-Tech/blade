@@ -124,14 +124,14 @@ func setFlags(cmd *cobra.Command) {
 		"the duration of the load test expressed in time. When set, the load test will run for the specified duration",
 	)
 
-	cmd.Flags().Uint32Var(
+	cmd.Flags().IntVar(
 		&params.stateReadThreads,
 		stateReadThreadsFlag,
 		1,
 		"the number of state read threads (threads that read the state of the blockchain)",
 	)
 
-	cmd.Flags().Uint32Var(
+	cmd.Flags().IntVar(
 		&params.txpoolReadThreads,
 		txpoolReadThreadsFlag,
 		1,
