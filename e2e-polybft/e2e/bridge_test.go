@@ -219,7 +219,7 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 		internalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(childEthEndpoint))
 		require.NoError(t, err)
 
-		lastCommittedIDMethod := contractsapi.BridgeStorage.Abi.GetMethod("lastCommitted")
+		lastCommittedIDMethod := contractsapi.BridgeStorage.Abi.GetMethod("lastCommittedE2I")
 		lastCommittedIDInput, err := lastCommittedIDMethod.Encode([]interface{}{chainID.Uint64()})
 		require.NoError(t, err)
 
