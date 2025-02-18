@@ -247,7 +247,7 @@ func decryptKey(keyProtected *encryptedKey, auth string) (keyBytes []byte, keyID
 func getKDFKey(cryptoJSON Crypto, auth string) ([]byte, error) {
 	authArray := []byte(auth)
 
-	salt, err := hex.DecodeString(cryptoJSON.KDFParams["salt"].(string))
+	salt, err := hex.DecodeString(cryptoJSON.KDFParams["salt"].(string)) //nolint:forcetypeassert
 	if err != nil {
 		return nil, err
 	}
