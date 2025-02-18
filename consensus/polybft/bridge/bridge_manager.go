@@ -405,7 +405,9 @@ func (b *bridgeEventManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSign
 			return nil, fmt.Errorf("could not get largest retry pending batch. Error: %w", err)
 		}
 
-		signedBridgeBatches = append(signedBridgeBatches, largestRetryBatch)
+		if largestRetryBatch != nil {
+			signedBridgeBatches = append(signedBridgeBatches, largestRetryBatch)
+		}
 	}
 
 	return signedBridgeBatches, nil
