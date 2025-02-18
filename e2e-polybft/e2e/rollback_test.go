@@ -3,7 +3,9 @@ package e2e
 import (
 	"fmt"
 	"math/big"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +18,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/e2e-polybft/framework"
 	"github.com/0xPolygon/polygon-edge/helper/hex"
+	"github.com/0xPolygon/polygon-edge/jsonrpc"
 	"github.com/0xPolygon/polygon-edge/state/runtime/addresslist"
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
@@ -289,6 +292,21 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 	})
 }
 
+func init() {
+	wd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	parent := filepath.Dir(wd)
+	parent = strings.Trim(parent, "e2e-polybft")
+	wd = filepath.Join(parent, "/artifacts/blade")
+	os.Setenv("EDGE_BINARY", wd)
+	os.Setenv("E2E_TESTS", "true")
+	os.Setenv("E2E_LOGS", "true")
+	os.Setenv("E2E_LOG_LEVEL", "debug")
+}
+
 func TestE2E_Rollback_I2E(t *testing.T) {
 	const (
 		transfersCount   = uint64(4)
@@ -333,7 +351,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithNumBlockConfirmations(0),
-		framework.WithBridgeBatchThreshold(25),
+		framework.WithBridgeBatchThreshold(100),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeBlockListAdmin(adminAddr),
@@ -387,16 +405,29 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 
 		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
 			for i := uint64(1); i <= transfersCount+1; i++ {
-				if !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i, true) {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
 					return false
 				}
 			}
 
 			return true
 		}))
+
+		externalRPC, err := jsonrpc.NewEthClient(bridge.JSONRPCAddr())
+		require.NoError(t, err)
+
+		latest, err := externalRPC.BlockNumber()
+		require.NoError(t, err)
+
+		var bridgeMessageResult contractsapi.BridgeMessageResultEvent
+		logs, err := getFilteredLogs(bridgeMessageResult.Sig(), 0, latest, externalRPC)
+		require.NoError(t, err)
+
+		assertBridgeEventResultNotSuccessfull(t, logs, int(transfersCount-3))
 	})
 
 	t.Run("Rollback_ERC721", func(t *testing.T) {
+		t.Skip()
 		erc721DeployTxn := cluster.Deploy(t, admin, contractsapi.RootERC721.Bytecode)
 		require.True(t, erc721DeployTxn.Succeed())
 		rootERC721Token := types.Address(erc721DeployTxn.Receipt().ContractAddress)

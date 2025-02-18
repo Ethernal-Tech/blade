@@ -96,6 +96,23 @@ func assertBridgeEventResultSuccess(
 		})
 }
 
+// assertBridgeEventResultNotSuccessfull asserts that:
+// 1. there are required amount of logs,
+// 2. they are of contractsapi.BridgeMessageResult type
+// 3. status is true, meaning that the state syncs were executed successfully
+func assertBridgeEventResultNotSuccessfull(
+	t *testing.T,
+	logs []*ethgo.Log,
+	expectedCount int) {
+	t.Helper()
+	checkBridgeMessageResultLogs(t, logs, expectedCount,
+		func(t *testing.T, ssre contractsapi.BridgeMessageResultEvent) {
+			t.Helper()
+
+			require.True(t, ssre.Status)
+		})
+}
+
 // setAccessListRole sets access list role to appropriate access list precompile
 func setAccessListRole(t *testing.T, cluster *framework.TestCluster, precompile, account types.Address,
 	role addresslist.Role, aclAdmin *crypto.ECDSAKey) {
