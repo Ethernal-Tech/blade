@@ -214,6 +214,8 @@ func (b *bridge) GetTransactions(blockInfo oracle.NewBlockInfo) ([]*types.Transa
 
 				txs = append(txs, tx)
 			}
+
+			bridgeManager.ClearPendingLists()
 		}
 	}
 

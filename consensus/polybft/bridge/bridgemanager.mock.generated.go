@@ -135,6 +135,38 @@ func (_c *BridgeManagerMock_BridgeBatch_Call) RunAndReturn(run func(uint64) ([]*
 	return _c
 }
 
+// ClearPendingLists provides a mock function with given fields:
+func (_m *BridgeManagerMock) ClearPendingLists() {
+	_m.Called()
+}
+
+// BridgeManagerMock_ClearPendingLists_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ClearPendingLists'
+type BridgeManagerMock_ClearPendingLists_Call struct {
+	*mock.Call
+}
+
+// ClearPendingLists is a helper method to define mock.On call
+func (_e *BridgeManagerMock_Expecter) ClearPendingLists() *BridgeManagerMock_ClearPendingLists_Call {
+	return &BridgeManagerMock_ClearPendingLists_Call{Call: _e.mock.On("ClearPendingLists")}
+}
+
+func (_c *BridgeManagerMock_ClearPendingLists_Call) Run(run func()) *BridgeManagerMock_ClearPendingLists_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *BridgeManagerMock_ClearPendingLists_Call) Return() *BridgeManagerMock_ClearPendingLists_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *BridgeManagerMock_ClearPendingLists_Call) RunAndReturn(run func()) *BridgeManagerMock_ClearPendingLists_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Close provides a mock function with given fields:
 func (_m *BridgeManagerMock) Close() {
 	_m.Called()

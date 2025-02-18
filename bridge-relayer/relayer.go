@@ -449,8 +449,8 @@ func (r *BridgeRelayer) Start() {
 					if batch.Batch.DestinationChainID.Cmp(r.externalChainID) != 0 &&
 						batch.Batch.SourceChainID.Cmp(r.externalChainID) != 0 {
 						continue // skip batches from other bridges
-					} else if batch.Batch.SourceChainID.Cmp(r.externalChainID) == 0 && !batch.Batch.IsRollback {
-						continue // skip it if not rollback
+					} else if batch.Batch.SourceChainID.Cmp(r.externalChainID) == 0 {
+						continue
 					}
 
 					if err := r.sendSignedBridgeMessageBatch(&batch); err != nil {
@@ -579,19 +579,9 @@ func (r *BridgeRelayer) sendSignedBridgeMessageBatch(batch *contractsapi.SignedB
 	if batch.Batch.SourceChainID.Cmp(r.externalChainID) == 0 {
 		destinationGateway = r.internalGatewayAddr
 		destinationRelayer = r.internalClient
-
-		if batch.Batch.IsRollback {
-			destinationGateway = r.externalGatewayAddr
-			destinationRelayer = r.externalClient
-		}
 	} else {
 		destinationGateway = r.externalGatewayAddr
 		destinationRelayer = r.externalClient
-
-		if batch.Batch.IsRollback {
-			destinationGateway = r.internalGatewayAddr
-			destinationRelayer = r.internalClient
-		}
 	}
 
 	input, err := (&contractsapi.ReceiveBatchGatewayFn{

@@ -393,7 +393,7 @@ func main() {
 			[]string{
 				"BridgeMessageResult",
 				"BridgeMsg",
-				"BridgeBatchResult",
+				"BridgeBatchProcessed",
 			},
 		},
 	}

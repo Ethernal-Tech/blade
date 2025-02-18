@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
+	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/Ethernal-Tech/ethgo"
 	"github.com/Ethernal-Tech/ethgo/contract"
 	"github.com/stretchr/testify/mock"
@@ -61,6 +62,14 @@ func (m *SystemStateMock) GetValidatorSetByNumber(numberOfValidatorSet *big.Int)
 	}
 
 	return &contractsapi.SignedValidatorSet{}, nil
+}
+
+func (m *SystemStateMock) GetBatchValidation(hash types.Hash) (*big.Int, error) {
+	args := m.Called()
+
+	num, _ := args.Get(0).(*big.Int)
+
+	return num, nil
 }
 
 func (m *SystemStateMock) GetEpoch() (uint64, error) {
