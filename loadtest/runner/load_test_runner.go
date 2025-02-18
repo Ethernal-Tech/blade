@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/crypto"
-	"github.com/0xPolygon/polygon-edge/types"
 )
 
 const (
@@ -17,8 +16,6 @@ const (
 	ERC721TestType = "erc721"
 	MixedTestType  = "mixed"
 )
-
-var receiverAddr = types.StringToAddress("0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF")
 
 func IsLoadTestSupported(loadTestType string) bool {
 	ltp := strings.ToLower(loadTestType)
@@ -69,6 +66,8 @@ type LoadTestConfig struct {
 	ExecutionTime     time.Duration // ExecutionTime is the duration for which the load test should run.
 	StateReadThreads  uint32        // StateReadThreads is the number of threads to read state.
 	TxPoolReadThreads uint32        // TxPoolReadThreads is the number of threads to read tx pool.
+
+	ReceiversNum int // ReceiversNum is the number of receivers for different types of tokens
 }
 
 // LoadTestRunner represents a runner for load tests.

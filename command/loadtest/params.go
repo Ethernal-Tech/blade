@@ -29,6 +29,8 @@ const (
 	executionTimeFlag     = "execution-time"
 	stateReadThreadsFlag  = "state-read-threads"
 	txpoolReadThreadsFlag = "txpool-read-threads"
+
+	receiversNumFlag = "receivers-num"
 )
 
 var (
@@ -42,6 +44,7 @@ var (
 	errInvalidExecutionTime                 = errors.New("when set execution-time must be at least 1s or greater")
 	errInvalidExecutionTimeAndTxPoolTimeout = errors.New("txpool-timeout must be greater than execution-time")
 	errInvalidNumOfJSONRPCAddresses         = errors.New("at least one JSON-RPC address must be provided")
+	errInvalidReceiversNum                  = errors.New("receivers-num must be greater than 0")
 )
 
 type loadTestParams struct {
@@ -64,6 +67,8 @@ type loadTestParams struct {
 	executionTime     time.Duration
 	stateReadThreads  uint32
 	txpoolReadThreads uint32
+
+	receiversNum int
 }
 
 func (ltp *loadTestParams) validateFlags() error {
@@ -110,6 +115,10 @@ func (ltp *loadTestParams) validateFlags() error {
 		if ltp.txPoolTimeout < ltp.executionTime {
 			return errInvalidExecutionTimeAndTxPoolTimeout
 		}
+	}
+
+	if ltp.receiversNum < 1 {
+		return errInvalidReceiversNum
 	}
 
 	return nil

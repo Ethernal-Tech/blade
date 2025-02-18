@@ -54,6 +54,7 @@ type BaseLoadTestRunner struct {
 
 	resultsCollector *ResultCollector
 	clients          ethClientList
+	receivers        receiversList
 }
 
 // NewBaseLoadTestRunner creates a new instance of BaseLoadTestRunner with the provided LoadTestConfig.
@@ -64,22 +65,27 @@ type BaseLoadTestRunner struct {
 func NewBaseLoadTestRunner(cfg LoadTestConfig) (*BaseLoadTestRunner, error) {
 	key, err := wallet.NewWalletFromMnemonic(cfg.Mnemonnic)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create wallet from mnemonic: %w", err)
 	}
 
 	raw, err := key.MarshallPrivateKey()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to marshal private key for load test account: %w", err)
 	}
 
 	ecdsaKey, err := crypto.NewECDSAKeyFromRawPrivECDSA(raw)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create ECDSA key for load test account: %w", err)
 	}
 
 	ethClientList, err := newEthClientList(cfg.JSONRPCUrls)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create eth client list: %w", err)
+	}
+
+	receiversList, err := newReceiversList(cfg.ReceiversNum)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create receivers list: %w", err)
 	}
 
 	return &BaseLoadTestRunner{
@@ -90,6 +96,7 @@ func NewBaseLoadTestRunner(cfg LoadTestConfig) (*BaseLoadTestRunner, error) {
 		batchSender:        newTransactionBatchSender(cfg.JSONRPCUrls[0]),
 		resultsCollector:   NewResultCollector(),
 		clients:            ethClientList,
+		receivers:          receiversList,
 	}, nil
 }
 
@@ -800,37 +807,16 @@ func (r *BaseLoadTestRunner) readState(ctx context.Context) {
 				default:
 					// read non stop the state of the accounts
 					for _, senderAddr := range senderAddrs {
-						_, err := client.GetBalance(senderAddr, jsonrpc.LatestBlockNumberOrHash)
-						if err != nil {
-							r.resultsCollector.BalanceReadErrorCh <- fmt.Errorf("failed to read balance for %s account: %w",
-								senderAddr, err)
+						r.readBalance(client, senderAddr)
+						r.readNonce(client, senderAddr)
+					}
 
-							continue
-						}
-
-						r.resultsCollector.BalanceReadCountCh <- struct{}{}
-
-						_, err = client.GetNonce(senderAddr, jsonrpc.LatestBlockNumberOrHash)
-						if err != nil {
-							r.resultsCollector.NonceReadErrorCh <- fmt.Errorf("failed to read nonce for %s account: %w",
-								senderAddr, err)
-
-							continue
-						}
-
-						r.resultsCollector.NonceReadCountCh <- struct{}{}
+					for _, receiver := range r.receivers {
+						r.readBalance(client, receiver)
 					}
 
 					for _, contractAddr := range contractMap {
-						_, err := client.GetCode(contractAddr, jsonrpc.LatestBlockNumberOrHash)
-						if err != nil {
-							r.resultsCollector.CodeReadErrorCh <- fmt.Errorf("failed to read code for %s contract: %w",
-								contractAddr, err)
-
-							continue
-						}
-
-						r.resultsCollector.CodeReadCountCh <- struct{}{}
+						r.readCode(client, contractAddr)
 					}
 				}
 			}
@@ -1065,6 +1051,48 @@ func (r *BaseLoadTestRunner) calculateTotalTxs() int64 {
 	}
 
 	return totalTxs
+}
+
+// readBalance reads the balance of the given address from the blockchain
+// and reports the result to the results collector.
+func (r *BaseLoadTestRunner) readBalance(client *jsonrpc.EthClient, addr types.Address) {
+	_, err := client.GetBalance(addr, jsonrpc.LatestBlockNumberOrHash)
+	if err != nil {
+		r.resultsCollector.BalanceReadErrorCh <- fmt.Errorf("failed to read balance for %s account: %w",
+			addr, err)
+
+		return
+	}
+
+	r.resultsCollector.BalanceReadCountCh <- struct{}{}
+}
+
+// readNonce reads the nonce of the given address from the blockchain
+// and reports the result to the results collector.
+func (r *BaseLoadTestRunner) readNonce(client *jsonrpc.EthClient, addr types.Address) {
+	_, err := client.GetNonce(addr, jsonrpc.LatestBlockNumberOrHash)
+	if err != nil {
+		r.resultsCollector.NonceReadErrorCh <- fmt.Errorf("failed to read nonce for %s account: %w",
+			addr, err)
+
+		return
+	}
+
+	r.resultsCollector.NonceReadCountCh <- struct{}{}
+}
+
+// readCode reads the code of the given contract address from the blockchain
+// and reports the result to the results collector.
+func (r *BaseLoadTestRunner) readCode(client *jsonrpc.EthClient, addr types.Address) {
+	_, err := client.GetCode(addr, jsonrpc.LatestBlockNumberOrHash)
+	if err != nil {
+		r.resultsCollector.CodeReadErrorCh <- fmt.Errorf("failed to read code for %s contract: %w",
+			addr, err)
+
+		return
+	}
+
+	r.resultsCollector.CodeReadCountCh <- struct{}{}
 }
 
 // getFeeData retrieves fee data based on the provided JSON-RPC Ethereum client and dynamicTxs flag.

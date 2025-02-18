@@ -86,7 +86,7 @@ func (e *EOARunner) createEOATransaction(account *account, feeData *feeData,
 	if e.cfg.DynamicTxs {
 		return types.NewTx(types.NewDynamicFeeTx(
 			types.WithNonce(account.nonce),
-			types.WithTo(&receiverAddr),
+			types.WithTo(e.receivers.getReceiverForSender(account.index)),
 			types.WithValue(ethgo.Gwei(1)),
 			types.WithGas(21000),
 			types.WithFrom(account.key.Address()),
@@ -98,7 +98,7 @@ func (e *EOARunner) createEOATransaction(account *account, feeData *feeData,
 
 	return types.NewTx(types.NewLegacyTx(
 		types.WithNonce(account.nonce),
-		types.WithTo(&receiverAddr),
+		types.WithTo(e.receivers.getReceiverForSender(account.index)),
 		types.WithValue(ethgo.Gwei(1)),
 		types.WithGas(21000),
 		types.WithGasPrice(feeData.gasPrice),

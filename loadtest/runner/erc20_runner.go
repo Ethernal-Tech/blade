@@ -151,7 +151,7 @@ func (e *ERC20Runner) deployERC20Token() error {
 	e.erc20TokenArtifact = artifact
 
 	input, err = e.erc20TokenArtifact.Abi.Methods["transfer"].Encode(map[string]interface{}{
-		"receiver":  receiverAddr,
+		"receiver":  e.receivers.getReceiver(),
 		"numTokens": big.NewInt(1),
 	})
 	if err != nil {

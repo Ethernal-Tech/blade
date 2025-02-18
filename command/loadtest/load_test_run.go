@@ -138,6 +138,13 @@ func setFlags(cmd *cobra.Command) {
 		"the number of txpool read threads (threads that read the transaction pool)",
 	)
 
+	cmd.Flags().IntVar(
+		&params.receiversNum,
+		receiversNumFlag,
+		1,
+		"the number of receivers for tokens being sent in load test",
+	)
+
 	_ = cmd.MarkFlagRequired(MnemonicFlag)
 	_ = cmd.MarkFlagRequired(loadTestTypeFlag)
 
@@ -166,6 +173,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 		ExecutionTime:        params.executionTime,
 		StateReadThreads:     params.stateReadThreads,
 		TxPoolReadThreads:    params.txpoolReadThreads,
+		ReceiversNum:         params.receiversNum,
 	})
 
 	if err != nil {
