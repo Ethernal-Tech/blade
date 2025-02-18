@@ -132,7 +132,7 @@ func (e *ERC20Runner) deployERC20Token() error {
 	))
 
 	txRelayer, err := txrelayer.NewTxRelayer(
-		txrelayer.WithClient(e.client),
+		txrelayer.WithClient(e.clients.getClient()),
 		txrelayer.WithReceiptsTimeout(e.cfg.ReceiptsTimeout))
 	if err != nil {
 		return err
@@ -181,8 +181,9 @@ func (e *ERC20Runner) mintERC20TokenToVUs() error {
 		fmt.Printf("Minting ERC20 tokens took %s\n", time.Since(start))
 	}()
 
+	client := e.clients.getClient()
 	txRelayer, err := txrelayer.NewTxRelayer(
-		txrelayer.WithClient(e.client),
+		txrelayer.WithClient(client),
 		txrelayer.WithoutNonceGet(),
 		txrelayer.WithReceiptsTimeout(e.cfg.ReceiptsTimeout),
 	)
@@ -190,7 +191,7 @@ func (e *ERC20Runner) mintERC20TokenToVUs() error {
 		return err
 	}
 
-	nonce, err := e.client.GetNonce(e.loadTestAccount.key.Address(), jsonrpc.PendingBlockNumberOrHash)
+	nonce, err := client.GetNonce(e.loadTestAccount.key.Address(), jsonrpc.PendingBlockNumberOrHash)
 	if err != nil {
 		return err
 	}

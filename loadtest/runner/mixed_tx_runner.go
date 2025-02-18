@@ -154,8 +154,9 @@ func (m *MixedTxRunner) createTransaction(account *account, feeData *feeData, ch
 
 // estimateGas estimates the gas for ERC transaction types
 func (m *MixedTxRunner) estimateGas() error {
+	client := m.clients.getClient()
 	estimateGasFn := func(tx *types.Transaction) uint64 {
-		gasLimit, err := m.client.EstimateGas(txrelayer.ConvertTxnToCallMsg(tx))
+		gasLimit, err := client.EstimateGas(txrelayer.ConvertTxnToCallMsg(tx))
 		if err != nil {
 			gasLimit = txrelayer.DefaultGasLimit
 		}
@@ -163,12 +164,12 @@ func (m *MixedTxRunner) estimateGas() error {
 		return gasLimit * 2 // double it just in case
 	}
 
-	chainID, err := m.client.ChainID()
+	chainID, err := client.ChainID()
 	if err != nil {
 		return err
 	}
 
-	feeData, err := getFeeData(m.client, m.cfg.DynamicTxs)
+	feeData, err := getFeeData(client, m.cfg.DynamicTxs)
 	if err != nil {
 		return err
 	}

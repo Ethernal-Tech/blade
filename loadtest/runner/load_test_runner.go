@@ -27,6 +27,7 @@ func IsLoadTestSupported(loadTestType string) bool {
 }
 
 type account struct {
+	index int
 	nonce uint64
 	key   *crypto.ECDSAKey
 }
