@@ -736,13 +736,7 @@ func (b *bridgeEventManager) handleRetry(dbTx *bolt.Tx, systemState systemstate.
 		return
 	}
 
-	for _, retryBatch := range b.retryBatches {
-		hash, err := retryBatch.Hash()
-		if err != nil {
-			b.logger.Error("could not generate a hash for retry bridge batch", "err", err)
-			continue
-		}
-
+	for hash := range b.retryBatches {
 		err = b.buildRetryBridgeBatch(hash, blockNumber.Uint64(), dbTx)
 		if err != nil {
 			b.logger.Error("could not create retry bridge batch", "err", err)
@@ -750,8 +744,8 @@ func (b *bridgeEventManager) handleRetry(dbTx *bolt.Tx, systemState systemstate.
 	}
 }
 
-func (b *bridgeEventManager) buildRetryBridgeBatch(hash types.Hash, blockNumber uint64, dbTx *bolt.Tx) error {
-	rb := b.retryBatches[hash]
+func (b *bridgeEventManager) buildRetryBridgeBatch(primaryHash types.Hash, blockNumber uint64, dbTx *bolt.Tx) error {
+	rb := b.retryBatches[primaryHash]
 	pendingBatch := PendingBridgeBatch{
 		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
 			Messages:           rb.Messages,
@@ -798,8 +792,8 @@ func (b *bridgeEventManager) buildRetryBridgeBatch(hash types.Hash, blockNumber 
 		DestinationChainID: b.externalChainID,
 	})
 
-	pendingRetryBatches := b.pendingRetryBatches[hash]
-	b.pendingRetryBatches[hash] = append(pendingRetryBatches, &pendingBatch)
+	pendingRetryBatches := b.pendingRetryBatches[primaryHash]
+	b.pendingRetryBatches[primaryHash] = append(pendingRetryBatches, &pendingBatch)
 
 	return nil
 }
