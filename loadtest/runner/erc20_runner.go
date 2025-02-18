@@ -174,6 +174,7 @@ func (e *ERC20Runner) mintERC20TokenToVUs() error {
 
 	start := time.Now().UTC()
 	bar := progressbar.Default(int64(e.cfg.VUs), "Minting ERC20 tokens to VUs")
+	client := e.clients.getClient()
 
 	defer func() {
 		_ = bar.Close()
@@ -181,7 +182,6 @@ func (e *ERC20Runner) mintERC20TokenToVUs() error {
 		fmt.Printf("Minting ERC20 tokens took %s\n", time.Since(start))
 	}()
 
-	client := e.clients.getClient()
 	txRelayer, err := txrelayer.NewTxRelayer(
 		txrelayer.WithClient(client),
 		txrelayer.WithoutNonceGet(),

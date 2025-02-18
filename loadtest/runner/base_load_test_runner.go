@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"math/rand"
 	"os"
 	"sort"
 	"sync"
@@ -50,11 +49,10 @@ type BaseLoadTestRunner struct {
 	resultsCollectedCh chan *stats
 	done               chan error
 
-	batchSender *TransactionBatchSender
-
 	resultsCollector *ResultCollector
 	clients          ethClientList
 	receivers        receiversList
+	batchSenders     batchSendersList
 }
 
 // NewBaseLoadTestRunner creates a new instance of BaseLoadTestRunner with the provided LoadTestConfig.
@@ -93,7 +91,7 @@ func NewBaseLoadTestRunner(cfg LoadTestConfig) (*BaseLoadTestRunner, error) {
 		loadTestAccount:    &account{key: ecdsaKey},
 		resultsCollectedCh: make(chan *stats),
 		done:               make(chan error),
-		batchSender:        newTransactionBatchSender(cfg.JSONRPCUrls[0]),
+		batchSenders:       newBatchSenders(cfg.JSONRPCUrls),
 		resultsCollector:   NewResultCollector(),
 		clients:            ethClientList,
 		receivers:          receiversList,
@@ -254,6 +252,7 @@ func (r *BaseLoadTestRunner) waitForTxPoolToEmpty() error {
 // if there is a predefined number of empty blocks, it stops the results gathering before the timer.
 func (r *BaseLoadTestRunner) waitForReceiptsParallel(ctx context.Context) {
 	client := r.clients.getClient()
+
 	startBlock, err := client.BlockNumber()
 	if err != nil {
 		fmt.Println("Error getting start block on gathering block info:", err)
@@ -719,15 +718,15 @@ func (r *BaseLoadTestRunner) sendTransactions(createTxnFn func(*account, *feeDat
 	fmt.Println("=============================================================")
 
 	client := r.clients.getClient()
+	totalTxs := r.calculateTotalTxs()
+	foundErrs := make([]error, 0)
+	bar := progressbar.Default(totalTxs, "Sending transactions")
+	start := time.Now().UTC()
+
 	chainID, err := client.ChainID()
 	if err != nil {
 		return nil, err
 	}
-
-	start := time.Now().UTC()
-	totalTxs := r.calculateTotalTxs()
-	foundErrs := make([]error, 0)
-	bar := progressbar.Default(totalTxs, "Sending transactions")
 
 	defer func() {
 		_ = bar.Close()
@@ -877,11 +876,7 @@ func (r *BaseLoadTestRunner) sendTransactionsInTime(account *account, chainID *b
 		numOfTxns = r.cfg.BatchSize
 	}
 
-	batchSender := r.batchSender
-	if len(r.cfg.JSONRPCUrls) > 1 {
-		// if we have multiple JSON-RPC URLs, we will use a random one for each sender
-		batchSender = newTransactionBatchSender(r.cfg.JSONRPCUrls[rand.Intn(len(r.cfg.JSONRPCUrls))])
-	}
+	batchSender := r.batchSenders.getBatchSenderForAccount(account.index)
 
 	for {
 		h, se, err := r.sendTransactionsForUserInBatchesInternal(numOfTxns,
@@ -909,6 +904,7 @@ func (r *BaseLoadTestRunner) sendTransactionsForUser(account *account, chainID *
 	bar *progressbar.ProgressBar, createTxnFn func(*account, *feeData, *big.Int) *types.Transaction,
 ) ([]types.Hash, []error, error) {
 	client := r.clients.getClient()
+
 	txRelayer, err := txrelayer.NewTxRelayer(
 		txrelayer.WithClient(client),
 		txrelayer.WithChainID(chainID),
@@ -954,7 +950,8 @@ func (r *BaseLoadTestRunner) sendTransactionsForUserInBatches(account *account, 
 	bar *progressbar.ProgressBar, createTxnFn func(*account, *feeData, *big.Int) *types.Transaction,
 ) ([]types.Hash, []error, error) {
 	return r.sendTransactionsForUserInBatchesInternal(
-		r.cfg.TxsPerUser, account, chainID, r.clients.getClient(), bar, r.batchSender, createTxnFn)
+		r.cfg.TxsPerUser, account, chainID, r.clients.getClient(),
+		bar, r.batchSenders.getBatchSender(), createTxnFn)
 }
 
 func (r *BaseLoadTestRunner) sendTransactionsForUserInBatchesInternal(

@@ -12,6 +12,7 @@ type ethClientList []*jsonrpc.EthClient
 // newEthClientList creates a new list of EthClients from the given JSON-RPC URLs
 func newEthClientList(jsonRPCURLs []string) (ethClientList, error) {
 	clients := make(ethClientList, 0, len(jsonRPCURLs))
+
 	for _, url := range jsonRPCURLs {
 		client, err := jsonrpc.NewEthClient(url)
 		if err != nil {
@@ -45,11 +46,13 @@ func (ecl ethClientList) getClient() *jsonrpc.EthClient {
 	return ecl[0]
 }
 
+// receiversList is a list of receiver addresses for tokens in a load test
 type receiversList []types.Address
 
 // newReceiversList creates a new list of receivers from the given number of receivers
 func newReceiversList(receiversNum int) (receiversList, error) {
 	receivers := make(receiversList, receiversNum)
+
 	for i := 0; i < receiversNum; i++ {
 		acc, err := wallet.GenerateAccount()
 		if err != nil {
@@ -70,4 +73,29 @@ func (rl receiversList) getReceiverForSender(index int) *types.Address {
 // getReceiver returns the first receiver from the list of receivers
 func (rl receiversList) getReceiver() types.Address {
 	return rl[0]
+}
+
+// batchSendersList is a list of TransactionBatchSenders
+type batchSendersList []*TransactionBatchSender
+
+// newBatchSenders creates a new list of TransactionBatchSenders from the given EthClients
+func newBatchSenders(jsonRPCURLs []string) batchSendersList {
+	senders := make(batchSendersList, len(jsonRPCURLs))
+
+	for i, url := range jsonRPCURLs {
+		senders[i] = newTransactionBatchSender(url)
+	}
+
+	return senders
+}
+
+// getBatchSenderForAccount returns a TransactionBatchSender
+// from the list of senders for the given account index
+func (bs batchSendersList) getBatchSenderForAccount(accountIndex int) *TransactionBatchSender {
+	return bs[accountIndex%len(bs)]
+}
+
+// getBatchSender returns the first TransactionBatchSender from the list of senders
+func (bs batchSendersList) getBatchSender() *TransactionBatchSender {
+	return bs[0]
 }
