@@ -145,13 +145,15 @@ func newBridgeManager(
 	runtime Runtime,
 	externalChainID, internalChainID uint64, blockchain polychain.Blockchain) *bridgeEventManager {
 	return &bridgeEventManager{
-		logger:          logger,
-		state:           state,
-		config:          config,
-		runtime:         runtime,
-		externalChainID: externalChainID,
-		internalChainID: internalChainID,
-		blockchain:      blockchain,
+		logger:              logger,
+		state:               state,
+		config:              config,
+		retryBatches:        make(map[types.Hash]PendingBridgeBatch),
+		pendingRetryBatches: make(map[types.Hash][]*PendingBridgeBatch),
+		runtime:             runtime,
+		externalChainID:     externalChainID,
+		internalChainID:     internalChainID,
+		blockchain:          blockchain,
 	}
 }
 
