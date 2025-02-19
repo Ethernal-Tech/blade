@@ -1943,10 +1943,10 @@ type BridgeMessageBatch struct {
 	DestinationChainID    *big.Int         `abi:"destinationChainId"`
 	Threshold             *big.Int         `abi:"threshold"`
 	NumberOfRegularEvents *big.Int         `abi:"numberOfRegularEvents"`
-	ValidationCounter     *big.Int         `abi:"validationCounter"`
+	CommitCounter         *big.Int         `abi:"commitCounter"`
 }
 
-var BridgeMessageBatchABIType = abi.MustNewType("tuple(tuple(uint256 id,uint256 sourceChainId,uint256 destinationChainId,address sender,address receiver,bool isRollback,bytes payload)[] messages,uint256 sourceChainId,uint256 destinationChainId,uint256 threshold,uint256 numberOfRegularEvents,uint256 validationCounter)")
+var BridgeMessageBatchABIType = abi.MustNewType("tuple(tuple(uint256 id,uint256 sourceChainId,uint256 destinationChainId,address sender,address receiver,bool isRollback,bytes payload)[] messages,uint256 sourceChainId,uint256 destinationChainId,uint256 threshold,uint256 numberOfRegularEvents,uint256 commitCounter)")
 
 func (b *BridgeMessageBatch) EncodeAbi() ([]byte, error) {
 	return BridgeMessageBatchABIType.Encode(b)
@@ -1963,7 +1963,7 @@ type SignedBridgeMessageBatch struct {
 	ValidatorSetBatchID *big.Int            `abi:"validatorSetBatchId"`
 }
 
-var SignedBridgeMessageBatchABIType = abi.MustNewType("tuple(tuple(tuple(uint256 id,uint256 sourceChainId,uint256 destinationChainId,address sender,address receiver,bool isRollback,bytes payload)[] messages,uint256 sourceChainId,uint256 destinationChainId,uint256 threshold,uint256 numberOfRegularEvents,uint256 validationCounter) batch,uint256[2] signature,bytes bitmap,uint256 validatorSetBatchId)")
+var SignedBridgeMessageBatchABIType = abi.MustNewType("tuple(tuple(tuple(uint256 id,uint256 sourceChainId,uint256 destinationChainId,address sender,address receiver,bool isRollback,bytes payload)[] messages,uint256 sourceChainId,uint256 destinationChainId,uint256 threshold,uint256 numberOfRegularEvents,uint256 commitCounter) batch,uint256[2] signature,bytes bitmap,uint256 validatorSetBatchId)")
 
 func (s *SignedBridgeMessageBatch) EncodeAbi() ([]byte, error) {
 	return SignedBridgeMessageBatchABIType.Encode(s)
