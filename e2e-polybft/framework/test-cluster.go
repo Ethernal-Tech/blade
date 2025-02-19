@@ -908,7 +908,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		)
 		require.NoError(t, err)
 
-		initializeGatewayRollbackContract(t, types.StringToAddress(gatewayContractAddress), cluster, &txRelayer)
+		initializeGatewayRollbackContract(t, types.StringToAddress(gatewayContractAddress), cluster, &txRelayer, config.RollbackMode)
 	}
 
 	return cluster
@@ -1287,7 +1287,7 @@ func CopyDir(source, destination string) error {
 }
 
 func initializeGatewayRollbackContract(t *testing.T, address types.Address,
-	cluster *TestCluster, txRelayer *txrelayer.TxRelayer) {
+	cluster *TestCluster, txRelayer *txrelayer.TxRelayer, mode RollbackMode) {
 	t.Helper()
 
 	validators, err := genesis.ReadValidatorsByPrefix(
@@ -1321,10 +1321,20 @@ func initializeGatewayRollbackContract(t *testing.T, address types.Address,
 		}
 	}
 
-	inputParams := &contractsapi.InitializeGatewayFn{
-		NewBls:     contracts.BLSContract,
-		NewBn256G2: contracts.BLS256Contract,
-		Validators: validatorSet,
+	var inputParams contractsapi.ABIEncoder
+	if mode == E2IRollback {
+		inputParams = &contractsapi.InitializeGWGatewayFn{
+			NewBls:     contracts.BLSContract,
+			NewBn256G2: contracts.BLS256Contract,
+			Validators: validatorSet,
+			BsAddress:  contracts.BridgeStorageContractV1,
+		}
+	} else {
+		inputParams = &contractsapi.InitializeGatewayFn{
+			NewBls:     contracts.BLSContract,
+			NewBn256G2: contracts.BLS256Contract,
+			Validators: validatorSet,
+		}
 	}
 
 	key, err := helper.DecodePrivateKey("")
