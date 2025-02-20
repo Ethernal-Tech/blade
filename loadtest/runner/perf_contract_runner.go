@@ -191,6 +191,8 @@ func (p *PerfContractRunner) Run(ctx context.Context) error {
 }
 
 // createPerfContractTransaction creates a performance test contract transaction.
+//
+//nolint:godox
 func (p *PerfContractRunner) createPerfContractTransaction(
 	account *account, feeData *feeData, chainID *big.Int) *types.Transaction {
 	// TODO - implement
@@ -312,6 +314,7 @@ func (p *PerfContractRunner) readLastBatchID(client *jsonrpc.EthClient) {
 	}, jsonrpc.LatestBlockNumber, nil)
 	if err != nil {
 		p.perfResultCollector.LastBatchIDErrCh <- err
+
 		return
 	}
 
@@ -332,6 +335,7 @@ func (p *PerfContractRunner) readHashesCount(client *jsonrpc.EthClient) {
 	}, jsonrpc.LatestBlockNumber, nil)
 	if err != nil {
 		p.perfResultCollector.HashesErrCh <- err
+
 		return
 	}
 
@@ -352,6 +356,7 @@ func (p *PerfContractRunner) readConfirmedBatchesCount(client *jsonrpc.EthClient
 	}, jsonrpc.LatestBlockNumber, nil)
 	if err != nil {
 		p.perfResultCollector.ConfirmedBatchesErrCh <- err
+
 		return
 	}
 
