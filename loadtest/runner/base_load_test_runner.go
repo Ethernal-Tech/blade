@@ -649,8 +649,7 @@ func (r *BaseLoadTestRunner) calculateResults(blockInfos map[uint64]*BlockInfo, 
 		totalTxs, totalTime, totalGasUsed,
 		maxTxsPerSecond, minTxsPerSecond, avgTxsPerSecond, avgGasPerTx,
 		minGasUtilization, maxGasUtilization, avgGasUtilization,
-		infos,
-	)
+		infos)
 }
 
 type NodeInfoResult struct {
@@ -661,6 +660,8 @@ type NodeInfoResult struct {
 // queryLatestBlocks queries for the latest blocks on all the nodes and
 // detects if there are nodes that are out of sync (whose latest block number is outside of predefined deadband)
 func (r *BaseLoadTestRunner) queryLatestBlocks() ([]*NodeInfoResult, []string, error) {
+	fmt.Println("=============================================================")
+	fmt.Println("Querying latest blocks...")
 	if len(r.clients) == 0 {
 		return nil, nil, errors.New("no clients available to query the latest blocks")
 	}
@@ -668,6 +669,8 @@ func (r *BaseLoadTestRunner) queryLatestBlocks() ([]*NodeInfoResult, []string, e
 	if len(r.cfg.JSONRPCUrls) != len(r.clients) {
 		return nil, nil, errors.New("number of JSON RPC URLs does not match the number of clients")
 	}
+
+	fmt.Println("Number of nodes:", len(r.clients))
 
 	nodeInfos := make([]*NodeInfoResult, 0, len(r.clients))
 
@@ -709,6 +712,65 @@ func (r *BaseLoadTestRunner) queryLatestBlocks() ([]*NodeInfoResult, []string, e
 	}
 
 	return nodeInfos, nodesOutOfSync, nil
+}
+
+// printNodeInfos prints the node information to the console.
+// It displays the node URL and the latest block number for each node.
+// If there are nodes that are out of sync, it displays the URLs of those nodes.
+func (r *BaseLoadTestRunner) printNodeInfos(nodeInfos []*NodeInfoResult, nodesOutOfSync []string) error {
+	if !r.cfg.ResultsToJSON {
+		fmt.Println("=============================================================")
+		fmt.Println("Node information:")
+
+		table := tablewriter.NewWriter(os.Stdout)
+		table.SetHeader([]string{"Node URL", "Block Number"})
+
+		for _, nodeInfo := range nodeInfos {
+			table.Append([]string{nodeInfo.NodeURL, fmt.Sprint(nodeInfo.BlockNumber)})
+		}
+
+		table.Render()
+
+		if len(nodesOutOfSync) > 0 {
+			fmt.Println("Nodes out of sync:")
+
+			for _, nodeURL := range nodesOutOfSync {
+				fmt.Println(nodeURL)
+			}
+		} else {
+			fmt.Println("All nodes are in sync")
+		}
+	} else {
+		fileName := fmt.Sprintf("./%s_%s_node_infos.json", r.cfg.LoadTestName, r.cfg.LoadTestType)
+		if err := appendJSONToFile(fileName, nodeInfos); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// appendJSONToFile opens or creates a JSON file and appends the given data
+func appendJSONToFile(filename string, data interface{}) error {
+	// Open file with append and create mode, read/write permissions
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open or create file: %w", err)
+	}
+	defer file.Close()
+
+	// Encode the data to JSON
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+
+	// Append a newline for readability if appending multiple JSON objects
+	if _, err := file.Write(append(jsonData, '\n')); err != nil {
+		return fmt.Errorf("failed to write to file: %w", err)
+	}
+
+	return nil
 }
 
 // saveResultsToJSONFile saves the load test results to a JSON file.

@@ -185,7 +185,16 @@ func (p *PerfContractRunner) Run(ctx context.Context) error {
 			return err
 		}
 
-		return <-p.done
+		if err := <-p.done; err != nil {
+			return err
+		}
+
+		nodeInfos, nodesOutOfSync, err := p.queryLatestBlocks()
+		if err != nil {
+			return err
+		}
+
+		return p.printNodeInfos(nodeInfos, nodesOutOfSync)
 	}
 
 	txHashes, err := p.sendTransactions(p.createPerfContractTransaction)
@@ -197,7 +206,16 @@ func (p *PerfContractRunner) Run(ctx context.Context) error {
 		return err
 	}
 
-	return p.calculateResults(p.waitForReceipts(txHashes))
+	if err := p.calculateResults(p.waitForReceipts(txHashes)); err != nil {
+		return err
+	}
+
+	nodeInfos, nodesOutOfSync, err := p.queryLatestBlocks()
+	if err != nil {
+		return err
+	}
+
+	return p.printNodeInfos(nodeInfos, nodesOutOfSync)
 }
 
 // createPerfContractTransaction creates a performance test contract transaction.
