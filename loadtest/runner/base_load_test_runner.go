@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -652,36 +653,62 @@ func (r *BaseLoadTestRunner) calculateResults(blockInfos map[uint64]*BlockInfo, 
 	)
 }
 
-// queryLatestBlocks queries for the latest blocks on all the nodes and propagates an error
-// in case there is any node whose latest block is not within the predefined deadband.
-//
-//nolint:godox
-func (r *BaseLoadTestRunner) queryLatestBlocks() error {
-	// TODO: @Stefan-Ethernal invoke after calculateResults and print results in the table format
-	blockNumsMap := make(map[string]uint64)
+type NodeInfoResult struct {
+	NodeURL     string `json:"nodeURL"`
+	BlockNumber uint64 `json:"blockNumber"`
+}
 
+// queryLatestBlocks queries for the latest blocks on all the nodes and
+// detects if there are nodes that are out of sync (whose latest block number is outside of predefined deadband)
+func (r *BaseLoadTestRunner) queryLatestBlocks() ([]*NodeInfoResult, []string, error) {
+	if len(r.clients) == 0 {
+		return nil, nil, errors.New("no clients available to query the latest blocks")
+	}
+
+	if len(r.cfg.JSONRPCUrls) != len(r.clients) {
+		return nil, nil, errors.New("number of JSON RPC URLs does not match the number of clients")
+	}
+
+	nodeInfos := make([]*NodeInfoResult, 0, len(r.clients))
+
+	// query each node for the latest block number and store the result
 	for i, client := range r.clients {
-		rpcURL := r.cfg.JSONRPCUrls[i]
+		nodeURL := r.cfg.JSONRPCUrls[i]
 
 		blockNum, err := client.BlockNumber()
 		if err != nil {
-			return fmt.Errorf("failed to query the latest block for %s node: %w", rpcURL, err)
+			return nil, nil, fmt.Errorf("failed to query the latest block for %s node: %w", nodeURL, err)
 		}
 
-		blockNumsMap[rpcURL] = blockNum
+		nodeInfos = append(nodeInfos,
+			&NodeInfoResult{
+				NodeURL:     nodeURL,
+				BlockNumber: blockNum,
+			})
 	}
 
-	// Check if block numbers are within the predefined deadband
-	var referenceBlockNum uint64
-	for _, blockNum := range blockNumsMap {
-		if referenceBlockNum == 0 {
-			referenceBlockNum = blockNum
-		} else if math.Abs(float64(referenceBlockNum)-float64(blockNum)) > float64(r.cfg.BlockNumberDeadband) {
-			return fmt.Errorf("block numbers are not within the acceptable range: %v", blockNumsMap)
+	// sort the node infos by block number (descending)
+	sort.Slice(nodeInfos, func(i, j int) bool {
+		return nodeInfos[i].BlockNumber > nodeInfos[j].BlockNumber
+	})
+
+	var (
+		nodesOutOfSync     = make([]string, 0)
+		largestBlockNumber = nodeInfos[0].BlockNumber
+	)
+
+	for _, nodeInfo := range nodeInfos[1:] {
+		blockNum := nodeInfo.BlockNumber
+		if blockNum == largestBlockNumber {
+			continue
+		}
+
+		if largestBlockNumber-blockNum > r.cfg.BlockNumberDeadband {
+			nodesOutOfSync = append(nodesOutOfSync, nodeInfo.NodeURL)
 		}
 	}
 
-	return nil
+	return nodeInfos, nodesOutOfSync, nil
 }
 
 // saveResultsToJSONFile saves the load test results to a JSON file.
