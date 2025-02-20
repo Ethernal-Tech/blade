@@ -27,7 +27,7 @@ type ERC20Runner struct {
 // NewERC20Runner creates a new ERC20Runner instance with the given LoadTestConfig.
 // It returns a pointer to the created ERC20Runner and an error, if any.
 func NewERC20Runner(cfg LoadTestConfig) (*ERC20Runner, error) {
-	runner, err := NewBaseLoadTestRunner(cfg)
+	runner, err := NewBaseLoadTestRunner(cfg, true)
 	if err != nil {
 		return nil, err
 	}

@@ -33,7 +33,7 @@ type MixedTxRunner struct {
 
 // NewMixedTxRunner creates a new MixedTxRunner
 func NewMixedTxRunner(cfg LoadTestConfig) (*MixedTxRunner, error) {
-	runner, err := NewBaseLoadTestRunner(cfg)
+	runner, err := NewBaseLoadTestRunner(cfg, true)
 	if err != nil {
 		return nil, err
 	}

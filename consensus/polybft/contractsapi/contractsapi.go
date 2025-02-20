@@ -2475,3 +2475,66 @@ func (i *InitializeChildTimelockFn) EncodeAbi() ([]byte, error) {
 func (i *InitializeChildTimelockFn) DecodeAbi(buf []byte) error {
 	return decodeMethod(ChildTimelock.Abi.Methods["initialize"], buf, i)
 }
+
+type TestPerformanceConstructorFn struct {
+	QuorumCnt                          *big.Int `abi:"_quorumCnt"`
+	CheckBatchID                       bool     `abi:"_checkBatchID"`
+	DeleteTemporaryMappingsAfterQuorum bool     `abi:"_deleteTemporaryMappingsAfterQuorum"`
+}
+
+func (t *TestPerformanceConstructorFn) Sig() []byte {
+	return TestPerformance.Abi.Constructor.ID()
+}
+
+func (t *TestPerformanceConstructorFn) EncodeAbi() ([]byte, error) {
+	return TestPerformance.Abi.Constructor.Inputs.Encode(t)
+}
+
+func (t *TestPerformanceConstructorFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(TestPerformance.Abi.Constructor, buf, t)
+}
+
+type GetConfirmedBatchesTestPerformanceFn struct {
+}
+
+func (g *GetConfirmedBatchesTestPerformanceFn) Sig() []byte {
+	return TestPerformance.Abi.Methods["getConfirmedBatches"].ID()
+}
+
+func (g *GetConfirmedBatchesTestPerformanceFn) EncodeAbi() ([]byte, error) {
+	return TestPerformance.Abi.Methods["getConfirmedBatches"].Encode(g)
+}
+
+func (g *GetConfirmedBatchesTestPerformanceFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(TestPerformance.Abi.Methods["getConfirmedBatches"], buf, g)
+}
+
+type GetHashesCountTestPerformanceFn struct {
+}
+
+func (g *GetHashesCountTestPerformanceFn) Sig() []byte {
+	return TestPerformance.Abi.Methods["getHashesCount"].ID()
+}
+
+func (g *GetHashesCountTestPerformanceFn) EncodeAbi() ([]byte, error) {
+	return TestPerformance.Abi.Methods["getHashesCount"].Encode(g)
+}
+
+func (g *GetHashesCountTestPerformanceFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(TestPerformance.Abi.Methods["getHashesCount"], buf, g)
+}
+
+type GetLastBatchIDTestPerformanceFn struct {
+}
+
+func (g *GetLastBatchIDTestPerformanceFn) Sig() []byte {
+	return TestPerformance.Abi.Methods["getLastBatchID"].ID()
+}
+
+func (g *GetLastBatchIDTestPerformanceFn) EncodeAbi() ([]byte, error) {
+	return TestPerformance.Abi.Methods["getLastBatchID"].Encode(g)
+}
+
+func (g *GetLastBatchIDTestPerformanceFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(TestPerformance.Abi.Methods["getLastBatchID"], buf, g)
+}

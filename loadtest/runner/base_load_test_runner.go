@@ -45,6 +45,7 @@ type BaseLoadTestRunner struct {
 
 	loadTestAccount *account
 	vus             []*account
+	vusAddresses    []types.Address
 
 	resultsCollectedCh chan *stats
 	done               chan error
@@ -60,7 +61,7 @@ type BaseLoadTestRunner struct {
 // and sets up the necessary components such as the Ethereum key, binary path, and JSON-RPC client.
 // If any error occurs during the initialization process, it returns nil and the error.
 // Otherwise, it returns a pointer to the initialized BaseLoadTestRunner and nil error.
-func NewBaseLoadTestRunner(cfg LoadTestConfig) (*BaseLoadTestRunner, error) {
+func NewBaseLoadTestRunner(cfg LoadTestConfig, initResultCollector bool) (*BaseLoadTestRunner, error) {
 	key, err := wallet.NewWalletFromMnemonic(cfg.Mnemonnic)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create wallet from mnemonic: %w", err)
@@ -86,15 +87,23 @@ func NewBaseLoadTestRunner(cfg LoadTestConfig) (*BaseLoadTestRunner, error) {
 		return nil, fmt.Errorf("failed to create receivers list: %w", err)
 	}
 
+	var resultsCollector *ResultCollector
+
+	if initResultCollector {
+		resultsCollector = NewResultCollector()
+	}
+
 	return &BaseLoadTestRunner{
 		cfg:                cfg,
 		loadTestAccount:    &account{key: ecdsaKey},
 		resultsCollectedCh: make(chan *stats),
 		done:               make(chan error),
 		batchSenders:       newBatchSenders(cfg.JSONRPCUrls),
-		resultsCollector:   NewResultCollector(),
+		resultsCollector:   resultsCollector,
 		clients:            ethClientList,
 		receivers:          receiversList,
+		vus:                make([]*account, cfg.VUs),
+		vusAddresses:       make([]types.Address, cfg.VUs),
 	}, nil
 }
 
@@ -125,7 +134,9 @@ func (r *BaseLoadTestRunner) createVUs() error {
 			return err
 		}
 
-		r.vus = append(r.vus, &account{index: i, key: key})
+		r.vus[i] = &account{index: i, key: key}
+		r.vusAddresses[i] = key.Address()
+
 		_ = bar.Add(1)
 	}
 
@@ -790,11 +801,6 @@ func (r *BaseLoadTestRunner) readState(ctx context.Context) {
 	}
 
 	contractMap := contracts.GetProxyImplementationMapping()
-	senderAddrs := make([]types.Address, len(r.vus))
-
-	for i, sender := range r.vus {
-		senderAddrs[i] = sender.key.Address()
-	}
 
 	for i := 0; i < r.cfg.StateReadThreads; i++ {
 		i := i
@@ -808,22 +814,27 @@ func (r *BaseLoadTestRunner) readState(ctx context.Context) {
 					return
 				default:
 					// read non stop the state of the accounts
-					for _, senderAddr := range senderAddrs {
-						r.readBalance(client, senderAddr)
-						r.readNonce(client, senderAddr)
-					}
-
-					for _, receiver := range r.receivers {
-						r.readBalance(client, receiver)
-						r.readNonce(client, receiver)
-					}
-
-					for _, contractAddr := range contractMap {
-						r.readCode(client, contractAddr)
-					}
+					r.readBasicState(client, contractMap)
 				}
 			}
 		}()
+	}
+}
+
+// readBasicState reads the basic state of the accounts and contracts.
+func (r *BaseLoadTestRunner) readBasicState(client *jsonrpc.EthClient, contractsMap map[types.Address]types.Address) {
+	for _, senderAddr := range r.vusAddresses {
+		r.readBalance(client, senderAddr)
+		r.readNonce(client, senderAddr)
+	}
+
+	for _, receiver := range r.receivers {
+		r.readBalance(client, receiver)
+		r.readNonce(client, receiver)
+	}
+
+	for _, contractAddr := range contractsMap {
+		r.readCode(client, contractAddr)
 	}
 }
 

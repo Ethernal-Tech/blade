@@ -17,7 +17,7 @@ type EOARunner struct {
 // NewEOARunner creates a new EOARunner instance with the given LoadTestConfig.
 // It returns a pointer to the created EOARunner and an error, if any.
 func NewEOARunner(cfg LoadTestConfig) (*EOARunner, error) {
-	runner, err := NewBaseLoadTestRunner(cfg)
+	runner, err := NewBaseLoadTestRunner(cfg, true)
 	if err != nil {
 		return nil, err
 	}

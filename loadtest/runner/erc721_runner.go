@@ -26,7 +26,7 @@ type ERC721Runner struct {
 // NewERC721Runner creates a new ERC721Runner instance with the given LoadTestConfig.
 // It returns a pointer to the created ERC721Runner and an error, if any.
 func NewERC721Runner(cfg LoadTestConfig) (*ERC721Runner, error) {
-	runner, err := NewBaseLoadTestRunner(cfg)
+	runner, err := NewBaseLoadTestRunner(cfg, true)
 	if err != nil {
 		return nil, err
 	}

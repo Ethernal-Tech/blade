@@ -483,6 +483,17 @@ func main() {
 			},
 			[]string{},
 		},
+		{
+			"TestPerformance",
+			gensc.TestPerformance,
+			true,
+			[]string{
+				"getConfirmedBatches",
+				"getHashesCount",
+				"getLastBatchID",
+			},
+			[]string{},
+		},
 	}
 
 	generatedData := &generatedData{}

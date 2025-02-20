@@ -11,16 +11,21 @@ import (
 )
 
 const (
-	EOATestType    = "eoa"
-	ERC20TestType  = "erc20"
-	ERC721TestType = "erc721"
-	MixedTestType  = "mixed"
+	EOATestType      = "eoa"
+	ERC20TestType    = "erc20"
+	ERC721TestType   = "erc721"
+	MixedTestType    = "mixed"
+	PerfContractType = "perf-contract"
 )
 
 func IsLoadTestSupported(loadTestType string) bool {
 	ltp := strings.ToLower(loadTestType)
 
-	return ltp == EOATestType || ltp == ERC20TestType || ltp == ERC721TestType || ltp == MixedTestType
+	return ltp == EOATestType ||
+		ltp == ERC20TestType ||
+		ltp == ERC721TestType ||
+		ltp == MixedTestType ||
+		ltp == PerfContractType
 }
 
 type account struct {
@@ -107,6 +112,13 @@ func (r *LoadTestRunner) Run(ctx context.Context, cfg LoadTestConfig) error {
 		}
 
 		return mixedTxRunner.Run(ctx)
+	case PerfContractType:
+		perfContractRunner, err := NewPerfContractRunner(cfg)
+		if err != nil {
+			return err
+		}
+
+		return perfContractRunner.Run(ctx)
 	default:
 		return fmt.Errorf("unknown load test type %s", cfg.LoadTestType)
 	}
