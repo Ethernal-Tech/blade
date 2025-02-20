@@ -17,7 +17,7 @@ type EOARunner struct {
 // NewEOARunner creates a new EOARunner instance with the given LoadTestConfig.
 // It returns a pointer to the created EOARunner and an error, if any.
 func NewEOARunner(cfg LoadTestConfig) (*EOARunner, error) {
-	runner, err := NewBaseLoadTestRunner(cfg, true)
+	runner, err := NewBaseLoadTestRunner(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func (e *EOARunner) Run(ctx context.Context) error {
 
 // createEOATransaction creates an EOA transaction
 func (e *EOARunner) createEOATransaction(account *account, feeData *feeData,
-	chainID *big.Int) *types.Transaction {
+	chainID *big.Int) (*types.Transaction, error) {
 	if e.cfg.DynamicTxs {
 		return types.NewTx(types.NewDynamicFeeTx(
 			types.WithNonce(account.nonce),
@@ -93,7 +93,7 @@ func (e *EOARunner) createEOATransaction(account *account, feeData *feeData,
 			types.WithGasFeeCap(feeData.gasFeeCap),
 			types.WithGasTipCap(feeData.gasTipCap),
 			types.WithChainID(chainID),
-		))
+		)), nil
 	}
 
 	return types.NewTx(types.NewLegacyTx(
@@ -103,5 +103,5 @@ func (e *EOARunner) createEOATransaction(account *account, feeData *feeData,
 		types.WithGas(21000),
 		types.WithGasPrice(feeData.gasPrice),
 		types.WithFrom(account.key.Address()),
-	))
+	)), nil
 }

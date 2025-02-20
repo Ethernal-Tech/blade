@@ -2538,3 +2538,36 @@ func (g *GetLastBatchIDTestPerformanceFn) EncodeAbi() ([]byte, error) {
 func (g *GetLastBatchIDTestPerformanceFn) DecodeAbi(buf []byte) error {
 	return decodeMethod(TestPerformance.Abi.Methods["getLastBatchID"], buf, g)
 }
+
+type SignedBatch struct {
+	BatchID     *big.Int `abi:"batchID"`
+	Counter     *big.Int `abi:"counter"`
+	ValidatorID *big.Int `abi:"validatorID"`
+	Signature   []byte   `abi:"signature"`
+}
+
+var SignedBatchABIType = abi.MustNewType("tuple(uint256 batchID,uint256 counter,uint256 validatorID,bytes signature)")
+
+func (s *SignedBatch) EncodeAbi() ([]byte, error) {
+	return SignedBatchABIType.Encode(s)
+}
+
+func (s *SignedBatch) DecodeAbi(buf []byte) error {
+	return decodeStruct(SignedBatchABIType, buf, &s)
+}
+
+type SubmitSignedBatchTestPerformanceFn struct {
+	SignedBatch *SignedBatch `abi:"_signedBatch"`
+}
+
+func (s *SubmitSignedBatchTestPerformanceFn) Sig() []byte {
+	return TestPerformance.Abi.Methods["submitSignedBatch"].ID()
+}
+
+func (s *SubmitSignedBatchTestPerformanceFn) EncodeAbi() ([]byte, error) {
+	return TestPerformance.Abi.Methods["submitSignedBatch"].Encode(s)
+}
+
+func (s *SubmitSignedBatchTestPerformanceFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(TestPerformance.Abi.Methods["submitSignedBatch"], buf, s)
+}

@@ -491,6 +491,7 @@ func main() {
 				"getConfirmedBatches",
 				"getHashesCount",
 				"getLastBatchID",
+				"submitSignedBatch",
 			},
 			[]string{},
 		},

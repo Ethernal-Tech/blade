@@ -26,7 +26,7 @@ type ERC721Runner struct {
 // NewERC721Runner creates a new ERC721Runner instance with the given LoadTestConfig.
 // It returns a pointer to the created ERC721Runner and an error, if any.
 func NewERC721Runner(cfg LoadTestConfig) (*ERC721Runner, error) {
-	runner, err := NewBaseLoadTestRunner(cfg, true)
+	runner, err := NewBaseLoadTestRunner(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +157,7 @@ func (e *ERC721Runner) deployERC21Token() error {
 
 // createERC721Transaction creates an ERC721 transaction
 func (e *ERC721Runner) createERC721Transaction(account *account, feeData *feeData,
-	chainID *big.Int) *types.Transaction {
+	chainID *big.Int) (*types.Transaction, error) {
 	if e.cfg.DynamicTxs {
 		return types.NewTx(types.NewDynamicFeeTx(
 			types.WithNonce(account.nonce),
@@ -167,7 +167,7 @@ func (e *ERC721Runner) createERC721Transaction(account *account, feeData *feeDat
 			types.WithGasTipCap(feeData.gasTipCap),
 			types.WithChainID(chainID),
 			types.WithInput(e.txInput),
-		))
+		)), nil
 	}
 
 	return types.NewTx(types.NewLegacyTx(
@@ -176,5 +176,5 @@ func (e *ERC721Runner) createERC721Transaction(account *account, feeData *feeDat
 		types.WithGasPrice(feeData.gasPrice),
 		types.WithFrom(account.key.Address()),
 		types.WithInput(e.txInput),
-	))
+	)), nil
 }

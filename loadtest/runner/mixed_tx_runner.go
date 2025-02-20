@@ -33,7 +33,7 @@ type MixedTxRunner struct {
 
 // NewMixedTxRunner creates a new MixedTxRunner
 func NewMixedTxRunner(cfg LoadTestConfig) (*MixedTxRunner, error) {
-	runner, err := NewBaseLoadTestRunner(cfg, true)
+	runner, err := NewBaseLoadTestRunner(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,8 @@ func (m *MixedTxRunner) Run(ctx context.Context) error {
 }
 
 // createTransaction creates a transaction for the mixed load test
-func (m *MixedTxRunner) createTransaction(account *account, feeData *feeData, chainID *big.Int) *types.Transaction {
+func (m *MixedTxRunner) createTransaction(
+	account *account, feeData *feeData, chainID *big.Int) (*types.Transaction, error) {
 	// Randomly choose a transaction type
 	r, _ := rand.Int(rand.Reader, three)
 
@@ -130,19 +131,19 @@ func (m *MixedTxRunner) createTransaction(account *account, feeData *feeData, ch
 		m.numOfERC20Txs++
 		m.lock.Unlock()
 
-		tx := m.createERC20Transaction(account, feeData, chainID)
+		tx, _ := m.createERC20Transaction(account, feeData, chainID) //nolint:errcheck
 		tx.SetGas(m.erc20Gas)
 
-		return tx
+		return tx, nil
 	case 1:
 		m.lock.Lock()
 		m.numOfERC721Txs++
 		m.lock.Unlock()
 
-		tx := m.createERC721Transaction(account, feeData, chainID)
+		tx, _ := m.createERC721Transaction(account, feeData, chainID) //nolint:errcheck
 		tx.SetGas(m.erc721Gas)
 
-		return tx
+		return tx, nil
 	default:
 		m.lock.Lock()
 		m.numOfEOATxs++
@@ -174,8 +175,11 @@ func (m *MixedTxRunner) estimateGas() error {
 		return err
 	}
 
-	m.erc20Gas = estimateGasFn(m.createERC20Transaction(m.loadTestAccount, feeData, chainID))
-	m.erc721Gas = estimateGasFn(m.createERC721Transaction(m.loadTestAccount, feeData, chainID))
+	erc20Txn, _ := m.createERC20Transaction(m.loadTestAccount, feeData, chainID)   //nolint:errcheck
+	erc721Txn, _ := m.createERC721Transaction(m.loadTestAccount, feeData, chainID) //nolint:errcheck
+
+	m.erc20Gas = estimateGasFn(erc20Txn)
+	m.erc721Gas = estimateGasFn(erc721Txn)
 
 	return nil
 }

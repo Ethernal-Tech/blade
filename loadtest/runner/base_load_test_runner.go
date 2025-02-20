@@ -61,7 +61,7 @@ type BaseLoadTestRunner struct {
 // and sets up the necessary components such as the Ethereum key, binary path, and JSON-RPC client.
 // If any error occurs during the initialization process, it returns nil and the error.
 // Otherwise, it returns a pointer to the initialized BaseLoadTestRunner and nil error.
-func NewBaseLoadTestRunner(cfg LoadTestConfig, initResultCollector bool) (*BaseLoadTestRunner, error) {
+func NewBaseLoadTestRunner(cfg LoadTestConfig) (*BaseLoadTestRunner, error) {
 	key, err := wallet.NewWalletFromMnemonic(cfg.Mnemonnic)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create wallet from mnemonic: %w", err)
@@ -87,19 +87,13 @@ func NewBaseLoadTestRunner(cfg LoadTestConfig, initResultCollector bool) (*BaseL
 		return nil, fmt.Errorf("failed to create receivers list: %w", err)
 	}
 
-	var resultsCollector *ResultCollector
-
-	if initResultCollector {
-		resultsCollector = NewResultCollector()
-	}
-
 	return &BaseLoadTestRunner{
 		cfg:                cfg,
 		loadTestAccount:    &account{key: ecdsaKey},
 		resultsCollectedCh: make(chan *stats),
 		done:               make(chan error),
 		batchSenders:       newBatchSenders(cfg.JSONRPCUrls),
-		resultsCollector:   resultsCollector,
+		resultsCollector:   NewResultCollector(),
 		clients:            ethClientList,
 		receivers:          receiversList,
 		vus:                make([]*account, cfg.VUs),
@@ -756,7 +750,8 @@ func (r *BaseLoadTestRunner) saveResultsToJSONFile(
 // The transaction hashes are appended to the allTxnHashes slice.
 // Finally, the function prints the time taken to send the transactions
 // and returns the transaction hashes and nil error.
-func (r *BaseLoadTestRunner) sendTransactions(createTxnFn func(*account, *feeData, *big.Int) *types.Transaction,
+func (r *BaseLoadTestRunner) sendTransactions(
+	createTxnFn func(*account, *feeData, *big.Int) (*types.Transaction, error),
 ) ([]types.Hash, error) {
 	fmt.Println("=============================================================")
 
@@ -908,8 +903,10 @@ func (r *BaseLoadTestRunner) readTxPool(ctx context.Context) {
 // - if batch-size is 0 or 1, it sends transactions one by one
 // - if batch-size is greater than 1, it sends transactions in batches
 // (for example, 5 txns in batch each iteration)
-func (r *BaseLoadTestRunner) sendTransactionsInTime(account *account, chainID *big.Int,
-	bar *progressbar.ProgressBar, createTxnFn func(*account, *feeData, *big.Int) *types.Transaction,
+func (r *BaseLoadTestRunner) sendTransactionsInTime(
+	account *account, chainID *big.Int,
+	bar *progressbar.ProgressBar,
+	createTxnFn func(*account, *feeData, *big.Int) (*types.Transaction, error),
 ) ([]types.Hash, []error, error) {
 	executionTimer := time.NewTimer(r.cfg.ExecutionTime)
 	defer executionTimer.Stop()
@@ -949,8 +946,10 @@ func (r *BaseLoadTestRunner) sendTransactionsInTime(account *account, chainID *b
 // sendTransactionsForUser sends transactions for a given user account.
 // It takes an account pointer and a chainID as input parameters.
 // It returns a slice of transaction hashes and an error if any.
-func (r *BaseLoadTestRunner) sendTransactionsForUser(account *account, chainID *big.Int,
-	bar *progressbar.ProgressBar, createTxnFn func(*account, *feeData, *big.Int) *types.Transaction,
+func (r *BaseLoadTestRunner) sendTransactionsForUser(
+	account *account, chainID *big.Int,
+	bar *progressbar.ProgressBar,
+	createTxnFn func(*account, *feeData, *big.Int) (*types.Transaction, error),
 ) ([]types.Hash, []error, error) {
 	client := r.clients.getClient()
 
@@ -982,7 +981,14 @@ func (r *BaseLoadTestRunner) sendTransactionsForUser(account *account, chainID *
 			}
 		}
 
-		_, err = txRelayer.SendTransaction(createTxnFn(account, feeData, chainID), account.key)
+		txn, err := createTxnFn(account, feeData, chainID)
+		if err != nil {
+			sendErrs = append(sendErrs, err)
+			_ = bar.Add(1)
+			continue
+		}
+
+		_, err = txRelayer.SendTransaction(txn, account.key)
 		if err != nil {
 			sendErrs = append(sendErrs, err)
 		}
@@ -995,8 +1001,10 @@ func (r *BaseLoadTestRunner) sendTransactionsForUser(account *account, chainID *
 }
 
 // sendTransactionsForUserInBatches sends user transactions in batches to the rpc node
-func (r *BaseLoadTestRunner) sendTransactionsForUserInBatches(account *account, chainID *big.Int,
-	bar *progressbar.ProgressBar, createTxnFn func(*account, *feeData, *big.Int) *types.Transaction,
+func (r *BaseLoadTestRunner) sendTransactionsForUserInBatches(
+	account *account, chainID *big.Int,
+	bar *progressbar.ProgressBar,
+	createTxnFn func(*account, *feeData, *big.Int) (*types.Transaction, error),
 ) ([]types.Hash, []error, error) {
 	return r.sendTransactionsForUserInBatchesInternal(
 		r.cfg.TxsPerUser, account, chainID, r.clients.getClient(),
@@ -1010,7 +1018,7 @@ func (r *BaseLoadTestRunner) sendTransactionsForUserInBatchesInternal(
 	client *jsonrpc.EthClient,
 	bar *progressbar.ProgressBar,
 	batchSender *TransactionBatchSender,
-	createTxnFn func(*account, *feeData, *big.Int) *types.Transaction,
+	createTxnFn func(*account, *feeData, *big.Int) (*types.Transaction, error),
 ) ([]types.Hash, []error, error) {
 	signer := crypto.NewLondonSigner(chainID.Uint64())
 
@@ -1026,7 +1034,11 @@ func (r *BaseLoadTestRunner) sendTransactionsForUserInBatchesInternal(
 		return nil, nil, err
 	}
 
-	txnExample := createTxnFn(account, feeData, chainID)
+	txnExample, err := createTxnFn(account, feeData, chainID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create transaction example: %w", err)
+	}
+
 	if txnExample.Gas() == 0 {
 		// estimate gas initially
 		gasLimit, err := client.EstimateGas(txrelayer.ConvertTxnToCallMsg(txnExample))
@@ -1052,7 +1064,12 @@ func (r *BaseLoadTestRunner) sendTransactionsForUserInBatchesInternal(
 				break
 			}
 
-			txn := createTxnFn(account, feeData, chainID)
+			txn, err := createTxnFn(account, feeData, chainID)
+			if err != nil {
+				sendErrs = append(sendErrs, err)
+				continue
+			}
+
 			if txn.Gas() == 0 {
 				txn.SetGas(gas)
 			}

@@ -16,8 +16,6 @@ import (
 )
 
 type PerfContractResultsCollector struct {
-	*ResultCollector
-
 	ConfirmedBatchesCountCh chan int
 	ConfirmedBatchesErrCh   chan error
 	ConfirmedBatchesCount   int
@@ -32,25 +30,26 @@ type PerfContractResultsCollector struct {
 	LastBatchIDErrCh  chan error
 	LastBatchID       *big.Int
 	LastBatchIDErrors []error
+
+	DebugCh       chan string
+	DebugMessages []string
 }
 
 // NewPerfContractResultsCollector creates a new PerfContractResultsCollector instance.
 func NewPerfContractResultsCollector() *PerfContractResultsCollector {
 	return &PerfContractResultsCollector{
-		ResultCollector:         NewResultCollector(),
 		ConfirmedBatchesCountCh: make(chan int, 3000),
 		ConfirmedBatchesErrCh:   make(chan error, 3000),
 		HashesCountCh:           make(chan *big.Int, 3000),
 		HashesErrCh:             make(chan error, 3000),
 		LastBatchIDCh:           make(chan *big.Int, 3000),
 		LastBatchIDErrCh:        make(chan error, 3000),
+		DebugCh:                 make(chan string, 3000),
 	}
 }
 
 // CollectResults collects the results of the load test.
 func (p *PerfContractResultsCollector) CollectResults(ctx context.Context) {
-	go p.ResultCollector.CollectResults(ctx)
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -67,14 +66,14 @@ func (p *PerfContractResultsCollector) CollectResults(ctx context.Context) {
 			p.LastBatchID = lastBatchID
 		case err := <-p.LastBatchIDErrCh:
 			p.LastBatchIDErrors = append(p.LastBatchIDErrors, err)
+		case msg := <-p.DebugCh:
+			p.DebugMessages = append(p.DebugMessages, msg)
 		}
 	}
 }
 
 // PrintResults prints the results of the load test.
 func (p *PerfContractResultsCollector) PrintResults() {
-	p.ResultCollector.PrintResults()
-
 	fmt.Println("====================================")
 	fmt.Println("Total number of confirmed batches", p.ConfirmedBatchesCount)
 	fmt.Println("Total number of hashes", p.HashesCount.String())
@@ -106,6 +105,15 @@ func (p *PerfContractResultsCollector) PrintResults() {
 			fmt.Printf("%d: %v\n", i, err)
 		}
 	}
+
+	if len(p.DebugMessages) > 0 {
+		fmt.Println("====================================")
+		fmt.Println("Debug messages:")
+
+		for i, msg := range p.DebugMessages {
+			fmt.Printf("%d: %v\n", i, msg)
+		}
+	}
 }
 
 // PerfContractRunner represents a load test runner for performance test contract.
@@ -125,7 +133,7 @@ type PerfContractRunner struct {
 // NewPerfContractRunner creates a new PerfContractRunner instance with the given LoadTestConfig.
 // It returns a pointer to the created PerfContractRunner and an error, if any.
 func NewPerfContractRunner(cfg LoadTestConfig) (*PerfContractRunner, error) {
-	runner, err := NewBaseLoadTestRunner(cfg, false)
+	runner, err := NewBaseLoadTestRunner(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -159,9 +167,11 @@ func (p *PerfContractRunner) Run(ctx context.Context) error {
 	defer func() {
 		cancel()
 
+		p.resultsCollector.PrintResults()
 		p.perfResultCollector.PrintResults()
 	}()
 
+	go p.resultsCollector.CollectResults(ctx)
 	go p.perfResultCollector.CollectResults(ctx)
 	go p.readState(cancelableCtx)
 	go p.readTxPool(cancelableCtx)
@@ -191,12 +201,43 @@ func (p *PerfContractRunner) Run(ctx context.Context) error {
 }
 
 // createPerfContractTransaction creates a performance test contract transaction.
-//
-//nolint:godox
 func (p *PerfContractRunner) createPerfContractTransaction(
-	account *account, feeData *feeData, chainID *big.Int) *types.Transaction {
-	// TODO - implement
-	return nil
+	account *account, feeData *feeData, chainID *big.Int) (*types.Transaction, error) {
+	input := &contractsapi.SubmitSignedBatchTestPerformanceFn{
+		SignedBatch: &contractsapi.SignedBatch{
+			BatchID:     new(big.Int).SetUint64(account.nonce),
+			Counter:     new(big.Int).SetUint64(account.nonce),
+			ValidatorID: new(big.Int).SetUint64(uint64(account.index)),
+			Signature:   []byte(fmt.Sprintf("validator-%d", account.index)),
+		},
+	}
+
+	p.perfResultCollector.DebugCh <- fmt.Sprintf("Creating transaction for account %d with nonce %d", account.index, account.nonce)
+
+	txInput, err := input.EncodeAbi()
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode submitSignedBatch function: %w", err)
+	}
+
+	if p.cfg.DynamicTxs {
+		return types.NewTx(types.NewDynamicFeeTx(
+			types.WithNonce(account.nonce),
+			types.WithTo(&p.contractAddr),
+			types.WithFrom(account.key.Address()),
+			types.WithGasFeeCap(feeData.gasFeeCap),
+			types.WithGasTipCap(feeData.gasTipCap),
+			types.WithChainID(chainID),
+			types.WithInput(txInput),
+		)), nil
+	}
+
+	return types.NewTx(types.NewLegacyTx(
+		types.WithNonce(account.nonce),
+		types.WithTo(&p.contractAddr),
+		types.WithGasPrice(feeData.gasPrice),
+		types.WithFrom(account.key.Address()),
+		types.WithInput(txInput),
+	)), nil
 }
 
 // deployPerfContract deploys the performance test contract.
@@ -281,8 +322,6 @@ func (p *PerfContractRunner) readState(ctx context.Context) {
 		return
 	}
 
-	contractMap := contracts.GetProxyImplementationMapping()
-
 	for i := 0; i < p.cfg.StateReadThreads; i++ {
 		i := i
 
@@ -295,7 +334,6 @@ func (p *PerfContractRunner) readState(ctx context.Context) {
 					return
 				default:
 					// read non stop the state of the accounts and contracts
-					p.readBasicState(client, contractMap)
 					p.readConfirmedBatchesCount(client)
 					p.readHashesCount(client)
 					p.readLastBatchID(client)

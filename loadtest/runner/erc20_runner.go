@@ -27,7 +27,7 @@ type ERC20Runner struct {
 // NewERC20Runner creates a new ERC20Runner instance with the given LoadTestConfig.
 // It returns a pointer to the created ERC20Runner and an error, if any.
 func NewERC20Runner(cfg LoadTestConfig) (*ERC20Runner, error) {
-	runner, err := NewBaseLoadTestRunner(cfg, true)
+	runner, err := NewBaseLoadTestRunner(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +247,7 @@ func (e *ERC20Runner) mintERC20TokenToVUs() error {
 
 // createERC20Transaction creates an ERC20 transaction
 func (e *ERC20Runner) createERC20Transaction(account *account, feeData *feeData,
-	chainID *big.Int) *types.Transaction {
+	chainID *big.Int) (*types.Transaction, error) {
 	if e.cfg.DynamicTxs {
 		return types.NewTx(types.NewDynamicFeeTx(
 			types.WithNonce(account.nonce),
@@ -257,7 +257,7 @@ func (e *ERC20Runner) createERC20Transaction(account *account, feeData *feeData,
 			types.WithGasTipCap(feeData.gasTipCap),
 			types.WithChainID(chainID),
 			types.WithInput(e.txInput),
-		))
+		)), nil
 	}
 
 	return types.NewTx(types.NewLegacyTx(
@@ -266,5 +266,5 @@ func (e *ERC20Runner) createERC20Transaction(account *account, feeData *feeData,
 		types.WithGasPrice(feeData.gasPrice),
 		types.WithFrom(account.key.Address()),
 		types.WithInput(e.txInput),
-	))
+	)), nil
 }
