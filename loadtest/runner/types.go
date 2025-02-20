@@ -36,7 +36,7 @@ func (ecl ethClientList) close() error {
 	return nil
 }
 
-// getClient returns an EthClient from the list of clients for the given account index
+// getClientForAccount returns an EthClient from the list of clients for the given account index
 func (ecl ethClientList) getClientForAccount(accountIndex int) *jsonrpc.EthClient {
 	return ecl[accountIndex%len(ecl)]
 }
