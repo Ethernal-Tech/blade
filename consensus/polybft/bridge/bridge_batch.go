@@ -45,7 +45,7 @@ func NewPendingBridgeBatch(epoch uint64,
 			DestinationChainID:    bridgeEvents[0].DestinationChainID,
 			Threshold:             big.NewInt(0),
 			NumberOfRegularEvents: big.NewInt(0),
-			ValidationCounter:     big.NewInt(1),
+			CommitCounter:         big.NewInt(1),
 		},
 		Epoch: epoch,
 	}, nil
@@ -185,7 +185,7 @@ func (bbs *BridgeBatchSigned) constructFromSignedBatch(signedBatch *contractsapi
 			DestinationChainID:    signedBatch.Batch.DestinationChainID,
 			Threshold:             signedBatch.Batch.Threshold,
 			NumberOfRegularEvents: signedBatch.Batch.NumberOfRegularEvents,
-			ValidationCounter:     signedBatch.Batch.ValidationCounter,
+			CommitCounter:         signedBatch.Batch.CommitCounter,
 		},
 		AggSignature: polytypes.Signature{
 			AggregatedSignature: signature,

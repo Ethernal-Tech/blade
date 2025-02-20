@@ -64,7 +64,7 @@ func (m *SystemStateMock) GetValidatorSetByNumber(numberOfValidatorSet *big.Int)
 	return &contractsapi.SignedValidatorSet{}, nil
 }
 
-func (m *SystemStateMock) GetBatchValidation(hash types.Hash) (*big.Int, error) {
+func (m *SystemStateMock) GetBatchCommitCounter(hash types.Hash) (*big.Int, error) {
 	args := m.Called()
 
 	num, _ := args.Get(0).(*big.Int)

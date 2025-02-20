@@ -35,7 +35,7 @@ type SystemState interface {
 	// GetValidatorSetByNumber return validator set by number
 	GetValidatorSetByNumber(numberOfValidatorSet *big.Int) (*contractsapi.SignedValidatorSet, error)
 
-	GetBatchValidation(batchHash types.Hash) (*big.Int, error)
+	GetBatchCommitCounter(batchHash types.Hash) (*big.Int, error)
 }
 
 var _ SystemState = &SystemStateImpl{}
@@ -150,8 +150,8 @@ func (s *SystemStateImpl) GetValidatorSetByNumber(validatorSetID *big.Int) (*con
 	return svs, nil
 }
 
-func (s *SystemStateImpl) GetBatchValidation(hash types.Hash) (*big.Int, error) {
-	funcName := "batchValidation"
+func (s *SystemStateImpl) GetBatchCommitCounter(hash types.Hash) (*big.Int, error) {
+	funcName := "batchCommitCounter"
 
 	rawResult, err := s.bridgeStorageContract.Call(funcName, ethgo.Latest, hash.Bytes())
 	if err != nil {
@@ -160,7 +160,7 @@ func (s *SystemStateImpl) GetBatchValidation(hash types.Hash) (*big.Int, error) 
 
 	num, isOk := rawResult["0"].(*big.Int)
 	if !isOk {
-		return nil, fmt.Errorf("failed to decode batch validation counter")
+		return nil, fmt.Errorf("failed to decode batch commit counter")
 	}
 
 	return num, nil
