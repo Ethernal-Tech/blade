@@ -985,6 +985,7 @@ func (r *BaseLoadTestRunner) sendTransactionsForUser(
 		if err != nil {
 			sendErrs = append(sendErrs, err)
 			_ = bar.Add(1)
+
 			continue
 		}
 
@@ -1067,6 +1068,7 @@ func (r *BaseLoadTestRunner) sendTransactionsForUserInBatchesInternal(
 			txn, err := createTxnFn(account, feeData, chainID)
 			if err != nil {
 				sendErrs = append(sendErrs, err)
+
 				continue
 			}
 

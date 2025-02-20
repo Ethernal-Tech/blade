@@ -131,7 +131,7 @@ func (m *MixedTxRunner) createTransaction(
 		m.numOfERC20Txs++
 		m.lock.Unlock()
 
-		tx, _ := m.createERC20Transaction(account, feeData, chainID) //nolint:errcheck
+		tx, _ := m.createERC20Transaction(account, feeData, chainID)
 		tx.SetGas(m.erc20Gas)
 
 		return tx, nil
@@ -140,7 +140,7 @@ func (m *MixedTxRunner) createTransaction(
 		m.numOfERC721Txs++
 		m.lock.Unlock()
 
-		tx, _ := m.createERC721Transaction(account, feeData, chainID) //nolint:errcheck
+		tx, _ := m.createERC721Transaction(account, feeData, chainID)
 		tx.SetGas(m.erc721Gas)
 
 		return tx, nil
@@ -175,8 +175,8 @@ func (m *MixedTxRunner) estimateGas() error {
 		return err
 	}
 
-	erc20Txn, _ := m.createERC20Transaction(m.loadTestAccount, feeData, chainID)   //nolint:errcheck
-	erc721Txn, _ := m.createERC721Transaction(m.loadTestAccount, feeData, chainID) //nolint:errcheck
+	erc20Txn, _ := m.createERC20Transaction(m.loadTestAccount, feeData, chainID)
+	erc721Txn, _ := m.createERC721Transaction(m.loadTestAccount, feeData, chainID)
 
 	m.erc20Gas = estimateGasFn(erc20Txn)
 	m.erc721Gas = estimateGasFn(erc721Txn)

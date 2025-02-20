@@ -212,7 +212,8 @@ func (p *PerfContractRunner) createPerfContractTransaction(
 		},
 	}
 
-	p.perfResultCollector.DebugCh <- fmt.Sprintf("Creating transaction for account %d with nonce %d", account.index, account.nonce)
+	p.perfResultCollector.DebugCh <- fmt.Sprintf("Creating transaction for account %d with nonce %d",
+		account.index, account.nonce)
 
 	txInput, err := input.EncodeAbi()
 	if err != nil {
