@@ -73,6 +73,9 @@ type LoadTestConfig struct {
 	TxPoolReadThreads int           // TxPoolReadThreads is the number of threads to read tx pool.
 
 	ReceiversNum int // ReceiversNum is the number of receivers for different types of tokens
+
+	// BlockNumberDeadband is the maximum allowed discrepancy in the latest block numbers among the nodes
+	BlockNumberDeadband uint64
 }
 
 // LoadTestRunner represents a runner for load tests.

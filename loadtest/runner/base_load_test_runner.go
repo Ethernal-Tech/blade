@@ -658,6 +658,38 @@ func (r *BaseLoadTestRunner) calculateResults(blockInfos map[uint64]*BlockInfo, 
 	)
 }
 
+// queryLatestBlocks queries for the latest blocks on all the nodes and propagates an error
+// in case there is any node whose latest block is not within the predefined deadband.
+//
+//nolint:godox
+func (r *BaseLoadTestRunner) queryLatestBlocks() error {
+	// TODO: @Stefan-Ethernal invoke after calculateResults and print results in the table format
+	blockNumsMap := make(map[string]uint64)
+
+	for i, client := range r.clients {
+		rpcURL := r.cfg.JSONRPCUrls[i]
+
+		blockNum, err := client.BlockNumber()
+		if err != nil {
+			return fmt.Errorf("failed to query the latest block for %s node: %w", rpcURL, err)
+		}
+
+		blockNumsMap[rpcURL] = blockNum
+	}
+
+	// Check if block numbers are within the predefined deadband
+	var referenceBlockNum uint64
+	for _, blockNum := range blockNumsMap {
+		if referenceBlockNum == 0 {
+			referenceBlockNum = blockNum
+		} else if math.Abs(float64(referenceBlockNum)-float64(blockNum)) > float64(r.cfg.BlockNumberDeadband) {
+			return fmt.Errorf("block numbers are not within the acceptable range: %v", blockNumsMap)
+		}
+	}
+
+	return nil
+}
+
 // saveResultsToJSONFile saves the load test results to a JSON file.
 // It takes the total number of transactions (totalTxs), total time taken (totalTime),
 // maximum transactions per second (maxTxsPerSecond), minimum transactions per second (minTxsPerSecond),

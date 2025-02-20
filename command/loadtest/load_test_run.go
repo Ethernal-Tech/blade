@@ -145,6 +145,13 @@ func setFlags(cmd *cobra.Command) {
 		"the number of receivers for tokens being sent in load test",
 	)
 
+	cmd.Flags().Uint64Var(
+		&params.blockNumberDeadband,
+		blockNumberDeadbandFlag,
+		0,
+		"the deadband of block numbers, that is used when checking whether all the nodes are on the same block number",
+	)
+
 	_ = cmd.MarkFlagRequired(MnemonicFlag)
 	_ = cmd.MarkFlagRequired(loadTestTypeFlag)
 
@@ -174,6 +181,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 		StateReadThreads:     params.stateReadThreads,
 		TxPoolReadThreads:    params.txpoolReadThreads,
 		ReceiversNum:         params.receiversNum,
+		BlockNumberDeadband:  params.blockNumberDeadband,
 	})
 
 	if err != nil {

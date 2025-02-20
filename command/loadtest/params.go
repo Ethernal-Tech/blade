@@ -31,6 +31,8 @@ const (
 	txpoolReadThreadsFlag = "txpool-read-threads"
 
 	receiversNumFlag = "receivers-num"
+
+	blockNumberDeadbandFlag = "block-num-deadband"
 )
 
 var (
@@ -71,6 +73,8 @@ type loadTestParams struct {
 	txpoolReadThreads int
 
 	receiversNum int
+
+	blockNumberDeadband uint64
 }
 
 func (ltp *loadTestParams) validateFlags() error {
