@@ -96,7 +96,6 @@ contract TestPerformanceContract {
         // check if quorum reached (+1 is last vote)
         if (_numberOfVotes + 1 >= quorumCnt) {
             // console.log("Quorum has been reached!");
-
             confirmedBatches.push(
                 ConfirmedBatch(
                     _batchID,
@@ -106,7 +105,9 @@ contract TestPerformanceContract {
                 )
             );
 
-            lastBatchID = _batchID;
+            if (lastBatchID < _batchID) {
+                lastBatchID = _batchID;
+            }
 
             if (deleteTemporaryMappingsAfterQuorum) {
                 // remove from storage but for that exactly hash

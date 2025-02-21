@@ -262,7 +262,7 @@ func (p *PerfContractRunner) deployPerfContract() error {
 	input := &contractsapi.TestPerformanceConstructorFn{
 		QuorumCnt:                          quorum,
 		CheckBatchID:                       false,
-		DeleteTemporaryMappingsAfterQuorum: true,
+		DeleteTemporaryMappingsAfterQuorum: false,
 	}
 
 	raw, err := input.EncodeAbi()
