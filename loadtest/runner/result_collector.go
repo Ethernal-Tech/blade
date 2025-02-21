@@ -89,11 +89,14 @@ func (r *ResultCollector) CollectResults(ctx context.Context) {
 func (r *ResultCollector) PrintResults() {
 	fmt.Println("=============================================================")
 	fmt.Println("VUs transaction count:")
+
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"VU", "Num of Sent Transactions"})
+
 	for vu, txCount := range r.VUTxns {
 		table.Append([]string{vu, fmt.Sprintf("%d", txCount)})
 	}
+
 	table.Render()
 
 	fmt.Println("=============================================================")

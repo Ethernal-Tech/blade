@@ -667,6 +667,7 @@ type NodeInfo struct {
 func (r *BaseLoadTestRunner) queryLatestBlocks() (*NodeInfoResult, error) {
 	fmt.Println("=============================================================")
 	fmt.Println("Querying latest blocks...")
+
 	if len(r.clients) == 0 {
 		return nil, errors.New("no clients available to query the latest blocks")
 	}
@@ -750,6 +751,7 @@ func (r *BaseLoadTestRunner) printNodeInfos(nodesResult *NodeInfoResult) error {
 		}
 	} else {
 		fileName := fmt.Sprintf("./%s_%s_node_infos.json", r.cfg.LoadTestName, r.cfg.LoadTestType)
+
 		jsonData, err := json.MarshalIndent(nodesResult, "", "   ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal JSON: %w", err)
@@ -1074,6 +1076,7 @@ func (r *BaseLoadTestRunner) sendTransactionsForUser(
 		}
 
 		r.resultsCollector.VUTxnCountCh <- VUTxnCount{account.id, 1}
+
 		account.nonce++
 		_ = bar.Add(1)
 	}
@@ -1177,6 +1180,7 @@ func (r *BaseLoadTestRunner) sendTransactionsForUserInBatchesInternal(
 		}
 
 		r.resultsCollector.VUTxnCountCh <- VUTxnCount{account.id, len(hashes)}
+
 		txHashes = append(txHashes, hashes...)
 		_ = bar.Add(len(batchTxs))
 	}
