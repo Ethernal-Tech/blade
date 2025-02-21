@@ -898,7 +898,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 	}
 	// Initialize Gateway contract with BLS, BN256G2 and validators
 	if config.RollbackMode != NoRollback {
-		ipAddress := cluster.Bridges[0].JSONRPCAddr()
+		ipAddress := cluster.Servers[0].JSONRPCAddr()
 		if config.RollbackMode == I2ERollback {
 			ipAddress = cluster.Bridges[0].JSONRPCAddr()
 		}

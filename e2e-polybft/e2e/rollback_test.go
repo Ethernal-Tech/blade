@@ -175,7 +175,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 
 		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
 			for i := startEventNum(); i <= endEventNum(); i++ {
-				if i%2 == 0 && !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, internalChainTxRelayer, i, true) {
+				if i%2 == 0 && !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, true) {
 					return false
 				}
 			}
@@ -183,8 +183,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 			return true
 		}))
 
-		latest, err = externalRPC.BlockNumber()
-		require.NoError(t, err)
+		latest = waitForBlocksOnExternal(t, 20, externalRPC, 2*time.Minute)
 
 		logs, err = getFilteredLogs(bridgeMessageResult.Sig(), externalBlockStart, latest, externalRPC)
 		require.NoError(t, err)
@@ -241,7 +240,6 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 
 	evNum++
 	t.Run("Rollback_ERC721", func(t *testing.T) {
-		t.Skip()
 		tokenIDs := make([]string, transfersCount)
 
 		for i := 0; i < transfersCount; i++ {
@@ -255,6 +253,8 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 			},
 		})
 
+		waitForBlocksOnExternal(t, 10, externalRPC, 2*time.Minute)
+
 		startBlockInternal, err := validatorSrv.JSONRPC().BlockNumber()
 		require.NoError(t, err)
 
@@ -266,25 +266,27 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 
 		rootERC721Addr := types.Address(receipt.ContractAddress)
 
-		require.NoError(
-			t,
-			bridge.Deposit(
-				common.ERC721,
-				rootERC721Addr,
-				bridgeCfg.ExternalERC721PredicateAddr,
-				bridgeHelper.TestAccountPrivKey,
-				strings.Join(receivers, ","),
-				"",
-				strings.Join(tokenIDs, ","),
-				bridge.JSONRPCAddr(),
-				bridgeHelper.TestAccountPrivKey,
-				false),
-		)
+		for i := range transfersCount {
+			require.NoError(
+				t,
+				bridge.Deposit(
+					common.ERC721,
+					rootERC721Addr,
+					bridgeCfg.ExternalERC721PredicateAddr,
+					bridgeHelper.TestAccountPrivKey,
+					receivers[i],
+					"",
+					tokenIDs[i],
+					bridge.JSONRPCAddr(),
+					bridgeHelper.TestAccountPrivKey,
+					false),
+			)
+		}
 
 		// Wait for rollback to be processed
 		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 			for i := startEventNum(); i <= endEventNum(); i++ {
-				if !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i, true) {
+				if !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i, false) {
 					return false
 				}
 			}
@@ -297,7 +299,6 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 
 	evNum++
 	t.Run("Rollback_ERC1155", func(t *testing.T) {
-		t.Skip()
 		tokenIDs := make([]string, transfersCount)
 		for i := 0; i < transfersCount; i++ {
 			tokenIDs[i] = fmt.Sprintf("%d", i+1)
@@ -310,6 +311,8 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 			},
 		})
 
+		waitForBlocksOnExternal(t, 10, externalRPC, 2*time.Minute)
+
 		startBlockExternal, err := externalRPC.BlockNumber()
 		require.NoError(t, err)
 
@@ -320,25 +323,27 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 		require.NoError(t, err)
 
 		rootERC1155Addr := types.Address(receipt.ContractAddress)
-		require.NoError(
-			t,
-			bridge.Deposit(
-				common.ERC1155,
-				rootERC1155Addr,
-				bridgeCfg.ExternalERC1155PredicateAddr,
-				bridgeHelper.TestAccountPrivKey,
-				strings.Join(receivers, ","),
-				strings.Join(amounts, ","),
-				strings.Join(tokenIDs, ","),
-				bridge.JSONRPCAddr(),
-				bridgeHelper.TestAccountPrivKey,
-				false),
-		)
+		for i := range receivers {
+			require.NoError(
+				t,
+				bridge.Deposit(
+					common.ERC1155,
+					rootERC1155Addr,
+					bridgeCfg.ExternalERC1155PredicateAddr,
+					bridgeHelper.TestAccountPrivKey,
+					receivers[i],
+					amounts[i],
+					tokenIDs[i],
+					bridge.JSONRPCAddr(),
+					bridgeHelper.TestAccountPrivKey,
+					false),
+			)
+		}
 
 		// Wait for rollback to be processed
 		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
 			for i := startEventNum(); i <= endEventNum(); i++ {
-				if !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, externalChainTxRelayer, i, true) {
+				if !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i, false) {
 					return false
 				}
 			}
