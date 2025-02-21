@@ -653,26 +653,31 @@ func (r *BaseLoadTestRunner) calculateResults(blockInfos map[uint64]*BlockInfo, 
 }
 
 type NodeInfoResult struct {
-	NodeURL     string `json:"nodeURL"`
+	NodeInfos []*NodeInfo `json:"nodeInfos"`
+	OutOfSync []string    `json:"nodesOutOfSync"`
+}
+
+type NodeInfo struct {
+	URL         string `json:"nodeURL"`
 	BlockNumber uint64 `json:"blockNumber"`
 }
 
 // queryLatestBlocks queries for the latest blocks on all the nodes and
 // detects if there are nodes that are out of sync (whose latest block number is outside of predefined deadband)
-func (r *BaseLoadTestRunner) queryLatestBlocks() ([]*NodeInfoResult, []string, error) {
+func (r *BaseLoadTestRunner) queryLatestBlocks() (*NodeInfoResult, error) {
 	fmt.Println("=============================================================")
 	fmt.Println("Querying latest blocks...")
 	if len(r.clients) == 0 {
-		return nil, nil, errors.New("no clients available to query the latest blocks")
+		return nil, errors.New("no clients available to query the latest blocks")
 	}
 
 	if len(r.cfg.JSONRPCUrls) != len(r.clients) {
-		return nil, nil, errors.New("number of JSON RPC URLs does not match the number of clients")
+		return nil, errors.New("number of JSON RPC URLs does not match the number of clients")
 	}
 
 	fmt.Println("Number of nodes:", len(r.clients))
 
-	nodeInfos := make([]*NodeInfoResult, 0, len(r.clients))
+	nodeInfos := make([]*NodeInfo, 0, len(r.clients))
 
 	// query each node for the latest block number and store the result
 	for i, client := range r.clients {
@@ -680,12 +685,12 @@ func (r *BaseLoadTestRunner) queryLatestBlocks() ([]*NodeInfoResult, []string, e
 
 		blockNum, err := client.BlockNumber()
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to query the latest block for %s node: %w", nodeURL, err)
+			return nil, fmt.Errorf("failed to query the latest block for %s node: %w", nodeURL, err)
 		}
 
 		nodeInfos = append(nodeInfos,
-			&NodeInfoResult{
-				NodeURL:     nodeURL,
+			&NodeInfo{
+				URL:         nodeURL,
 				BlockNumber: blockNum,
 			})
 	}
@@ -707,17 +712,20 @@ func (r *BaseLoadTestRunner) queryLatestBlocks() ([]*NodeInfoResult, []string, e
 		}
 
 		if largestBlockNumber-blockNum > r.cfg.BlockNumberDeadband {
-			nodesOutOfSync = append(nodesOutOfSync, nodeInfo.NodeURL)
+			nodesOutOfSync = append(nodesOutOfSync, nodeInfo.URL)
 		}
 	}
 
-	return nodeInfos, nodesOutOfSync, nil
+	return &NodeInfoResult{
+		NodeInfos: nodeInfos,
+		OutOfSync: nodesOutOfSync,
+	}, nil
 }
 
 // printNodeInfos prints the node information to the console.
 // It displays the node URL and the latest block number for each node.
 // If there are nodes that are out of sync, it displays the URLs of those nodes.
-func (r *BaseLoadTestRunner) printNodeInfos(nodeInfos []*NodeInfoResult, nodesOutOfSync []string) error {
+func (r *BaseLoadTestRunner) printNodeInfos(nodesResult *NodeInfoResult) error {
 	if !r.cfg.ResultsToJSON {
 		fmt.Println("=============================================================")
 		fmt.Println("Node information:")
@@ -725,16 +733,16 @@ func (r *BaseLoadTestRunner) printNodeInfos(nodeInfos []*NodeInfoResult, nodesOu
 		table := tablewriter.NewWriter(os.Stdout)
 		table.SetHeader([]string{"Node URL", "Block Number"})
 
-		for _, nodeInfo := range nodeInfos {
-			table.Append([]string{nodeInfo.NodeURL, fmt.Sprint(nodeInfo.BlockNumber)})
+		for _, nodeInfo := range nodesResult.NodeInfos {
+			table.Append([]string{nodeInfo.URL, fmt.Sprint(nodeInfo.BlockNumber)})
 		}
 
 		table.Render()
 
-		if len(nodesOutOfSync) > 0 {
+		if len(nodesResult.OutOfSync) > 0 {
 			fmt.Println("Nodes out of sync:")
 
-			for _, nodeURL := range nodesOutOfSync {
+			for _, nodeURL := range nodesResult.OutOfSync {
 				fmt.Println(nodeURL)
 			}
 		} else {
@@ -742,7 +750,12 @@ func (r *BaseLoadTestRunner) printNodeInfos(nodeInfos []*NodeInfoResult, nodesOu
 		}
 	} else {
 		fileName := fmt.Sprintf("./%s_%s_node_infos.json", r.cfg.LoadTestName, r.cfg.LoadTestType)
-		if err := appendJSONToFile(fileName, nodeInfos); err != nil {
+		jsonData, err := json.Marshal(nodesResult)
+		if err != nil {
+			return fmt.Errorf("failed to marshal JSON: %w", err)
+		}
+
+		if err := common.SaveFileSafe(fileName, jsonData, 0600); err != nil {
 			return err
 		}
 	}

@@ -83,12 +83,12 @@ func (e *ERC721Runner) Run(ctx context.Context) error {
 			return err
 		}
 
-		nodeInfos, nodesOutOfSync, err := e.queryLatestBlocks()
+		nodeInfos, err := e.queryLatestBlocks()
 		if err != nil {
 			return err
 		}
 
-		return e.printNodeInfos(nodeInfos, nodesOutOfSync)
+		return e.printNodeInfos(nodeInfos)
 	}
 
 	txHashes, err := e.sendTransactions(e.createERC721Transaction)
@@ -104,12 +104,12 @@ func (e *ERC721Runner) Run(ctx context.Context) error {
 		return err
 	}
 
-	nodeInfos, nodesOutOfSync, err := e.queryLatestBlocks()
+	nodeInfos, err := e.queryLatestBlocks()
 	if err != nil {
 		return err
 	}
 
-	return e.printNodeInfos(nodeInfos, nodesOutOfSync)
+	return e.printNodeInfos(nodeInfos)
 }
 
 // deployERC21Token deploys an ERC721 token contract.

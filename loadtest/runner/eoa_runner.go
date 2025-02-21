@@ -69,12 +69,12 @@ func (e *EOARunner) Run(ctx context.Context) error {
 			return err
 		}
 
-		nodeInfos, nodesOutOfSync, err := e.queryLatestBlocks()
+		nodeInfos, err := e.queryLatestBlocks()
 		if err != nil {
 			return err
 		}
 
-		return e.printNodeInfos(nodeInfos, nodesOutOfSync)
+		return e.printNodeInfos(nodeInfos)
 	}
 
 	txHashes, err := e.sendTransactions(e.createEOATransaction)
@@ -90,12 +90,12 @@ func (e *EOARunner) Run(ctx context.Context) error {
 		return err
 	}
 
-	nodeInfos, nodesOutOfSync, err := e.queryLatestBlocks()
+	nodeInfos, err := e.queryLatestBlocks()
 	if err != nil {
 		return err
 	}
 
-	return e.printNodeInfos(nodeInfos, nodesOutOfSync)
+	return e.printNodeInfos(nodeInfos)
 }
 
 // createEOATransaction creates an EOA transaction

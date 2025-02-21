@@ -106,12 +106,12 @@ func (m *MixedTxRunner) Run(ctx context.Context) error {
 			return err
 		}
 
-		nodeInfos, nodesOutOfSync, err := m.queryLatestBlocks()
+		nodeInfos, err := m.queryLatestBlocks()
 		if err != nil {
 			return err
 		}
 
-		return m.printNodeInfos(nodeInfos, nodesOutOfSync)
+		return m.printNodeInfos(nodeInfos)
 	}
 
 	txHashes, err := m.sendTransactions(m.createTransaction)
@@ -129,12 +129,12 @@ func (m *MixedTxRunner) Run(ctx context.Context) error {
 		return err
 	}
 
-	nodeInfos, nodesOutOfSync, err := m.queryLatestBlocks()
+	nodeInfos, err := m.queryLatestBlocks()
 	if err != nil {
 		return err
 	}
 
-	return m.printNodeInfos(nodeInfos, nodesOutOfSync)
+	return m.printNodeInfos(nodeInfos)
 }
 
 // createTransaction creates a transaction for the mixed load test

@@ -89,12 +89,12 @@ func (e *ERC20Runner) Run(ctx context.Context) error {
 			return err
 		}
 
-		nodeInfos, nodesOutOfSync, err := e.queryLatestBlocks()
+		nodeInfos, err := e.queryLatestBlocks()
 		if err != nil {
 			return err
 		}
 
-		return e.printNodeInfos(nodeInfos, nodesOutOfSync)
+		return e.printNodeInfos(nodeInfos)
 	}
 
 	txHashes, err := e.sendTransactions(e.createERC20Transaction)
@@ -110,12 +110,12 @@ func (e *ERC20Runner) Run(ctx context.Context) error {
 		return err
 	}
 
-	nodeInfos, nodesOutOfSync, err := e.queryLatestBlocks()
+	nodeInfos, err := e.queryLatestBlocks()
 	if err != nil {
 		return err
 	}
 
-	return e.printNodeInfos(nodeInfos, nodesOutOfSync)
+	return e.printNodeInfos(nodeInfos)
 }
 
 // deployERC20Token deploys an ERC20 token contract.
