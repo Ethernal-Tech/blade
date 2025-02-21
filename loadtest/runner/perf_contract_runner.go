@@ -255,9 +255,7 @@ func (p *PerfContractRunner) deployPerfContract() error {
 	start := time.Now().UTC()
 	artifact := contractsapi.TestPerformance
 
-	quorum := new(big.Int)
-	quorum.Mul(big.NewInt(int64(p.cfg.VUs)), big.NewInt(2))
-	quorum = quorum.Div(quorum, big.NewInt(3)).Add(quorum, big.NewInt(1))
+	quorum := big.NewInt(int64(p.cfg.VUs / 3))
 
 	fmt.Println("Quorum count:", quorum)
 
