@@ -142,7 +142,7 @@ func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, externalChainsIDs []uint6
 				}
 
 				if _, err := bucket.CreateBucketIfNotExists(rollbackMessages); err != nil {
-					return fmt.Errorf("failed to create bucket for rollback messagess: %w", err)
+					return fmt.Errorf("failed to create bucket for rollback messages: %w", err)
 				}
 			}
 		}
@@ -242,6 +242,8 @@ func (bms *BridgeManagerStore) getBridgeMessageEvent(messageID, sourceChainID, d
 		if err := bms.db.Update(insertFn); err != nil {
 			return nil, err
 		}
+
+		return message, nil
 	}
 
 	if err := insertFn(dbTx); err != nil {

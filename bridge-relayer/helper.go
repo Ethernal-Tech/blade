@@ -74,7 +74,7 @@ func GetBridgeBatchesFromNumber(batchID *big.Int,
 			return nil, fmt.Errorf("invalid format of the number of regular events")
 		}
 
-		decodedValidationCounter, ok := decodedBatch["validationCounter"].(*big.Int)
+		decodedCommitCounter, ok := decodedBatch["commitCounter"].(*big.Int)
 		if !ok {
 			return nil, fmt.Errorf("invalid format of the validation counter")
 		}
@@ -111,7 +111,7 @@ func GetBridgeBatchesFromNumber(batchID *big.Int,
 				DestinationChainID:    decodedDestinationChainID,
 				Threshold:             decodedThreshold,
 				NumberOfRegularEvents: decodedNumberOfRegularEvents,
-				ValidationCounter:     decodedValidationCounter,
+				CommitCounter:         decodedCommitCounter,
 			},
 			Signature:           decodedSignature,
 			Bitmap:              decodedBitmap,

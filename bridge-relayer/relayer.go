@@ -571,18 +571,6 @@ func newLoggerFromConfig(options *options) (hclog.Logger, error) {
 }
 
 func (r *BridgeRelayer) sendSignedBridgeMessageBatch(batch *contractsapi.SignedBridgeMessageBatch) error {
-	var (
-		destinationRelayer txrelayer.TxRelayer
-		destinationGateway types.Address
-	)
-
-	if batch.Batch.SourceChainID.Cmp(r.externalChainID) == 0 {
-		destinationGateway = r.internalGatewayAddr
-		destinationRelayer = r.internalClient
-	} else {
-		destinationGateway = r.externalGatewayAddr
-		destinationRelayer = r.externalClient
-	}
 
 	input, err := (&contractsapi.ReceiveBatchGatewayFn{
 		SignedBatch: batch,
@@ -593,11 +581,11 @@ func (r *BridgeRelayer) sendSignedBridgeMessageBatch(batch *contractsapi.SignedB
 
 	tx := types.NewTx(types.NewLegacyTx(
 		types.WithFrom(r.privateKey.Address()),
-		types.WithTo(&destinationGateway),
+		types.WithTo(&r.externalGatewayAddr),
 		types.WithInput(input),
 	))
 
-	receipt, err := destinationRelayer.SendTransaction(tx, r.privateKey)
+	receipt, err := r.externalClient.SendTransaction(tx, r.privateKey)
 	if err != nil {
 		return fmt.Errorf("id-ed batch has already been processed or cannot be processed, err: %w", err)
 	}
