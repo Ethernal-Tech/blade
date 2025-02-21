@@ -73,7 +73,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 		transfersCount        = 5
 		numOfRollback         = int((transfersCount + 1) / 2)
 		numBlockConfirmations = 2
-		epochSize             = 40
+		epochSize             = 10
 		sprintSize            = uint64(5)
 		numberOfAttempts      = 7
 		stateSyncedLogsCount  = 2
@@ -119,7 +119,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
-		framework.WithBridgeBatchThreshold(25),
+		framework.WithBridgeBatchThreshold(100),
 		framework.WithPredeploy(fmt.Sprintf("%s:TestRollbackGateway", gatewayAddr)),
 		framework.WithRelayerPrivateKey(relayerKey),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
@@ -370,7 +370,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 		transfersCount   = uint64(5)
 		numOfRollback    = int((transfersCount + 1) / 2)
 		amount           = 100
-		epochSize        = 30
+		epochSize        = 10
 		sprintSize       = uint64(5)
 		numberOfAttempts = 4
 		numberOfBridges  = 1
