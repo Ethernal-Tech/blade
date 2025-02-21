@@ -750,7 +750,7 @@ func (r *BaseLoadTestRunner) printNodeInfos(nodesResult *NodeInfoResult) error {
 		}
 	} else {
 		fileName := fmt.Sprintf("./%s_%s_node_infos.json", r.cfg.LoadTestName, r.cfg.LoadTestType)
-		jsonData, err := json.Marshal(nodesResult)
+		jsonData, err := json.MarshalIndent(nodesResult, "", "   ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal JSON: %w", err)
 		}
@@ -758,29 +758,6 @@ func (r *BaseLoadTestRunner) printNodeInfos(nodesResult *NodeInfoResult) error {
 		if err := common.SaveFileSafe(fileName, jsonData, 0600); err != nil {
 			return err
 		}
-	}
-
-	return nil
-}
-
-// appendJSONToFile opens or creates a JSON file and appends the given data
-func appendJSONToFile(filename string, data interface{}) error {
-	// Open file with append and create mode, read/write permissions
-	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open or create file: %w", err)
-	}
-	defer file.Close()
-
-	// Encode the data to JSON
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %w", err)
-	}
-
-	// Append a newline for readability if appending multiple JSON objects
-	if _, err := file.Write(append(jsonData, '\n')); err != nil {
-		return fmt.Errorf("failed to write to file: %w", err)
 	}
 
 	return nil
@@ -828,7 +805,7 @@ func (r *BaseLoadTestRunner) saveResultsToJSONFile(
 		AvgGasUtilization: avgGasUtilization,
 	}
 
-	jsonData, err := json.Marshal(result)
+	jsonData, err := json.MarshalIndent(result, "", "   ")
 	if err != nil {
 		return err
 	}
