@@ -3,6 +3,7 @@ package e2e
 import (
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/0xPolygon/polygon-edge/jsonrpc"
 	"github.com/Ethernal-Tech/ethgo"
@@ -100,17 +101,52 @@ func assertBridgeEventResultSuccess(
 // 1. there are required amount of logs,
 // 2. they are of contractsapi.BridgeMessageResult type
 // 3. status is true, meaning that the state syncs were executed successfully
-func assertBridgeEventResultNotSuccessfull(
+func assertBridgeEventResultNotSuccessful(
 	t *testing.T,
 	logs []*ethgo.Log,
 	expectedCount int) {
 	t.Helper()
-	checkBridgeMessageResultLogs(t, logs, expectedCount,
-		func(t *testing.T, ssre contractsapi.BridgeMessageResultEvent) {
-			t.Helper()
 
-			require.True(t, ssre.Status)
-		})
+	numberOfFailed := 0
+	var bridgeMessage contractsapi.BridgeMessageResultEvent
+
+	for _, log := range logs {
+		doesMatch, err := bridgeMessage.ParseLog(log)
+		require.NoError(t, err)
+		require.True(t, doesMatch)
+
+		if !bridgeMessage.Status {
+			numberOfFailed++
+		}
+	}
+
+	require.Equal(t, expectedCount, numberOfFailed)
+}
+
+// assertBridgeEventResultNotSuccessfull asserts that:
+// 1. there are required amount of logs,
+// 2. they are of contractsapi.BridgeMessageResult type
+// 3. status is true, meaning that the state syncs were executed successfully
+func assertBridgeEventResultSuccessful(
+	t *testing.T,
+	logs []*ethgo.Log,
+	expectedCount int) {
+	t.Helper()
+
+	numberOfSuccessful := 0
+	var bridgeMessage contractsapi.BridgeMessageResultEvent
+
+	for _, log := range logs {
+		doesMatch, err := bridgeMessage.ParseLog(log)
+		require.NoError(t, err)
+		require.True(t, doesMatch)
+
+		if bridgeMessage.Status {
+			numberOfSuccessful++
+		}
+	}
+
+	require.Equal(t, expectedCount, numberOfSuccessful)
 }
 
 // setAccessListRole sets access list role to appropriate access list precompile
@@ -248,4 +284,31 @@ func isEventProcessed(t *testing.T, gatewayAddr types.Address,
 	require.NoError(t, err)
 
 	return isProcessedAsNumber == 1
+}
+
+// Waits for number of blocks specified from current on external
+// returns last block number
+func waitForBlocksOnExternal(t *testing.T, numberOfBlocks uint64,
+	externalRPC *jsonrpc.EthClient, timeToWait time.Duration) uint64 {
+	latest, err := externalRPC.BlockNumber()
+	require.NoError(t, err)
+
+	ticker := time.NewTicker(time.Second)
+	timer := time.NewTimer(timeToWait)
+
+	waitFor := latest + numberOfBlocks
+
+	for {
+		select {
+		case <-ticker.C:
+			latest, err := externalRPC.BlockNumber()
+			require.NoError(t, err)
+
+			if latest >= waitFor {
+				return latest
+			}
+		case <-timer.C:
+			t.Fatalf("External chain didn't get to %d at time", waitFor)
+		}
+	}
 }
