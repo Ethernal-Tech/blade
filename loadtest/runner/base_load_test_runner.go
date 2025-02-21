@@ -94,7 +94,7 @@ func NewBaseLoadTestRunner(cfg LoadTestConfig) (*BaseLoadTestRunner, error) {
 		resultsCollectedCh: make(chan *stats),
 		done:               make(chan error),
 		batchSenders:       newBatchSenders(cfg.JSONRPCUrls),
-		resultsCollector:   NewResultCollector(),
+		resultsCollector:   NewResultCollector(cfg),
 		clients:            ethClientList,
 		receivers:          receiversList,
 		vus:                make([]*account, cfg.VUs),
@@ -129,7 +129,7 @@ func (r *BaseLoadTestRunner) createVUs() error {
 			return err
 		}
 
-		r.vus[i] = &account{index: i, key: key}
+		r.vus[i] = &account{index: i, key: key, id: fmt.Sprintf("Index: %d Address: %s", i, key.Address().String())}
 		r.vusAddresses[i] = key.Address()
 
 		_ = bar.Add(1)
@@ -1073,6 +1073,7 @@ func (r *BaseLoadTestRunner) sendTransactionsForUser(
 			sendErrs = append(sendErrs, err)
 		}
 
+		r.resultsCollector.VUTxnCountCh <- VUTxnCount{account.id, 1}
 		account.nonce++
 		_ = bar.Add(1)
 	}
@@ -1175,6 +1176,7 @@ func (r *BaseLoadTestRunner) sendTransactionsForUserInBatchesInternal(
 			return nil, nil, err
 		}
 
+		r.resultsCollector.VUTxnCountCh <- VUTxnCount{account.id, len(hashes)}
 		txHashes = append(txHashes, hashes...)
 		_ = bar.Add(len(batchTxs))
 	}

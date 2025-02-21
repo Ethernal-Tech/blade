@@ -30,9 +30,6 @@ type PerfContractResultsCollector struct {
 	LastBatchIDErrCh  chan error
 	LastBatchID       *big.Int
 	LastBatchIDErrors []error
-
-	DebugCh       chan string
-	DebugMessages []string
 }
 
 // NewPerfContractResultsCollector creates a new PerfContractResultsCollector instance.
@@ -44,7 +41,8 @@ func NewPerfContractResultsCollector() *PerfContractResultsCollector {
 		HashesErrCh:             make(chan error, 3000),
 		LastBatchIDCh:           make(chan *big.Int, 3000),
 		LastBatchIDErrCh:        make(chan error, 3000),
-		DebugCh:                 make(chan string, 3000),
+		LastBatchID:             new(big.Int),
+		HashesCount:             new(big.Int),
 	}
 }
 
@@ -59,15 +57,17 @@ func (p *PerfContractResultsCollector) CollectResults(ctx context.Context) {
 		case err := <-p.ConfirmedBatchesErrCh:
 			p.ConfirmedBatchesErrors = append(p.ConfirmedBatchesErrors, err)
 		case count := <-p.HashesCountCh:
-			p.HashesCount = count
+			if p.HashesCount.Cmp(count) < 0 {
+				p.HashesCount = count
+			}
 		case err := <-p.HashesErrCh:
 			p.HashesErrors = append(p.HashesErrors, err)
 		case lastBatchID := <-p.LastBatchIDCh:
-			p.LastBatchID = lastBatchID
+			if p.LastBatchID.Cmp(lastBatchID) < 0 {
+				p.LastBatchID = lastBatchID
+			}
 		case err := <-p.LastBatchIDErrCh:
 			p.LastBatchIDErrors = append(p.LastBatchIDErrors, err)
-		case msg := <-p.DebugCh:
-			p.DebugMessages = append(p.DebugMessages, msg)
 		}
 	}
 }
@@ -103,15 +103,6 @@ func (p *PerfContractResultsCollector) PrintResults() {
 
 		for i, err := range p.LastBatchIDErrors {
 			fmt.Printf("%d: %v\n", i, err)
-		}
-	}
-
-	if len(p.DebugMessages) > 0 {
-		fmt.Println("====================================")
-		fmt.Println("Debug messages:")
-
-		for i, msg := range p.DebugMessages {
-			fmt.Printf("%d: %v\n", i, msg)
 		}
 	}
 }
@@ -230,9 +221,6 @@ func (p *PerfContractRunner) createPerfContractTransaction(
 		},
 	}
 
-	p.perfResultCollector.DebugCh <- fmt.Sprintf("Creating transaction for account %d with nonce %d",
-		account.index, account.nonce)
-
 	txInput, err := input.EncodeAbi()
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode submitSignedBatch function: %w", err)
@@ -271,10 +259,12 @@ func (p *PerfContractRunner) deployPerfContract() error {
 	quorum.Mul(big.NewInt(int64(p.cfg.VUs)), big.NewInt(2))
 	quorum = quorum.Div(quorum, big.NewInt(3)).Add(quorum, big.NewInt(1))
 
+	fmt.Println("Quorum count:", quorum)
+
 	input := &contractsapi.TestPerformanceConstructorFn{
 		QuorumCnt:                          quorum,
-		CheckBatchID:                       true,
-		DeleteTemporaryMappingsAfterQuorum: false,
+		CheckBatchID:                       false,
+		DeleteTemporaryMappingsAfterQuorum: true,
 	}
 
 	raw, err := input.EncodeAbi()
@@ -341,6 +331,8 @@ func (p *PerfContractRunner) readState(ctx context.Context) {
 		return
 	}
 
+	contractMap := contracts.GetProxyImplementationMapping()
+
 	for i := 0; i < p.cfg.StateReadThreads; i++ {
 		i := i
 
@@ -353,6 +345,7 @@ func (p *PerfContractRunner) readState(ctx context.Context) {
 					return
 				default:
 					// read non stop the state of the accounts and contracts
+					p.readBasicState(client, contractMap)
 					p.readConfirmedBatchesCount(client)
 					p.readHashesCount(client)
 					p.readLastBatchID(client)
@@ -432,5 +425,14 @@ func (p *PerfContractRunner) readConfirmedBatchesCount(client *jsonrpc.EthClient
 		p.perfResultCollector.ConfirmedBatchesErrCh <- fmt.Errorf("failed to convert decoded response to map, %w", err)
 	}
 
-	p.perfResultCollector.ConfirmedBatchesCountCh <- len(decodedMap)
+	if len(decodedMap) == 0 {
+		return
+	}
+
+	decodedBatches, ok := decodedMap["0"].([]map[string]interface{})
+	if !ok {
+		p.perfResultCollector.ConfirmedBatchesErrCh <- fmt.Errorf("failed to convert decoded batches to map, %w", err)
+	}
+
+	p.perfResultCollector.ConfirmedBatchesCountCh <- len(decodedBatches)
 }

@@ -32,6 +32,7 @@ type account struct {
 	index int
 	nonce uint64
 	key   *crypto.ECDSAKey
+	id    string
 }
 
 type BlockInfo struct {

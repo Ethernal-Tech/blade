@@ -3,7 +3,17 @@ package runner
 import (
 	"context"
 	"fmt"
+	"os"
+
+	"github.com/olekukonko/tablewriter"
 )
+
+// VUTxnCount represents the number of transactions sent by a virtual user
+// in one iteration of send transactions loop
+type VUTxnCount struct {
+	VU      string
+	TxCount int
+}
 
 // ResultCollector collects the results of the load test.
 type ResultCollector struct {
@@ -26,10 +36,13 @@ type ResultCollector struct {
 	CodeReadErrorCh chan error
 	CodeReadCount   int
 	CodeReadErrors  []error
+
+	VUTxnCountCh chan VUTxnCount
+	VUTxns       map[string]int
 }
 
 // NewResultCollector creates a new ResultCollector instance.
-func NewResultCollector() *ResultCollector {
+func NewResultCollector(cfg LoadTestConfig) *ResultCollector {
 	return &ResultCollector{
 		BalanceReadCountCh:      make(chan struct{}, 3000),
 		BalanceReadErrorCh:      make(chan error, 3000),
@@ -39,6 +52,8 @@ func NewResultCollector() *ResultCollector {
 		TxPoolStatusReadErrorCh: make(chan error, 3000),
 		CodeReadCountCh:         make(chan struct{}, 3000),
 		CodeReadErrorCh:         make(chan error, 3000),
+		VUTxnCountCh:            make(chan VUTxnCount, 3000),
+		VUTxns:                  make(map[string]int, cfg.VUs),
 	}
 }
 
@@ -64,12 +79,24 @@ func (r *ResultCollector) CollectResults(ctx context.Context) {
 			r.CodeReadCount++
 		case err := <-r.CodeReadErrorCh:
 			r.CodeReadErrors = append(r.CodeReadErrors, err)
+		case vuTxns := <-r.VUTxnCountCh:
+			r.VUTxns[vuTxns.VU] += vuTxns.TxCount
 		}
 	}
 }
 
 // PrintResults prints the results of the load test.
 func (r *ResultCollector) PrintResults() {
+	fmt.Println("=============================================================")
+	fmt.Println("VUs transaction count:")
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"VU", "Num of Sent Transactions"})
+	for vu, txCount := range r.VUTxns {
+		table.Append([]string{vu, fmt.Sprintf("%d", txCount)})
+	}
+	table.Render()
+
+	fmt.Println("=============================================================")
 	fmt.Println("Total balance read count:", r.BalanceReadCount)
 	fmt.Println("Total nonce read count:", r.NonceReadCount)
 	fmt.Println("Total tx pool status read count:", r.TxPoolStatusReadCount)
