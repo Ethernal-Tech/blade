@@ -658,7 +658,7 @@ type NodeInfoResult struct {
 }
 
 type NodeInfo struct {
-	URL         string `json:"nodeURL"`
+	URL         string `json:"url"`
 	BlockNumber uint64 `json:"blockNumber"`
 }
 
