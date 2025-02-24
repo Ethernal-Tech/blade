@@ -691,7 +691,7 @@ func TestE2E_Retry_I2E(t *testing.T) {
 		}
 	})
 
-	t.Run("Rollback_ERC721", func(t *testing.T) {
+	t.Run("Retry_ERC721", func(t *testing.T) {
 		cluster.BridgeRelayers[0].Stop()
 
 		erc721DeployTxn := cluster.Deploy(t, admin, contractsapi.RootERC721.Bytecode)
@@ -738,6 +738,11 @@ func TestE2E_Retry_I2E(t *testing.T) {
 
 			return true
 		}))
+
+		currentBlock, err = internalRPC.BlockNumber()
+		require.NoError(t, err)
+
+		require.NoError(t, cluster.WaitForBlock(currentBlock+epochSize, time.Minute))
 
 		childERC721Token := getChildToken(t, contractsapi.RootERC721Predicate.Abi,
 			bridgeCfg.InternalMintableERC721PredicateAddr, rootERC721Token, internalChainTxRelayer)
