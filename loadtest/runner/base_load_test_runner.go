@@ -853,9 +853,15 @@ func (r *BaseLoadTestRunner) sendTransactions(
 		fmt.Println("Sending transactions took", time.Since(start))
 	}()
 
-	allTxnHashes := make([]types.Hash, 0)
+	var (
+		allTxnHashes []types.Hash
+		appendMux    sync.Mutex
+		g, ctx       = errgroup.WithContext(context.Background())
+	)
 
-	g, ctx := errgroup.WithContext(context.Background())
+	if totalTxs > 0 {
+		allTxnHashes = make([]types.Hash, 0, totalTxs)
+	}
 
 	sendFn := r.sendTransactionsForUser
 	if r.cfg.ExecutionTime > 0 {
@@ -878,8 +884,10 @@ func (r *BaseLoadTestRunner) sendTransactions(
 					return err
 				}
 
+				appendMux.Lock()
 				foundErrs = append(foundErrs, sendErrors...)
 				allTxnHashes = append(allTxnHashes, txnHashes...)
+				appendMux.Unlock()
 
 				return nil
 			}
