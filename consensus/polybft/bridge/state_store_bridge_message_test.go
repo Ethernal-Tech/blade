@@ -17,19 +17,19 @@ func TestState_InsertEvent(t *testing.T) {
 	t.Parallel()
 
 	state := newTestState(t)
-	event1 := &contractsapi.BridgeMsgEvent{
-		ID:                 big.NewInt(0),
+	event := &contractsapi.BridgeMsgEvent{
+		ID:                 big.NewInt(1),
 		Sender:             types.Address{},
 		Receiver:           types.Address{},
 		Data:               []byte{},
-		SourceChainID:      big.NewInt(1),
-		DestinationChainID: bigZero,
+		SourceChainID:      big.NewInt(100),
+		DestinationChainID: big.NewInt(1),
 	}
 
-	err := state.insertBridgeMessageEvent(event1, nil)
+	err := state.insertBridgeMessageEvent(event, false, nil)
 	assert.NoError(t, err)
 
-	events, err := state.list()
+	events, err := state.list(100)
 	assert.NoError(t, err)
 	assert.Len(t, events, 1)
 }
@@ -56,22 +56,33 @@ func TestState_Insert_And_Get_MessageVotes(t *testing.T) {
 	assert.True(t, bytes.Equal([]byte{1, 2}, votes[0].Signature))
 }
 
-func TestState_getBridgeEventsForBridgeBatch_NotEnoughEvents(t *testing.T) {
+func TestState_getBridgeMessages_Mix(t *testing.T) {
 	t.Parallel()
 
 	state := newTestState(t)
 
-	for i := 0; i < maxNumberOfBatchEvents-2; i++ {
-		assert.NoError(t, state.insertBridgeMessageEvent(&contractsapi.BridgeMsgEvent{
-			ID:                 big.NewInt(int64(i)),
-			Data:               []byte{1, 2},
-			SourceChainID:      big.NewInt(1),
-			DestinationChainID: bigZero,
-		}, nil))
+	for i := 1; i <= 10; i++ {
+		if i <= 7 {
+			assert.NoError(t, state.insertBridgeMessageEvent(&contractsapi.BridgeMsgEvent{
+				ID:                 big.NewInt(int64(i)),
+				Data:               []byte{1, 2},
+				SourceChainID:      big.NewInt(100),
+				DestinationChainID: big.NewInt(1),
+			}, false, nil))
+		} else {
+			assert.NoError(t, state.insertBridgeMessageEvent(&contractsapi.BridgeMsgEvent{
+				ID:                 big.NewInt(int64(i)),
+				Data:               []byte{1, 2},
+				SourceChainID:      big.NewInt(100),
+				DestinationChainID: big.NewInt(1),
+			}, true, nil))
+		}
 	}
 
-	_, err := state.getBridgeMessageEventsForBridgeBatch(0, maxNumberOfBatchEvents-1, nil, 1, 0)
-	assert.ErrorIs(t, err, errNotEnoughBridgeEvents)
+	messages, numOfOrdinary, err := state.getBridgeMessages(1, maxNumberOfBatchEvents, 100, 1, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(7), numOfOrdinary)
+	assert.Equal(t, 10, len(messages))
 }
 
 func TestState_getBridgeEventsForBridgeBatch(t *testing.T) {
@@ -79,44 +90,29 @@ func TestState_getBridgeEventsForBridgeBatch(t *testing.T) {
 
 	state := newTestState(t)
 
-	for i := 0; i < maxNumberOfBatchEvents; i++ {
+	for i := 1; i <= maxNumberOfBatchEvents; i++ {
 		assert.NoError(t, state.insertBridgeMessageEvent(&contractsapi.BridgeMsgEvent{
 			ID:                 big.NewInt(int64(i)),
 			Data:               []byte{1, 2},
-			SourceChainID:      big.NewInt(1),
-			DestinationChainID: bigZero,
-		}, nil))
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}, false, nil))
 	}
 
-	t.Run("Return all - forced. Enough events", func(t *testing.T) {
+	t.Run("Return all - forced. Enough messages", func(t *testing.T) {
 		t.Parallel()
 
-		events, err := state.getBridgeMessageEventsForBridgeBatch(0, maxNumberOfBatchEvents-1, nil, 1, 0)
+		messages, _, err := state.getBridgeMessages(1, maxNumberOfBatchEvents, 100, 1, nil)
 		require.NoError(t, err)
-		require.Equal(t, maxNumberOfBatchEvents, len(events))
+		require.Equal(t, maxNumberOfBatchEvents, len(messages))
 	})
 
-	t.Run("Return all - forced. Not enough events", func(t *testing.T) {
+	t.Run("Return all - forced. Not enough messages", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := state.getBridgeMessageEventsForBridgeBatch(0, maxNumberOfBatchEvents+1, nil, 1, 0)
-		require.ErrorIs(t, err, errNotEnoughBridgeEvents)
-	})
-
-	t.Run("Return all you can. Enough events", func(t *testing.T) {
-		t.Parallel()
-
-		events, err := state.getBridgeMessageEventsForBridgeBatch(0, maxNumberOfBatchEvents-1, nil, 1, 0)
-		assert.NoError(t, err)
-		assert.Equal(t, maxNumberOfBatchEvents, len(events))
-	})
-
-	t.Run("Return all you can. Not enough events", func(t *testing.T) {
-		t.Parallel()
-
-		events, err := state.getBridgeMessageEventsForBridgeBatch(0, maxNumberOfBatchEvents+1, nil, 1, 0)
-		assert.ErrorIs(t, err, errNotEnoughBridgeEvents)
-		assert.Equal(t, maxNumberOfBatchEvents, len(events))
+		messages, _, err := state.getBridgeMessages(1, 30, 100, 1, nil)
+		require.NoError(t, err)
+		require.Equal(t, maxNumberOfBatchEvents, len(messages))
 	})
 }
 

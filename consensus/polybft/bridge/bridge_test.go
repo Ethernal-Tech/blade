@@ -131,8 +131,8 @@ func TestGetTransactions(t *testing.T) {
 				bridgeManagerMock := NewBridgeManagerMock(t)
 				bridgeManagerMock.On("BridgeBatch", blockInfo.CurrentBlock()).Return([]*BridgeBatchSigned{{
 					BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-						Threshold:          bigZero,
-						IsRollback:         false,
+						Threshold: bigZero,
+						//IsRollback:         false,
 						SourceChainID:      big.NewInt(1),
 						DestinationChainID: big.NewInt(2),
 					},
@@ -428,10 +428,11 @@ func createAndSignBridgeBatch(t *testing.T, numOfValidators int,
 
 	pendingBridgeBatch := &PendingBridgeBatch{
 		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-			Threshold:          bigZero,
-			IsRollback:         false,
-			SourceChainID:      big.NewInt(int64(sourceChainID)),
-			DestinationChainID: big.NewInt(int64(destinationChainID)),
+			Threshold:             bigZero,
+			SourceChainID:         big.NewInt(int64(sourceChainID)),
+			DestinationChainID:    big.NewInt(int64(destinationChainID)),
+			CommitCounter:         big.NewInt(1),
+			NumberOfRegularEvents: big.NewInt(1),
 		},
 		Epoch: epoch,
 	}

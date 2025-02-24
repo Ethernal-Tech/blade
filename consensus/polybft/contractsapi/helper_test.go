@@ -25,11 +25,12 @@ func TestEncoding_SignedTypes(t *testing.T) {
 		},
 		&SignedBridgeMessageBatch{
 			Batch: &BridgeMessageBatch{
-				Messages:           []*BridgeMessage{},
-				SourceChainID:      big.NewInt(2),
-				DestinationChainID: big.NewInt(3),
-				Threshold:          big.NewInt(1),
-				IsRollback:         false,
+				Messages:              []*BridgeMessage{},
+				SourceChainID:         big.NewInt(2),
+				DestinationChainID:    big.NewInt(3),
+				Threshold:             big.NewInt(1),
+				NumberOfRegularEvents: big.NewInt(1),
+				CommitCounter:         big.NewInt(1),
 			},
 			Signature:           [2]*big.Int{big.NewInt(300), big.NewInt(200)},
 			Bitmap:              []byte("smth"),
