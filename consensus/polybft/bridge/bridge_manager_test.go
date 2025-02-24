@@ -604,8 +604,6 @@ func (*mockBridgeManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error {
 
 func (*mockBridgeManager) Close() {}
 
-func (*mockBridgeManager) ClearPendingLists() {}
-
 func (*mockBridgeManager) GetLogFilters() map[types.Address][]types.Hash {
 	return nil
 }

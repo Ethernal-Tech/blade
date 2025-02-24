@@ -14,7 +14,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/validator"
 	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/types"
-	"github.com/stretchr/testify/mock"
+	mock "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -131,10 +131,11 @@ func TestGetTransactions(t *testing.T) {
 				bridgeManagerMock := NewBridgeManagerMock(t)
 				bridgeManagerMock.On("BridgeBatch", blockInfo.CurrentBlock()).Return([]*BridgeBatchSigned{{
 					BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-						Threshold: bigZero,
-						//IsRollback:         false,
-						SourceChainID:      big.NewInt(1),
-						DestinationChainID: big.NewInt(2),
+						Threshold:             big.NewInt(100),
+						NumberOfRegularEvents: big.NewInt(1),
+						CommitCounter:         big.NewInt(1),
+						SourceChainID:         big.NewInt(1),
+						DestinationChainID:    big.NewInt(2),
 					},
 					AggSignature: *signature,
 				}}, nil)

@@ -66,7 +66,6 @@ type BridgeManager interface {
 	PostEpoch(req *oracle.PostEpochRequest) error
 	Close()
 	GetInternalGatewayAddr() types.Address
-	ClearPendingLists()
 }
 
 var _ BridgeManager = (*dummyBridgeEventManager)(nil)
@@ -95,8 +94,6 @@ func (d *dummyBridgeEventManager) ProcessLog(header *types.Header,
 	return nil
 }
 func (d *dummyBridgeEventManager) Close() {}
-
-func (d *dummyBridgeEventManager) ClearPendingLists() {}
 
 // bridgeEventManagerConfig holds the configuration data of bridge event manager
 type bridgeEventManagerConfig struct {
@@ -183,15 +180,6 @@ func (b *bridgeEventManager) Start(runtimeConfig *config.Runtime) error {
 
 func (b *bridgeEventManager) GetInternalGatewayAddr() types.Address {
 	return b.config.bridgeCfg.InternalGatewayAddr
-}
-
-func (b *bridgeEventManager) ClearPendingLists() {
-	b.lock.Lock()
-
-	b.pendingBridgeBatchesE2I = nil
-	b.pendingBridgeBatchesI2E = nil
-
-	b.lock.Unlock()
 }
 
 // Close stops the bridge manager
@@ -341,7 +329,8 @@ func (b *bridgeEventManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSign
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 
-	getLargestPendingBatchFn := func(pendingBatches []*PendingBridgeBatch, sourceChainId uint64) (*BridgeBatchSigned, error) {
+	getLargestPendingBatchFn := func(pendingBatches []*PendingBridgeBatch, sourceChainId uint64) (*BridgeBatchSigned,
+		error) {
 		var (
 			largestBridgeBatch *BridgeBatchSigned
 			err                error
@@ -349,7 +338,6 @@ func (b *bridgeEventManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSign
 
 		// We start from the end, since last pending batch is the most relevant one.
 		for i := len(pendingBatches) - 1; i >= 0; i-- {
-
 			if pendingBatches[i].SourceChainID.Uint64() == sourceChainId {
 				var aggregatedSignature polytypes.Signature
 
@@ -709,14 +697,18 @@ func (b *bridgeEventManager) handleRetry(dbTx *bolt.Tx, systemState systemstate.
 			hash, err := retryBatch.Hash()
 			if err != nil {
 				b.logger.Error("could not generate a hash for retry bridge batch", "err", err)
+
 				i++
+
 				continue
 			}
 
 			numOfTries, err := systemState.GetBatchCommitCounter(hash)
 			if err != nil {
 				b.logger.Error("could not get a number of retries for bridge batch", "err", err)
+
 				i++
+
 				continue
 			}
 
@@ -837,7 +829,6 @@ func (b *bridgeEventManager) GetLogFilters() map[types.Address][]types.Hash {
 // ProcessLog method is responsible for processing bridge events originating from the internal (Blade)
 // chain. An event provider is responsible for collecting these events.
 func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Log, dbTx *bolt.Tx) error {
-
 	isEventMine := func(chainID *big.Int) bool {
 		// If the event (bridge message) is related to an external chain that is not managed by the
 		// current bridge manager, it should be immediately discarded.
@@ -879,10 +870,13 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Lo
 	//		a quorum of votes (execution and commit to bridge storage occur within the same transaction),
 	//		thus adding to unexecuted list is not required. Additionally, regardless of direction, all
 	//		rollback messages that were committed in a given batch are deleted from the local database,
-	//		but only if the batch is being committed for the first time (not a retry batch).
+	//		but only if the batch is being committed for the first time (not a retry batch). Also, in
+	//		case it is a retry batch, it is deleted from the retry map together with all its pending
+	//		retry batches. Otherwise, if it is a regular batch, then, depending on the batch direction
+	// 		(whether it goes from the internal to the external chain or vice-verse) the I2E/E2I pending
+	//		list is restarted (cleared).
 	switch eventLog.Topics[0] {
 	case bridgeMessageEventSig:
-
 		event := &contractsapi.BridgeMsgEvent{}
 
 		doesMatch, err := event.ParseLog(eventLog)
@@ -896,10 +890,11 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Lo
 			return nil
 		}
 
-		b.handleBridgeMessageEvent(event, dbTx)
+		if err := b.handleBridgeMessageEvent(event, dbTx); err != nil {
+			return err
+		}
 
 	case bridgeMessageResultEventSig:
-
 		event := &contractsapi.BridgeMessageResultEvent{}
 
 		doesMatch, err := event.ParseLog(eventLog)
@@ -913,10 +908,11 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Lo
 			return nil
 		}
 
-		b.handleBridgeMessageResultEvent(event, dbTx)
+		if err := b.handleBridgeMessageResultEvent(event, dbTx); err != nil {
+			return err
+		}
 
 	case bridgeBatchProcessedEventSig:
-
 		event := &contractsapi.BridgeBatchProcessedEvent{}
 
 		doesMatch, err := event.ParseLog(eventLog)
@@ -941,7 +937,6 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Lo
 		)
 
 	case newBatchEventSig:
-
 		event := &contractsapi.NewBatchEvent{}
 
 		doesMatch, err := event.ParseLog(eventLog)
@@ -977,7 +972,6 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Lo
 
 		if bridgeBatch.Batch.SourceChainID.Uint64() == b.internalChainID &&
 			bridgeBatch.Batch.DestinationChainID.Uint64() == b.externalChainID {
-
 			b.lock.Lock()
 
 			unexecutedBatch := &PendingBridgeBatch{
@@ -997,6 +991,8 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Lo
 				if err != nil {
 					b.logger.Error("could not calculate a hash for the bridge batch", "err", err)
 
+					b.lock.Unlock()
+
 					return err
 				}
 
@@ -1006,6 +1002,12 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Lo
 				b.logger.Info(fmt.Sprintf("Batch (%s, %s, %d, %d -> %d) has been successfully removed from the retry map",
 					event.ID.String(), bridgeBatch.Batch.CommitCounter.String(),
 					len(bridgeBatch.Batch.Messages), sid.Uint64(), did.Uint64()))
+			} else {
+				if unexecutedBatch.SourceChainID.Cmp(big.NewInt(int64(b.internalChainID))) == 0 {
+					b.pendingBridgeBatchesI2E = nil
+				} else {
+					b.pendingBridgeBatchesE2I = nil
+				}
 			}
 
 			unexecutedBatch.Threshold = bridgeBatch.Batch.Threshold
@@ -1077,7 +1079,6 @@ func (b *bridgeEventManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error
 	//		does not need to be triggered.
 	switch eventLog.Topics[0] {
 	case bridgeMessageEventSig:
-
 		event := &contractsapi.BridgeMsgEvent{}
 
 		doesMatch, err := event.ParseLog(eventLog)
@@ -1087,10 +1088,11 @@ func (b *bridgeEventManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error
 			return err
 		}
 
-		b.handleBridgeMessageEvent(event, nil)
+		if err := b.handleBridgeMessageEvent(event, nil); err != nil {
+			return err
+		}
 
 	case bridgeMessageResultEventSig:
-
 		event := &contractsapi.BridgeMessageResultEvent{}
 
 		doesMatch, err := event.ParseLog(eventLog)
@@ -1100,10 +1102,11 @@ func (b *bridgeEventManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error
 			return err
 		}
 
-		b.handleBridgeMessageResultEvent(event, nil)
+		if err := b.handleBridgeMessageResultEvent(event, nil); err != nil {
+			return err
+		}
 
 	case bridgeBatchProcessedEventSig:
-
 		event := &contractsapi.BridgeBatchProcessedEvent{}
 
 		doesMatch, err := event.ParseLog(eventLog)
@@ -1126,7 +1129,6 @@ func (b *bridgeEventManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error
 		b.lock.Lock()
 
 		for i := 0; i < len(b.unexecutedBatches); i++ {
-
 			hash, err := b.unexecutedBatches[i].Hash()
 			if err != nil {
 				b.logger.Error("could not calculate a hash for the bridge batch", "err", err)
@@ -1177,7 +1179,8 @@ func (b *bridgeEventManager) handleBridgeMessageEvent(event *contractsapi.Bridge
 	return nil
 }
 
-func (b *bridgeEventManager) handleBridgeMessageResultEvent(event *contractsapi.BridgeMessageResultEvent, dbTx *bolt.Tx) error {
+func (b *bridgeEventManager) handleBridgeMessageResultEvent(event *contractsapi.BridgeMessageResultEvent,
+	dbTx *bolt.Tx) error {
 	id := event.ID
 	sid := event.SourceChainID
 	did := event.DestinationChainID
@@ -1227,7 +1230,6 @@ func (b *bridgeEventManager) handleBridgeMessageResultEvent(event *contractsapi.
 			// bucket occurs only after the message has been written to the rollback bucket,
 			// no further action is required.
 			if message == nil {
-
 				b.logger.Info(fmt.Sprintf("Bridge message %s is already in the rollback bucket", id.String()))
 
 				return nil
@@ -1257,6 +1259,8 @@ func (b *bridgeEventManager) handleBridgeMessageResultEvent(event *contractsapi.
 		// fail to execute.
 		{
 			if event.Status {
+				b.logger.Info(fmt.Sprintf("Bridge message %s has been successfully processed", id.String()))
+
 				// The following code is currently commented out, because in the current implementation
 				// we remove a message from the rollback bucket once a given rollback message is found
 				// in the batch that has been committed to bridge storage.
@@ -1266,8 +1270,6 @@ func (b *bridgeEventManager) handleBridgeMessageResultEvent(event *contractsapi.
 
 				// 	return err
 				// }
-
-				b.logger.Info(fmt.Sprintf("Bridge message %s has been successfully processed", id.String()))
 
 				return nil
 			}

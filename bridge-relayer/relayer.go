@@ -571,7 +571,6 @@ func newLoggerFromConfig(options *options) (hclog.Logger, error) {
 }
 
 func (r *BridgeRelayer) sendSignedBridgeMessageBatch(batch *contractsapi.SignedBridgeMessageBatch) error {
-
 	input, err := (&contractsapi.ReceiveBatchGatewayFn{
 		SignedBatch: batch,
 	}).EncodeAbi()
