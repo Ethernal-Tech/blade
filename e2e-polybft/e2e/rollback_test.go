@@ -3,9 +3,7 @@ package e2e
 import (
 	"fmt"
 	"math/big"
-	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -355,21 +353,6 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 	})
 }
 
-func init() {
-	wd, err := os.Getwd()
-	if err != nil {
-		return
-	}
-
-	parent := filepath.Dir(wd)
-	parent = strings.Trim(parent, "e2e-polybft")
-	wd = filepath.Join(parent, "/artifacts/blade")
-	os.Setenv("EDGE_BINARY", wd)
-	os.Setenv("E2E_TESTS", "true")
-	os.Setenv("E2E_LOGS", "true")
-	os.Setenv("E2E_LOG_LEVEL", "debug")
-}
-
 func TestE2E_Rollback_I2E(t *testing.T) {
 	const (
 		transfersCount   = uint64(5)
@@ -567,5 +550,199 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 		}))
 
 		validateBridgeRollback(startBlockOnExternal, startBlockOnInternal)
+	})
+}
+
+func TestE2E_Retry_I2E(t *testing.T) {
+	const (
+		transfersCount   = uint64(5)
+		amount           = 100
+		epochSize        = 10
+		threshold        = 20
+		sprintSize       = uint64(5)
+		numberOfAttempts = 4
+		numberOfBridges  = 1
+	)
+
+	const (
+		startEventERC721 = transfersCount + 2
+		endEventERC721   = startEventERC721 + transfersCount
+	)
+
+	var (
+		depositorKeys = make([]string, transfersCount)
+		depositors    = make([]types.Address, transfersCount)
+		amounts       = make([]string, transfersCount)
+		funds         = make([]*big.Int, transfersCount)
+		singleToken   = ethgo.Ether(1)
+	)
+
+	admin, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
+	adminAddr := admin.Address()
+
+	for i := uint64(0); i < transfersCount; i++ {
+		key, err := crypto.GenerateECDSAKey()
+		require.NoError(t, err)
+
+		rawKey, err := key.MarshallPrivateKey()
+		require.NoError(t, err)
+
+		depositorKeys[i] = hex.EncodeToString(rawKey)
+		depositors[i] = key.Address()
+		funds[i] = singleToken
+		amounts[i] = fmt.Sprintf("%d", amount)
+
+		t.Logf("Depositor#%d=%s\n", i+1, depositors[i])
+	}
+
+	// relayer key
+	relayerKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
+	cluster := framework.NewTestCluster(t, 5,
+		framework.WithNumBlockConfirmations(0),
+		framework.WithBridgeBatchThreshold(threshold),
+		framework.WithEpochSize(epochSize),
+		framework.WithBridges(numberOfBridges),
+		framework.WithBridgeBlockListAdmin(adminAddr),
+		framework.WithRelayerPrivateKey(relayerKey),
+		framework.WithBlockGasLimit(100000000),
+		framework.WithPremine(append(depositors, adminAddr)...))
+	defer cluster.Stop()
+
+	cluster.WaitForReady(t)
+
+	bridgeOne := 0
+	bridge := cluster.Bridges[bridgeOne]
+
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	require.NoError(t, err)
+
+	validatorSrv := cluster.Servers[0]
+	internalRPC := validatorSrv.JSONRPC()
+
+	require.NoError(t, validatorSrv.ExternalChainFundFor(depositors, funds, uint64(bridgeOne)))
+
+	externalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(bridge.JSONRPCAddr()))
+	require.NoError(t, err)
+
+	internalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(internalRPC))
+	require.NoError(t, err)
+
+	chainID, err := externalChainTxRelayer.Client().ChainID()
+	require.NoError(t, err)
+
+	bridgeCfg := polybftCfg.Bridge[chainID.Uint64()]
+
+	// Stop relayer to simulate retry
+	cluster.BridgeRelayers[0].Stop()
+
+	t.Run("Retry_ERC20", func(t *testing.T) {
+		rootToken := contracts.NativeERC20TokenContract
+
+		for i, key := range depositorKeys {
+			err = bridge.Deposit(
+				common.ERC20,
+				rootToken,
+				bridgeCfg.InternalMintableERC20PredicateAddr,
+				key,
+				depositors[i].String(),
+				amounts[i],
+				"",
+				validatorSrv.JSONRPCAddr(),
+				"",
+				true)
+			require.NoError(t, err)
+		}
+
+		currentBlock, err := internalRPC.BlockNumber()
+		require.NoError(t, err)
+
+		require.NoError(t, cluster.WaitForBlock(currentBlock+2*threshold, 2*time.Minute))
+
+		// Start relayer again to retry
+		cluster.BridgeRelayers[0].Start()
+
+		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
+			for i := uint64(1); i <= uint64(transfersCount)+1; i++ {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
+					return false
+				}
+			}
+
+			return true
+		}))
+
+		childToken := getChildToken(t,
+			contractsapi.RootERC20Predicate.Abi, bridgeCfg.InternalMintableERC20PredicateAddr,
+			contracts.NativeERC20TokenContract, internalChainTxRelayer)
+
+		expectedBalance := big.NewInt(amount)
+
+		for _, key := range depositors {
+			balance := erc20BalanceOf(t, key, childToken, externalChainTxRelayer)
+
+			require.True(t, balance.Cmp(expectedBalance) == 0)
+		}
+
+	})
+
+	t.Run("Rollback_ERC721", func(t *testing.T) {
+		cluster.BridgeRelayers[0].Stop()
+
+		erc721DeployTxn := cluster.Deploy(t, admin, contractsapi.RootERC721.Bytecode)
+		require.True(t, erc721DeployTxn.Succeed())
+		rootERC721Token := types.Address(erc721DeployTxn.Receipt().ContractAddress)
+
+		for _, depositor := range depositors {
+			mintFn := &contractsapi.MintRootERC721Fn{To: depositor}
+			mintInput, err := mintFn.EncodeAbi()
+			require.NoError(t, err)
+
+			mintTxn := cluster.MethodTxn(t, admin, rootERC721Token, mintInput)
+			require.True(t, mintTxn.Succeed())
+		}
+
+		for i, depositorKey := range depositorKeys {
+			err = bridge.Deposit(
+				common.ERC721,
+				rootERC721Token,
+				bridgeCfg.InternalMintableERC721PredicateAddr,
+				depositorKey,
+				depositors[i].String(),
+				"",
+				fmt.Sprintf("%d", i),
+				validatorSrv.JSONRPCAddr(),
+				"",
+				true)
+			require.NoError(t, err)
+		}
+
+		currentBlock, err := internalRPC.BlockNumber()
+		require.NoError(t, err)
+
+		require.NoError(t, cluster.WaitForBlock(currentBlock+2*threshold, 2*time.Minute))
+
+		cluster.BridgeRelayers[0].Start()
+
+		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
+			for i := startEventERC721; i <= endEventERC721; i++ {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
+					return false
+				}
+			}
+
+			return true
+		}))
+
+		childERC721Token := getChildToken(t, contractsapi.RootERC721Predicate.Abi,
+			bridgeCfg.InternalMintableERC721PredicateAddr, rootERC721Token, internalChainTxRelayer)
+
+		for i, depositor := range depositors {
+			owner := erc721OwnerOf(t, big.NewInt(int64(i)), childERC721Token, externalChainTxRelayer)
+			require.Equal(t, depositor, owner)
+		}
 	})
 }
