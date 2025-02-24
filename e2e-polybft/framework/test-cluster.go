@@ -908,7 +908,8 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		)
 		require.NoError(t, err)
 
-		initializeGatewayRollbackContract(t, types.StringToAddress(gatewayContractAddress), cluster, &txRelayer, genesisPath, config.RollbackMode)
+		initializeGatewayRollbackContract(t, types.StringToAddress(gatewayContractAddress),
+			cluster, &txRelayer, genesisPath, config.RollbackMode)
 	}
 
 	return cluster

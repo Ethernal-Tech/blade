@@ -164,6 +164,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 
 	validateBridgeRollback := func(externalBlockStart uint64, internalBlockStart uint64) {
 		latest, err := validatorSrv.JSONRPC().BlockNumber()
+		require.NoError(t, err)
 
 		var bridgeMessageResult contractsapi.BridgeMessageResultEvent
 		logs, err := getFilteredLogs(bridgeMessageResult.Sig(), internalBlockStart, latest, validatorSrv.JSONRPC())
@@ -237,6 +238,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 	})
 
 	evNum++
+
 	t.Run("Rollback_ERC721", func(t *testing.T) {
 		tokenIDs := make([]string, transfersCount)
 
@@ -296,6 +298,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 	})
 
 	evNum++
+
 	t.Run("Rollback_ERC1155", func(t *testing.T) {
 		tokenIDs := make([]string, transfersCount)
 		for i := 0; i < transfersCount; i++ {
@@ -666,7 +669,7 @@ func TestE2E_Retry_I2E(t *testing.T) {
 		cluster.BridgeRelayers[0].Start()
 
 		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
-			for i := uint64(1); i <= uint64(transfersCount)+1; i++ {
+			for i := uint64(1); i <= transfersCount+1; i++ {
 				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
 					return false
 				}
@@ -686,7 +689,6 @@ func TestE2E_Retry_I2E(t *testing.T) {
 
 			require.True(t, balance.Cmp(expectedBalance) == 0)
 		}
-
 	})
 
 	t.Run("Rollback_ERC721", func(t *testing.T) {

@@ -108,6 +108,7 @@ func assertBridgeEventResultNotSuccessful(
 	t.Helper()
 
 	numberOfFailed := 0
+
 	var bridgeMessage contractsapi.BridgeMessageResultEvent
 
 	for _, log := range logs {
@@ -134,6 +135,7 @@ func assertBridgeEventResultSuccessful(
 	t.Helper()
 
 	numberOfSuccessful := 0
+
 	var bridgeMessage contractsapi.BridgeMessageResultEvent
 
 	for _, log := range logs {
@@ -290,6 +292,8 @@ func isEventProcessed(t *testing.T, gatewayAddr types.Address,
 // returns last block number
 func waitForBlocksOnExternal(t *testing.T, numberOfBlocks uint64,
 	externalRPC *jsonrpc.EthClient, timeToWait time.Duration) uint64 {
+	t.Helper()
+
 	latest, err := externalRPC.BlockNumber()
 	require.NoError(t, err)
 
