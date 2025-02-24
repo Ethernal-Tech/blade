@@ -127,14 +127,14 @@ func setFlags(cmd *cobra.Command) {
 	cmd.Flags().IntVar(
 		&params.stateReadThreads,
 		stateReadThreadsFlag,
-		1,
+		0,
 		"the number of state read threads (threads that read the state of the blockchain)",
 	)
 
 	cmd.Flags().IntVar(
 		&params.txpoolReadThreads,
 		txpoolReadThreadsFlag,
-		1,
+		0,
 		"the number of txpool read threads (threads that read the transaction pool)",
 	)
 
