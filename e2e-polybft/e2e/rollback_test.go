@@ -742,7 +742,7 @@ func TestE2E_Retry_I2E(t *testing.T) {
 		currentBlock, err = internalRPC.BlockNumber()
 		require.NoError(t, err)
 
-		require.NoError(t, cluster.WaitForBlock(currentBlock+epochSize, time.Minute))
+		require.NoError(t, cluster.WaitForBlock(currentBlock+2*epochSize, time.Minute))
 
 		childERC721Token := getChildToken(t, contractsapi.RootERC721Predicate.Abi,
 			bridgeCfg.InternalMintableERC721PredicateAddr, rootERC721Token, internalChainTxRelayer)
