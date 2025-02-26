@@ -3,9 +3,7 @@ package e2e
 import (
 	"fmt"
 	"math/big"
-	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -738,18 +736,4 @@ func TestE2E_Retry_I2E(t *testing.T) {
 			require.Equal(t, depositor, owner)
 		}
 	})
-}
-
-func init() {
-	wd, err := os.Getwd()
-	if err != nil {
-		return
-	}
-
-	parent := filepath.Dir(wd)
-	wd = filepath.Join(parent, "../artifacts/blade")
-	os.Setenv("EDGE_BINARY", wd)
-	os.Setenv("E2E_TESTS", "true")
-	os.Setenv("E2E_LOGS", "true")
-	os.Setenv("E2E_LOG_LEVEL", "debug")
 }
