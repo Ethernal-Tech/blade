@@ -3,7 +3,9 @@ package e2e
 import (
 	"fmt"
 	"math/big"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -576,8 +578,6 @@ func TestE2E_Retry_I2E(t *testing.T) {
 		depositorKeys = make([]string, transfersCount)
 		depositors    = make([]types.Address, transfersCount)
 		amounts       = make([]string, transfersCount)
-		funds         = make([]*big.Int, transfersCount)
-		singleToken   = ethgo.Ether(1)
 	)
 
 	admin, err := crypto.GenerateECDSAKey()
@@ -594,7 +594,6 @@ func TestE2E_Retry_I2E(t *testing.T) {
 
 		depositorKeys[i] = hex.EncodeToString(rawKey)
 		depositors[i] = key.Address()
-		funds[i] = singleToken
 		amounts[i] = fmt.Sprintf("%d", amount)
 
 		t.Logf("Depositor#%d=%s\n", i+1, depositors[i])
@@ -609,24 +608,19 @@ func TestE2E_Retry_I2E(t *testing.T) {
 		framework.WithBridgeBatchThreshold(threshold),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
-		framework.WithBridgeBlockListAdmin(adminAddr),
 		framework.WithRelayerPrivateKey(relayerKey),
-		framework.WithBlockGasLimit(100000000),
 		framework.WithPremine(append(depositors, adminAddr)...))
 	defer cluster.Stop()
 
 	cluster.WaitForReady(t)
 
-	bridgeOne := 0
-	bridge := cluster.Bridges[bridgeOne]
+	bridge := cluster.Bridges[0]
 
 	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
 	require.NoError(t, err)
 
 	validatorSrv := cluster.Servers[0]
 	internalRPC := validatorSrv.JSONRPC()
-
-	require.NoError(t, validatorSrv.ExternalChainFundFor(depositors, funds, uint64(bridgeOne)))
 
 	externalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(bridge.JSONRPCAddr()))
 	require.NoError(t, err)
@@ -639,25 +633,25 @@ func TestE2E_Retry_I2E(t *testing.T) {
 
 	bridgeCfg := polybftCfg.Bridge[chainID.Uint64()]
 
-	// Stop relayer to simulate retry
-	cluster.BridgeRelayers[0].Stop()
-
 	t.Run("Retry_ERC20", func(t *testing.T) {
+		// Stop relayer to simulate retry
+		cluster.BridgeRelayers[0].Stop()
+
 		rootToken := contracts.NativeERC20TokenContract
 
 		for i, key := range depositorKeys {
-			err = bridge.Deposit(
-				common.ERC20,
-				rootToken,
-				bridgeCfg.InternalMintableERC20PredicateAddr,
-				key,
-				depositors[i].String(),
-				amounts[i],
-				"",
-				validatorSrv.JSONRPCAddr(),
-				"",
-				true)
-			require.NoError(t, err)
+			require.NoError(t,
+				bridge.Deposit(
+					common.ERC20,
+					rootToken,
+					bridgeCfg.InternalMintableERC20PredicateAddr,
+					key,
+					depositors[i].String(),
+					amounts[i],
+					"",
+					validatorSrv.JSONRPCAddr(),
+					"",
+					true))
 		}
 
 		currentBlock, err := internalRPC.BlockNumber()
@@ -682,12 +676,9 @@ func TestE2E_Retry_I2E(t *testing.T) {
 			contractsapi.RootERC20Predicate.Abi, bridgeCfg.InternalMintableERC20PredicateAddr,
 			contracts.NativeERC20TokenContract, internalChainTxRelayer)
 
-		expectedBalance := big.NewInt(amount)
-
-		for _, key := range depositors {
-			balance := erc20BalanceOf(t, key, childToken, externalChainTxRelayer)
-
-			require.True(t, balance.Cmp(expectedBalance) == 0)
+		for _, depositor := range depositors {
+			balance := erc20BalanceOf(t, depositor, childToken, externalChainTxRelayer)
+			require.Equal(t, big.NewInt(amount), balance)
 		}
 	})
 
@@ -708,18 +699,18 @@ func TestE2E_Retry_I2E(t *testing.T) {
 		}
 
 		for i, depositorKey := range depositorKeys {
-			err = bridge.Deposit(
-				common.ERC721,
-				rootERC721Token,
-				bridgeCfg.InternalMintableERC721PredicateAddr,
-				depositorKey,
-				depositors[i].String(),
-				"",
-				fmt.Sprintf("%d", i),
-				validatorSrv.JSONRPCAddr(),
-				"",
-				true)
-			require.NoError(t, err)
+			require.NoError(t,
+				bridge.Deposit(
+					common.ERC721,
+					rootERC721Token,
+					bridgeCfg.InternalMintableERC721PredicateAddr,
+					depositorKey,
+					depositors[i].String(),
+					"",
+					fmt.Sprintf("%d", i),
+					validatorSrv.JSONRPCAddr(),
+					"",
+					true))
 		}
 
 		currentBlock, err := internalRPC.BlockNumber()
@@ -739,11 +730,6 @@ func TestE2E_Retry_I2E(t *testing.T) {
 			return true
 		}))
 
-		currentBlock, err = internalRPC.BlockNumber()
-		require.NoError(t, err)
-
-		require.NoError(t, cluster.WaitForBlock(currentBlock+2*epochSize, time.Minute))
-
 		childERC721Token := getChildToken(t, contractsapi.RootERC721Predicate.Abi,
 			bridgeCfg.InternalMintableERC721PredicateAddr, rootERC721Token, internalChainTxRelayer)
 
@@ -752,4 +738,18 @@ func TestE2E_Retry_I2E(t *testing.T) {
 			require.Equal(t, depositor, owner)
 		}
 	})
+}
+
+func init() {
+	wd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	parent := filepath.Dir(wd)
+	wd = filepath.Join(parent, "../artifacts/blade")
+	os.Setenv("EDGE_BINARY", wd)
+	os.Setenv("E2E_TESTS", "true")
+	os.Setenv("E2E_LOGS", "true")
+	os.Setenv("E2E_LOG_LEVEL", "debug")
 }
