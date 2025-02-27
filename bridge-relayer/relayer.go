@@ -449,8 +449,8 @@ func (r *BridgeRelayer) Start() {
 					if batch.Batch.DestinationChainID.Cmp(r.externalChainID) != 0 &&
 						batch.Batch.SourceChainID.Cmp(r.externalChainID) != 0 {
 						continue // skip batches from other bridges
-					} else if batch.Batch.SourceChainID.Cmp(r.externalChainID) == 0 && !batch.Batch.IsRollback {
-						continue // skip it if not rollback
+					} else if batch.Batch.SourceChainID.Cmp(r.externalChainID) == 0 {
+						continue
 					}
 
 					if err := r.sendSignedBridgeMessageBatch(&batch); err != nil {
@@ -571,29 +571,6 @@ func newLoggerFromConfig(options *options) (hclog.Logger, error) {
 }
 
 func (r *BridgeRelayer) sendSignedBridgeMessageBatch(batch *contractsapi.SignedBridgeMessageBatch) error {
-	var (
-		destinationRelayer txrelayer.TxRelayer
-		destinationGateway types.Address
-	)
-
-	if batch.Batch.SourceChainID.Cmp(r.externalChainID) == 0 {
-		destinationGateway = r.internalGatewayAddr
-		destinationRelayer = r.internalClient
-
-		if batch.Batch.IsRollback {
-			destinationGateway = r.externalGatewayAddr
-			destinationRelayer = r.externalClient
-		}
-	} else {
-		destinationGateway = r.externalGatewayAddr
-		destinationRelayer = r.externalClient
-
-		if batch.Batch.IsRollback {
-			destinationGateway = r.internalGatewayAddr
-			destinationRelayer = r.internalClient
-		}
-	}
-
 	input, err := (&contractsapi.ReceiveBatchGatewayFn{
 		SignedBatch: batch,
 	}).EncodeAbi()
@@ -603,11 +580,11 @@ func (r *BridgeRelayer) sendSignedBridgeMessageBatch(batch *contractsapi.SignedB
 
 	tx := types.NewTx(types.NewLegacyTx(
 		types.WithFrom(r.privateKey.Address()),
-		types.WithTo(&destinationGateway),
+		types.WithTo(&r.externalGatewayAddr),
 		types.WithInput(input),
 	))
 
-	receipt, err := destinationRelayer.SendTransaction(tx, r.privateKey)
+	receipt, err := r.externalClient.SendTransaction(tx, r.privateKey)
 	if err != nil {
 		return fmt.Errorf("id-ed batch has already been processed or cannot be processed, err: %w", err)
 	}

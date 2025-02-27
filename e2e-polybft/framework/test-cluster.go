@@ -898,7 +898,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 	}
 	// Initialize Gateway contract with BLS, BN256G2 and validators
 	if config.RollbackMode != NoRollback {
-		ipAddress := cluster.Bridges[0].JSONRPCAddr()
+		ipAddress := cluster.Servers[0].JSONRPCAddr()
 		if config.RollbackMode == I2ERollback {
 			ipAddress = cluster.Bridges[0].JSONRPCAddr()
 		}
@@ -908,7 +908,8 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		)
 		require.NoError(t, err)
 
-		initializeGatewayRollbackContract(t, types.StringToAddress(gatewayContractAddress), cluster, &txRelayer)
+		initializeGatewayRollbackContract(t, types.StringToAddress(gatewayContractAddress),
+			cluster, &txRelayer, genesisPath, config.RollbackMode)
 	}
 
 	return cluster
@@ -1287,11 +1288,15 @@ func CopyDir(source, destination string) error {
 }
 
 func initializeGatewayRollbackContract(t *testing.T, address types.Address,
-	cluster *TestCluster, txRelayer *txrelayer.TxRelayer) {
+	cluster *TestCluster, txRelayer *txrelayer.TxRelayer,
+	genesisPath string, mode RollbackMode) {
 	t.Helper()
 
 	validators, err := genesis.ReadValidatorsByPrefix(
 		cluster.Config.TmpDir, cluster.Config.ValidatorPrefix, nil, true)
+	require.NoError(t, err)
+
+	polybftConfig, err := polycfg.LoadPolyBFTConfig(genesisPath)
 	require.NoError(t, err)
 
 	initContract := func(txRelayer *txrelayer.TxRelayer,
@@ -1321,10 +1326,20 @@ func initializeGatewayRollbackContract(t *testing.T, address types.Address,
 		}
 	}
 
-	inputParams := &contractsapi.InitializeGatewayFn{
-		NewBls:     contracts.BLSContract,
-		NewBn256G2: contracts.BLS256Contract,
-		Validators: validatorSet,
+	var inputParams contractsapi.ABIEncoder
+	if mode == E2IRollback {
+		inputParams = &contractsapi.InitializeGWGatewayFn{
+			NewBls:     contracts.BLSContract,
+			NewBn256G2: contracts.BLS256Contract,
+			Validators: validatorSet,
+			BsAddress:  contracts.BridgeStorageContract,
+		}
+	} else {
+		inputParams = &contractsapi.InitializeGatewayFn{
+			NewBls:     polybftConfig.Bridge[1].BLSAddress,
+			NewBn256G2: polybftConfig.Bridge[1].BN256G2Address,
+			Validators: validatorSet,
+		}
 	}
 
 	key, err := helper.DecodePrivateKey("")

@@ -38,15 +38,14 @@ func NewPendingBridgeBatch(epoch uint64,
 			DestinationChainID: bridgeEvent.DestinationChainID}
 	}
 
-	firstBridgeMessage := bridgeEvents[0]
-
 	return &PendingBridgeBatch{
 		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-			Messages:           messages,
-			SourceChainID:      firstBridgeMessage.SourceChainID,
-			DestinationChainID: firstBridgeMessage.DestinationChainID,
-			Threshold:          big.NewInt(0),
-			IsRollback:         false,
+			Messages:              messages,
+			SourceChainID:         bridgeEvents[0].SourceChainID,
+			DestinationChainID:    bridgeEvents[0].DestinationChainID,
+			Threshold:             big.NewInt(0),
+			NumberOfRegularEvents: big.NewInt(0),
+			CommitCounter:         big.NewInt(1),
 		},
 		Epoch: epoch,
 	}, nil
@@ -93,8 +92,7 @@ func (bbs *BridgeBatchSigned) ContainsBridgeMessage(bridgeMessageID uint64) bool
 }
 
 func (bbs *BridgeBatchSigned) IsE2IBatch() bool {
-	return !bbs.IsRollback && bbs.SourceChainID.Cmp(big.NewInt(int64(bbs.InternalChainID))) != 0 ||
-		bbs.IsRollback && bbs.SourceChainID.Cmp(big.NewInt(int64(bbs.InternalChainID))) == 0
+	return bbs.SourceChainID.Cmp(big.NewInt(int64(bbs.InternalChainID))) != 0
 }
 
 // EncodeAbi contains logic for encoding arbitrary data into ABI format
@@ -182,11 +180,12 @@ func (bbs *BridgeBatchSigned) constructFromSignedBatch(signedBatch *contractsapi
 
 	*bbs = BridgeBatchSigned{
 		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-			Messages:           signedBatch.Batch.Messages,
-			SourceChainID:      signedBatch.Batch.SourceChainID,
-			DestinationChainID: signedBatch.Batch.DestinationChainID,
-			Threshold:          signedBatch.Batch.Threshold,
-			IsRollback:         signedBatch.Batch.IsRollback,
+			Messages:              signedBatch.Batch.Messages,
+			SourceChainID:         signedBatch.Batch.SourceChainID,
+			DestinationChainID:    signedBatch.Batch.DestinationChainID,
+			Threshold:             signedBatch.Batch.Threshold,
+			NumberOfRegularEvents: signedBatch.Batch.NumberOfRegularEvents,
+			CommitCounter:         signedBatch.Batch.CommitCounter,
 		},
 		AggSignature: polytypes.Signature{
 			AggregatedSignature: signature,

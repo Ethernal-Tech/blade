@@ -21,8 +21,8 @@ func TestSystemState_GetNextCommittedIndex(t *testing.T) {
 	t.Parallel()
 
 	methods := []string{
-		"function setCurrentInternalCommittedIndex(uint256 _chainId, uint256 _index) public payable",
-		"function setCurrentExternalCommittedIndex(uint256 _chainId, uint256 _index) public payable",
+		"function setCurrentE2ICommittedIndex(uint256 _chainId, uint256 _index) public payable",
+		"function setCurrentI2ECommittedIndex(uint256 _chainId, uint256 _index) public payable",
 	}
 
 	var scAbi, err = abi.NewABIFromList(methods)
@@ -32,15 +32,15 @@ func TestSystemState_GetNextCommittedIndex(t *testing.T) {
 	cc := &testutil.Contract{}
 	cc.AddCallback(func() string {
 		return `
-		mapping(uint256 => uint256) public lastCommitted;
-		mapping(uint256 => uint256) public lastCommittedInternal;
+		mapping(uint256 => uint256) public lastCommittedE2I;
+		mapping(uint256 => uint256) public lastCommittedI2E;
 		
-		function setCurrentExternalCommittedIndex(uint256 _chainId, uint256 _index) public payable {
-			lastCommitted[_chainId] = _index;
+		function setCurrentE2ICommittedIndex(uint256 _chainId, uint256 _index) public payable {
+			lastCommittedE2I[_chainId] = _index;
 		}
 			
-		function setCurrentInternalCommittedIndex(uint256 _chainId, uint256 _index) public payable {
-			lastCommittedInternal[_chainId] = _index;
+		function setCurrentI2ECommittedIndex(uint256 _chainId, uint256 _index) public payable {
+			lastCommittedI2E[_chainId] = _index;
 		}`
 	})
 
@@ -62,14 +62,14 @@ func TestSystemState_GetNextCommittedIndex(t *testing.T) {
 	systemState := NewSystemState(contracts.EpochManagerContract, result.Address, provider)
 
 	currentExternalCommitIntex := uint64(45)
-	input, err := scAbi.GetMethod("setCurrentExternalCommittedIndex").Encode([2]interface{}{0, currentExternalCommitIntex})
+	input, err := scAbi.GetMethod("setCurrentE2ICommittedIndex").Encode([2]interface{}{0, currentExternalCommitIntex})
 	assert.NoError(t, err)
 
 	_, err = provider.Call(ethgo.Address(result.Address), input, &contract.CallOpts{})
 	assert.NoError(t, err)
 
 	currentInternalCommitIntex := uint64(102)
-	input, err = scAbi.GetMethod("setCurrentInternalCommittedIndex").Encode([2]interface{}{0, currentInternalCommitIntex})
+	input, err = scAbi.GetMethod("setCurrentI2ECommittedIndex").Encode([2]interface{}{0, currentInternalCommitIntex})
 	assert.NoError(t, err)
 
 	_, err = provider.Call(ethgo.Address(result.Address), input, &contract.CallOpts{})
@@ -99,6 +99,7 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
 				uint256 destinationChainId;
 				address sender;
 				address receiver;
+				bool isRollback;
 				bytes payload;
 			}
 
@@ -107,7 +108,8 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
     			uint256 sourceChainId;
     			uint256 destinationChainId;
     			uint256 threshold;
-    			bool isRollback;
+    			uint256 numberOfRegularEvents;
+    			uint256 commitCounter;
 			}
 
 			struct SignedBridgeMessageBatch {
@@ -128,8 +130,8 @@ func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {
 				batches[_num] = signedBatch;
 			}
 
-			function getCommittedBatch(uint256 _num) public view returns (SignedBridgeMessageBatch memory) {
-				return batches[_num];
+			function getCommittedBatch(uint256 id) external view returns (SignedBridgeMessageBatch memory) {
+				return batches[id];
 			}
 		`
 	})
@@ -237,8 +239,8 @@ func TestSystemState_GetValidatorSetByNumber(t *testing.T) {
 				commitedValidatorSets[_num] = signedSet;
 			}
 
-			function getCommittedValidatorSet(uint256 _num) public view returns (SignedValidatorSet memory) {
-				return commitedValidatorSets[_num];
+			function getCommittedValidatorSet(uint256 id) external view returns (SignedValidatorSet memory) {
+				return commitedValidatorSets[id];
 			}
 		`
 	})

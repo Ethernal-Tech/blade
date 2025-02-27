@@ -34,6 +34,8 @@ type SystemState interface {
 	GetBridgeBatchByNumber(numberOfBatch *big.Int) (*contractsapi.SignedBridgeMessageBatch, error)
 	// GetValidatorSetByNumber return validator set by number
 	GetValidatorSetByNumber(numberOfValidatorSet *big.Int) (*contractsapi.SignedValidatorSet, error)
+
+	GetBatchCommitCounter(batchHash types.Hash) (*big.Int, error)
 }
 
 var _ SystemState = &SystemStateImpl{}
@@ -84,9 +86,9 @@ func (s *SystemStateImpl) GetNextCommittedIndex(chainID uint64, chainType ChainT
 
 	switch chainType {
 	case Internal:
-		funcName = "lastCommittedInternal"
+		funcName = "lastCommittedI2E"
 	case External:
-		funcName = "lastCommitted"
+		funcName = "lastCommittedE2I"
 	default:
 		return 0, fmt.Errorf("unsupported chain type: %d", chainType)
 	}
@@ -146,6 +148,22 @@ func (s *SystemStateImpl) GetValidatorSetByNumber(validatorSetID *big.Int) (*con
 	}
 
 	return svs, nil
+}
+
+func (s *SystemStateImpl) GetBatchCommitCounter(hash types.Hash) (*big.Int, error) {
+	funcName := "batchCommitCounter"
+
+	rawResult, err := s.bridgeStorageContract.Call(funcName, ethgo.Latest, hash.Bytes())
+	if err != nil {
+		return nil, err
+	}
+
+	num, isOk := rawResult["0"].(*big.Int)
+	if !isOk {
+		return nil, fmt.Errorf("failed to decode batch commit counter")
+	}
+
+	return num, nil
 }
 
 var _ contract.Provider = &stateProvider{}

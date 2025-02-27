@@ -219,7 +219,7 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 		internalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(childEthEndpoint))
 		require.NoError(t, err)
 
-		lastCommittedIDMethod := contractsapi.BridgeStorage.Abi.GetMethod("lastCommitted")
+		lastCommittedIDMethod := contractsapi.BridgeStorage.Abi.GetMethod("lastCommittedE2I")
 		lastCommittedIDInput, err := lastCommittedIDMethod.Encode([]interface{}{chainID.Uint64()})
 		require.NoError(t, err)
 
@@ -1481,13 +1481,14 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 	})
 
 	t.Run("transfer more native tokens than 0x0 balance is", func(t *testing.T) {
-		t.Skip() // TO DO: get back this test after retry/rollback implementation
-
 		// since bridging native token is essentially minting
 		// (i.e. transferring tokens from 0x0 to receiver address using native transfer precompile),
 		// this test tries to deposit more tokens than 0x0 address has on its balance
-		currentBlock, err := childEthEndpoint.GetBlockByNumber(jsonrpc.LatestBlockNumber, false)
+		currentBlock, err := childEthEndpoint.BlockNumber()
 		require.NoError(t, err)
+
+		require.NoError(t, cluster.WaitForBlock(currentBlock+epochSize, 2*time.Minute))
+		currentBlock += epochSize
 
 		require.NoError(t, cluster.Bridges[bridgeOne].Deposit(
 			common.ERC20,
@@ -1503,20 +1504,18 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 		)
 
 		// wait for couple of epoches
-		finalBlockNum := currentBlock.Header.Number + epochSize
+		finalBlockNum := currentBlock + 2*epochSize
 		require.NoError(t, cluster.WaitForBlock(finalBlockNum, 2*time.Minute))
 
 		// the transaction is processed and there should be a success event
 		var bridgeMessageResult contractsapi.BridgeMessageResultEvent
 
-		for i := uint64(0); i < numberOfAttempts; i++ {
-			logs, err := getFilteredLogs(bridgeMessageResult.Sig(), currentBlock.Number()+1, finalBlockNum+i*epochSize, childEthEndpoint)
-			require.NoError(t, err)
+		logs, err := getFilteredLogs(bridgeMessageResult.Sig(), currentBlock, finalBlockNum, childEthEndpoint)
+		require.NoError(t, err)
 
-			require.Equal(t, 0, len(logs))
+		assertBridgeEventResultNotSuccessful(t, logs, 1)
 
-			require.NoError(t, cluster.WaitForBlock(finalBlockNum+(i+1)*epochSize, time.Minute))
-		}
+		require.NoError(t, cluster.WaitForBlock(finalBlockNum+epochSize, time.Minute))
 
 		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
 			if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, 3, true) {

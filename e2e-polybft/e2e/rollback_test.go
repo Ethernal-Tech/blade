@@ -16,7 +16,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/e2e-polybft/framework"
 	"github.com/0xPolygon/polygon-edge/helper/hex"
-	"github.com/0xPolygon/polygon-edge/state/runtime/addresslist"
+	"github.com/0xPolygon/polygon-edge/jsonrpc"
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/Ethernal-Tech/ethgo"
@@ -67,12 +67,11 @@ import (
 // 5. Wait for the deposits to be processed and verify the rollback events.
 
 func TestE2E_Rollback_E2I(t *testing.T) {
-	t.Skip() // TO DO: get back this test after retry/rollback implementation
-
 	const (
-		transfersCount        = 4
+		transfersCount        = 5
+		numOfRollback         = int((transfersCount + 1) / 2)
 		numBlockConfirmations = 2
-		epochSize             = 40
+		epochSize             = 10
 		sprintSize            = uint64(5)
 		numberOfAttempts      = 7
 		stateSyncedLogsCount  = 2
@@ -118,7 +117,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
-		framework.WithBridgeBatchThreshold(25),
+		framework.WithBridgeBatchThreshold(100),
 		framework.WithPredeploy(fmt.Sprintf("%s:TestRollbackGateway", gatewayAddr)),
 		framework.WithRelayerPrivateKey(relayerKey),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
@@ -139,6 +138,14 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 	externalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(cluster.Bridges[0].JSONRPCAddr()))
 	require.NoError(t, err)
 
+	internalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(cluster.Servers[0].JSONRPCAddr()))
+	require.NoError(t, err)
+
+	validatorSrv := cluster.Servers[0]
+
+	externalRPC, err := jsonrpc.NewEthClient(cluster.Bridges[0].JSONRPCAddr())
+	require.NoError(t, err)
+
 	chainID, err := externalChainTxRelayer.Client().ChainID()
 	require.NoError(t, err)
 
@@ -150,6 +157,38 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 	// Default deployer key
 	deployerKey, err := bridgeHelper.DecodePrivateKey("")
 	require.NoError(t, err)
+
+	evNum := uint64(1) // to track with which event numbers starts & ends
+	startEventNum := func() uint64 { return (evNum-1)*transfersCount + evNum }
+	endEventNum := func() uint64 { return (evNum)*transfersCount + evNum }
+
+	validateBridgeRollback := func(externalBlockStart uint64, internalBlockStart uint64) {
+		latest, err := validatorSrv.JSONRPC().BlockNumber()
+		require.NoError(t, err)
+
+		var bridgeMessageResult contractsapi.BridgeMessageResultEvent
+		logs, err := getFilteredLogs(bridgeMessageResult.Sig(), internalBlockStart, latest, validatorSrv.JSONRPC())
+		require.NoError(t, err)
+
+		assertBridgeEventResultNotSuccessful(t, logs, numOfRollback)
+
+		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
+			for i := startEventNum(); i <= endEventNum(); i++ {
+				if i%2 == 0 && !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, true) {
+					return false
+				}
+			}
+
+			return true
+		}))
+
+		latest = waitForBlocksOnExternal(t, 20, externalRPC, 2*time.Minute)
+
+		logs, err = getFilteredLogs(bridgeMessageResult.Sig(), externalBlockStart, latest, externalRPC)
+		require.NoError(t, err)
+
+		assertBridgeEventResultSuccessful(t, logs, numOfRollback)
+	}
 
 	t.Run("Rollback_ERC20", func(t *testing.T) {
 		deployTx := types.NewTx(types.NewLegacyTx(
@@ -186,15 +225,19 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 
 		// Wait for the rollback to be processed
 		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
-			for i := range receivers {
-				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i+1), true) {
+			for i := startEventNum(); i <= endEventNum(); i++ {
+				if !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i, false) {
 					return false
 				}
 			}
 
 			return true
 		}))
+
+		validateBridgeRollback(0, 0)
 	})
+
+	evNum++
 
 	t.Run("Rollback_ERC721", func(t *testing.T) {
 		tokenIDs := make([]string, transfersCount)
@@ -210,39 +253,51 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 			},
 		})
 
+		waitForBlocksOnExternal(t, 10, externalRPC, 2*time.Minute)
+
+		startBlockInternal, err := validatorSrv.JSONRPC().BlockNumber()
+		require.NoError(t, err)
+
+		startBlockExternal, err := externalRPC.BlockNumber()
+		require.NoError(t, err)
+
 		receipt, err := externalChainTxRelayer.SendTransaction(deployTx, deployerKey)
 		require.NoError(t, err)
 
 		rootERC721Addr := types.Address(receipt.ContractAddress)
 
-		require.NoError(
-			t,
-			bridge.Deposit(
-				common.ERC721,
-				rootERC721Addr,
-				bridgeCfg.ExternalERC721PredicateAddr,
-				bridgeHelper.TestAccountPrivKey,
-				strings.Join(receivers, ","),
-				"",
-				strings.Join(tokenIDs, ","),
-				bridge.JSONRPCAddr(),
-				bridgeHelper.TestAccountPrivKey,
-				false),
-		)
-
-		require.NoError(t, cluster.WaitForBlock(50, 4*time.Minute))
+		for i := range transfersCount {
+			require.NoError(
+				t,
+				bridge.Deposit(
+					common.ERC721,
+					rootERC721Addr,
+					bridgeCfg.ExternalERC721PredicateAddr,
+					bridgeHelper.TestAccountPrivKey,
+					receivers[i],
+					"",
+					tokenIDs[i],
+					bridge.JSONRPCAddr(),
+					bridgeHelper.TestAccountPrivKey,
+					false),
+			)
+		}
 
 		// Wait for rollback to be processed
 		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
-			for i := range receivers {
-				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i+1), true) {
+			for i := startEventNum(); i <= endEventNum(); i++ {
+				if !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i, false) {
 					return false
 				}
 			}
 
 			return true
 		}))
+
+		validateBridgeRollback(startBlockExternal, startBlockInternal)
 	})
+
+	evNum++
 
 	t.Run("Rollback_ERC1155", func(t *testing.T) {
 		tokenIDs := make([]string, transfersCount)
@@ -257,43 +312,56 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 			},
 		})
 
+		waitForBlocksOnExternal(t, 10, externalRPC, 2*time.Minute)
+
+		startBlockExternal, err := externalRPC.BlockNumber()
+		require.NoError(t, err)
+
+		startBlockInternal, err := validatorSrv.JSONRPC().BlockNumber()
+		require.NoError(t, err)
+
 		receipt, err := externalChainTxRelayer.SendTransaction(deployTx, deployerKey)
 		require.NoError(t, err)
 
 		rootERC1155Addr := types.Address(receipt.ContractAddress)
-		require.NoError(
-			t,
-			bridge.Deposit(
-				common.ERC1155,
-				rootERC1155Addr,
-				bridgeCfg.ExternalERC1155PredicateAddr,
-				bridgeHelper.TestAccountPrivKey,
-				strings.Join(receivers, ","),
-				strings.Join(amounts, ","),
-				strings.Join(tokenIDs, ","),
-				bridge.JSONRPCAddr(),
-				bridgeHelper.TestAccountPrivKey,
-				false),
-		)
+		for i := range receivers {
+			require.NoError(
+				t,
+				bridge.Deposit(
+					common.ERC1155,
+					rootERC1155Addr,
+					bridgeCfg.ExternalERC1155PredicateAddr,
+					bridgeHelper.TestAccountPrivKey,
+					receivers[i],
+					amounts[i],
+					tokenIDs[i],
+					bridge.JSONRPCAddr(),
+					bridgeHelper.TestAccountPrivKey,
+					false),
+			)
+		}
 
 		// Wait for rollback to be processed
 		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
-			for i := range receivers {
-				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, uint64(i+1), true) {
+			for i := startEventNum(); i <= endEventNum(); i++ {
+				if !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i, false) {
 					return false
 				}
 			}
 
 			return true
 		}))
+
+		validateBridgeRollback(startBlockExternal, startBlockInternal)
 	})
 }
 
 func TestE2E_Rollback_I2E(t *testing.T) {
 	const (
-		transfersCount   = uint64(4)
+		transfersCount   = uint64(5)
+		numOfRollback    = int((transfersCount + 1) / 2)
 		amount           = 100
-		epochSize        = 30
+		epochSize        = 10
 		sprintSize       = uint64(5)
 		numberOfAttempts = 4
 		numberOfBridges  = 1
@@ -333,7 +401,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithNumBlockConfirmations(0),
-		framework.WithBridgeBatchThreshold(25),
+		framework.WithBridgeBatchThreshold(100),
 		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeBlockListAdmin(adminAddr),
@@ -367,6 +435,42 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 	internalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(childEthEndpoint))
 	require.NoError(t, err)
 
+	externalRPC, err := jsonrpc.NewEthClient(bridge.JSONRPCAddr())
+	require.NoError(t, err)
+
+	evNum := uint64(1) // to track with which event numbers starts & ends
+	startEventNum := func() uint64 { return (evNum-1)*transfersCount + evNum }
+	endEventNum := func() uint64 { return evNum*transfersCount + evNum }
+
+	// validate bridge rollback with events
+	validateBridgeRollback := func(externalBlockStart, internalBlockStart uint64) {
+		latest := waitForBlocksOnExternal(t, 20, externalRPC, 2*time.Minute)
+
+		var bridgeMessageResult contractsapi.BridgeMessageResultEvent
+		logs, err := getFilteredLogs(bridgeMessageResult.Sig(), externalBlockStart, latest, externalRPC)
+		require.NoError(t, err)
+
+		assertBridgeEventResultNotSuccessful(t, logs, numOfRollback)
+
+		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
+			for i := startEventNum(); i <= endEventNum(); i++ {
+				if i%2 == 0 && !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i, true) {
+					return false
+				}
+			}
+
+			return true
+		}))
+
+		latest, err = validatorSrv.JSONRPC().BlockNumber()
+		require.NoError(t, err)
+
+		logs, err = getFilteredLogs(bridgeMessageResult.Sig(), internalBlockStart, latest, validatorSrv.JSONRPC())
+		require.NoError(t, err)
+
+		assertBridgeEventResultSuccessful(t, logs, numOfRollback)
+	}
+
 	t.Run("Rollback_ERC20", func(t *testing.T) {
 		rootToken := contracts.NativeERC20TokenContract
 
@@ -386,20 +490,33 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 		}
 
 		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
-			for i := uint64(1); i <= transfersCount+1; i++ {
-				if !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i, true) {
+			for i := startEventNum(); i <= endEventNum(); i++ {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
 					return false
 				}
 			}
 
 			return true
 		}))
+
+		validateBridgeRollback(0, 0)
 	})
+
+	evNum++
 
 	t.Run("Rollback_ERC721", func(t *testing.T) {
 		erc721DeployTxn := cluster.Deploy(t, admin, contractsapi.RootERC721.Bytecode)
 		require.True(t, erc721DeployTxn.Succeed())
 		rootERC721Token := types.Address(erc721DeployTxn.Receipt().ContractAddress)
+
+		waitForBlocksOnExternal(t, 10, externalRPC, time.Minute)
+
+		// Just processing logs after Rollback ERC20
+		startBlockOnExternal, err := externalRPC.BlockNumber()
+		require.NoError(t, err)
+
+		startBlockOnInternal, err := validatorSrv.JSONRPC().BlockNumber()
+		require.NoError(t, err)
 
 		for _, depositor := range depositors {
 			mintFn := &contractsapi.MintRootERC721Fn{To: depositor}
@@ -408,26 +525,9 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 
 			mintTxn := cluster.MethodTxn(t, admin, rootERC721Token, mintInput)
 			require.True(t, mintTxn.Succeed())
-
-			setAccessListRole(t, cluster, contracts.BlockListBridgeAddr, depositor, addresslist.EnabledRole, admin)
 		}
 
-		err = bridge.Deposit(
-			common.ERC721,
-			rootERC721Token,
-			bridgeCfg.InternalMintableERC721PredicateAddr,
-			depositorKeys[0],
-			depositors[0].String(),
-			"",
-			fmt.Sprintf("%d", 0),
-			validatorSrv.JSONRPCAddr(),
-			"",
-			true)
-		require.Error(t, err)
-
 		for i, depositorKey := range depositorKeys {
-			setAccessListRole(t, cluster, contracts.BlockListBridgeAddr, depositors[i], addresslist.NoRole, admin)
-
 			err = bridge.Deposit(
 				common.ERC721,
 				rootERC721Token,
@@ -443,13 +543,217 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 		}
 
 		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
-			for i := uint64(1); i <= transfersCount+1; i++ {
-				if !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i, true) {
+			for i := startEventNum(); i <= endEventNum(); i++ {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
 					return false
 				}
 			}
 
 			return true
 		}))
+
+		validateBridgeRollback(startBlockOnExternal, startBlockOnInternal)
+	})
+}
+
+func TestE2E_Retry_I2E(t *testing.T) {
+	const (
+		transfersCount   = uint64(5)
+		amount           = 100
+		epochSize        = 10
+		threshold        = 20
+		sprintSize       = uint64(5)
+		numberOfAttempts = 4
+		numberOfBridges  = 1
+	)
+
+	const (
+		startEventERC721 = transfersCount + 2
+		endEventERC721   = startEventERC721 + transfersCount
+	)
+
+	var (
+		depositorKeys = make([]string, transfersCount)
+		depositors    = make([]types.Address, transfersCount)
+		amounts       = make([]string, transfersCount)
+	)
+
+	admin, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
+	adminAddr := admin.Address()
+
+	for i := uint64(0); i < transfersCount; i++ {
+		key, err := crypto.GenerateECDSAKey()
+		require.NoError(t, err)
+
+		rawKey, err := key.MarshallPrivateKey()
+		require.NoError(t, err)
+
+		depositorKeys[i] = hex.EncodeToString(rawKey)
+		depositors[i] = key.Address()
+		amounts[i] = fmt.Sprintf("%d", amount)
+
+		t.Logf("Depositor#%d=%s\n", i+1, depositors[i])
+	}
+
+	// relayer key
+	relayerKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
+	cluster := framework.NewTestCluster(t, 5,
+		framework.WithNumBlockConfirmations(0),
+		framework.WithBridgeBatchThreshold(threshold),
+		framework.WithEpochSize(epochSize),
+		framework.WithBridges(numberOfBridges),
+		framework.WithRelayerPrivateKey(relayerKey),
+		framework.WithPremine(append(depositors, adminAddr)...))
+	defer cluster.Stop()
+
+	cluster.WaitForReady(t)
+
+	bridge := cluster.Bridges[0]
+
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	require.NoError(t, err)
+
+	validatorSrv := cluster.Servers[0]
+	internalRPC := validatorSrv.JSONRPC()
+
+	externalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(bridge.JSONRPCAddr()))
+	require.NoError(t, err)
+
+	internalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(internalRPC))
+	require.NoError(t, err)
+
+	chainID, err := externalChainTxRelayer.Client().ChainID()
+	require.NoError(t, err)
+
+	bridgeCfg := polybftCfg.Bridge[chainID.Uint64()]
+
+	stopRelayerFn := func(startID, endID uint64) {
+		// Minimal time needed for sleep before stopping is sprint time + relayer period = 15s
+		require.NoError(t, cluster.WaitUntil(20*time.Second, 2*time.Second, func() bool {
+			for i := startID; i <= endID; i++ {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
+					return false
+				}
+			}
+
+			return true
+		}))
+
+		cluster.BridgeRelayers[0].Stop()
+	}
+
+	externalRPC, err := jsonrpc.NewEthClient(bridge.JSONRPCAddr())
+	require.NoError(t, err)
+
+	t.Run("Retry_ERC20", func(t *testing.T) {
+		rootToken := contracts.NativeERC20TokenContract
+
+		for i, key := range depositorKeys {
+			require.NoError(t,
+				bridge.Deposit(
+					common.ERC20,
+					rootToken,
+					bridgeCfg.InternalMintableERC20PredicateAddr,
+					key,
+					depositors[i].String(),
+					amounts[i],
+					"",
+					validatorSrv.JSONRPCAddr(),
+					"",
+					true))
+
+			if i == 0 {
+				// stop relayer to simulate retry, do that after child erc20 deployment!
+				stopRelayerFn(1, 2)
+			}
+		}
+
+		waitForBlocksOnExternal(t, threshold, externalRPC, 2*time.Minute)
+
+		// start relayer again to retry
+		cluster.BridgeRelayers[0].Start()
+
+		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
+			// skip events 1 & 2, that's already checked after 1st deposit
+			for i := uint64(3); i <= transfersCount+1; i++ {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
+					return false
+				}
+			}
+
+			return true
+		}))
+
+		childToken := getChildToken(t,
+			contractsapi.RootERC20Predicate.Abi, bridgeCfg.InternalMintableERC20PredicateAddr,
+			contracts.NativeERC20TokenContract, internalChainTxRelayer)
+
+		for _, depositor := range depositors {
+			balance := erc20BalanceOf(t, depositor, childToken, externalChainTxRelayer)
+			require.Equal(t, big.NewInt(amount), balance)
+		}
+	})
+
+	t.Run("Retry_ERC721", func(t *testing.T) {
+		erc721DeployTxn := cluster.Deploy(t, admin, contractsapi.RootERC721.Bytecode)
+		require.True(t, erc721DeployTxn.Succeed())
+		rootERC721Token := types.Address(erc721DeployTxn.Receipt().ContractAddress)
+
+		for _, depositor := range depositors {
+			mintFn := &contractsapi.MintRootERC721Fn{To: depositor}
+			mintInput, err := mintFn.EncodeAbi()
+			require.NoError(t, err)
+
+			mintTxn := cluster.MethodTxn(t, admin, rootERC721Token, mintInput)
+			require.True(t, mintTxn.Succeed())
+		}
+
+		for i, depositorKey := range depositorKeys {
+			require.NoError(t,
+				bridge.Deposit(
+					common.ERC721,
+					rootERC721Token,
+					bridgeCfg.InternalMintableERC721PredicateAddr,
+					depositorKey,
+					depositors[i].String(),
+					"",
+					fmt.Sprintf("%d", i),
+					validatorSrv.JSONRPCAddr(),
+					"",
+					true))
+
+			if i == 0 {
+				// stop relayer to simulate retry, do that after child erc721 deployment!
+				stopRelayerFn(startEventERC721, startEventERC721+1)
+			}
+		}
+
+		waitForBlocksOnExternal(t, threshold, externalRPC, 2*time.Minute)
+
+		// start relayer again to retry
+		cluster.BridgeRelayers[0].Start()
+
+		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
+			// skip 1st 2 events, that's already checked after 1st deposit
+			for i := startEventERC721 + 2; i <= endEventERC721; i++ {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
+					return false
+				}
+			}
+
+			return true
+		}))
+
+		childERC721Token := getChildToken(t, contractsapi.RootERC721Predicate.Abi,
+			bridgeCfg.InternalMintableERC721PredicateAddr, rootERC721Token, internalChainTxRelayer)
+
+		for i, depositor := range depositors {
+			owner := erc721OwnerOf(t, big.NewInt(int64(i)), childERC721Token, externalChainTxRelayer)
+			require.Equal(t, depositor, owner)
+		}
 	})
 }

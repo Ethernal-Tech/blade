@@ -69,9 +69,14 @@ func GetBridgeBatchesFromNumber(batchID *big.Int,
 			return nil, fmt.Errorf("invalid format of the threshold")
 		}
 
-		decodedIsRollback, ok := decodedBatch["isRollback"].(bool)
+		decodedNumberOfRegularEvents, ok := decodedBatch["numberOfRegularEvents"].(*big.Int)
 		if !ok {
-			return nil, fmt.Errorf("invalid format of the rollback flag")
+			return nil, fmt.Errorf("invalid format of the number of regular events")
+		}
+
+		decodedCommitCounter, ok := decodedBatch["commitCounter"].(*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the validation counter")
 		}
 
 		rawMessages, ok := decodedBatch["messages"].([]map[string]interface{})
@@ -101,11 +106,12 @@ func GetBridgeBatchesFromNumber(batchID *big.Int,
 
 		signedBridgeBatches[i] = contractsapi.SignedBridgeMessageBatch{
 			Batch: &contractsapi.BridgeMessageBatch{
-				Messages:           decodedMessages,
-				SourceChainID:      decodedSourceChainID,
-				DestinationChainID: decodedDestinationChainID,
-				Threshold:          decodedThreshold,
-				IsRollback:         decodedIsRollback,
+				Messages:              decodedMessages,
+				SourceChainID:         decodedSourceChainID,
+				DestinationChainID:    decodedDestinationChainID,
+				Threshold:             decodedThreshold,
+				NumberOfRegularEvents: decodedNumberOfRegularEvents,
+				CommitCounter:         decodedCommitCounter,
 			},
 			Signature:           decodedSignature,
 			Bitmap:              decodedBitmap,
@@ -145,6 +151,11 @@ func decodeBridgeMessages(rawMessages []map[string]interface{}) ([]*contractsapi
 			return nil, fmt.Errorf("invalid format of the receiver")
 		}
 
+		decodedIsRollback, ok := v["isRollback"].(bool)
+		if !ok {
+			return nil, fmt.Errorf("invalid format of the rollback flag")
+		}
+
 		decodedPayload, ok := v["payload"].([]byte)
 		if !ok {
 			return nil, fmt.Errorf("invalid format of the payload")
@@ -156,6 +167,7 @@ func decodeBridgeMessages(rawMessages []map[string]interface{}) ([]*contractsapi
 			DestinationChainID: decodedDestinationChainID,
 			Sender:             types.Address(decodedSender),
 			Receiver:           types.Address(decodedReceiver),
+			IsRollback:         decodedIsRollback,
 			Payload:            decodedPayload,
 		}
 	}
