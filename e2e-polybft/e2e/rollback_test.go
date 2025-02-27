@@ -631,10 +631,25 @@ func TestE2E_Retry_I2E(t *testing.T) {
 
 	bridgeCfg := polybftCfg.Bridge[chainID.Uint64()]
 
-	t.Run("Retry_ERC20", func(t *testing.T) {
-		// Stop relayer to simulate retry
-		cluster.BridgeRelayers[0].Stop()
+	stopRelayerFn := func(startID, endID uint64) {
+		// Minimal time needed for sleep before stopping is sprint time + relayer period = 15s
+		require.NoError(t, cluster.WaitUntil(20*time.Second, 2*time.Second, func() bool {
+			for i := startID; i <= endID; i++ {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
+					return false
+				}
+			}
 
+			return true
+		}))
+
+		cluster.BridgeRelayers[0].Stop()
+	}
+
+	externalRPC, err := jsonrpc.NewEthClient(bridge.JSONRPCAddr())
+	require.NoError(t, err)
+
+	t.Run("Retry_ERC20", func(t *testing.T) {
 		rootToken := contracts.NativeERC20TokenContract
 
 		for i, key := range depositorKeys {
@@ -650,18 +665,21 @@ func TestE2E_Retry_I2E(t *testing.T) {
 					validatorSrv.JSONRPCAddr(),
 					"",
 					true))
+
+			if i == 0 {
+				// stop relayer to simulate retry, do that after child erc20 deployment!
+				stopRelayerFn(1, 2)
+			}
 		}
 
-		currentBlock, err := internalRPC.BlockNumber()
-		require.NoError(t, err)
+		waitForBlocksOnExternal(t, threshold, externalRPC, 2*time.Minute)
 
-		require.NoError(t, cluster.WaitForBlock(currentBlock+2*threshold, 2*time.Minute))
-
-		// Start relayer again to retry
+		// start relayer again to retry
 		cluster.BridgeRelayers[0].Start()
 
-		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
-			for i := uint64(1); i <= transfersCount+1; i++ {
+		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
+			// skip events 1 & 2, that's already checked after 1st deposit
+			for i := uint64(3); i <= transfersCount+1; i++ {
 				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
 					return false
 				}
@@ -681,8 +699,6 @@ func TestE2E_Retry_I2E(t *testing.T) {
 	})
 
 	t.Run("Retry_ERC721", func(t *testing.T) {
-		cluster.BridgeRelayers[0].Stop()
-
 		erc721DeployTxn := cluster.Deploy(t, admin, contractsapi.RootERC721.Bytecode)
 		require.True(t, erc721DeployTxn.Succeed())
 		rootERC721Token := types.Address(erc721DeployTxn.Receipt().ContractAddress)
@@ -709,17 +725,21 @@ func TestE2E_Retry_I2E(t *testing.T) {
 					validatorSrv.JSONRPCAddr(),
 					"",
 					true))
+
+			if i == 0 {
+				// stop relayer to simulate retry, do that after child erc721 deployment!
+				stopRelayerFn(startEventERC721, startEventERC721+1)
+			}
 		}
 
-		currentBlock, err := internalRPC.BlockNumber()
-		require.NoError(t, err)
+		waitForBlocksOnExternal(t, threshold, externalRPC, 2*time.Minute)
 
-		require.NoError(t, cluster.WaitForBlock(currentBlock+2*threshold, 2*time.Minute))
-
+		// start relayer again to retry
 		cluster.BridgeRelayers[0].Start()
 
-		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
-			for i := startEventERC721; i <= endEventERC721; i++ {
+		require.NoError(t, cluster.WaitUntil(time.Minute*2, time.Second*2, func() bool {
+			// skip 1st 2 events, that's already checked after 1st deposit
+			for i := startEventERC721 + 2; i <= endEventERC721; i++ {
 				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
 					return false
 				}
