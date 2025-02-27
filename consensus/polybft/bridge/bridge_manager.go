@@ -726,7 +726,6 @@ func (b *bridgeEventManager) handleRetry(dbTx *bolt.Tx, systemState systemstate.
 
 			b.logger.Info(fmt.Sprintf("Retry mechanism has been successfully started for the batch (%s, %d -> %d)",
 				hash.String(), retryBatch.SourceChainID.Uint64(), retryBatch.DestinationChainID.Uint64()))
-
 		} else {
 			i++
 		}
@@ -810,7 +809,7 @@ func (b *bridgeEventManager) buildRetryBridgeBatch(primaryHash types.Hash, block
 
 	if numOfOrdinaryMsgs > 0 {
 		firstID = pendingBatch.Messages[0].ID
-		lastID = pendingBatch.Messages[int(numOfOrdinaryMsgs)-1].ID
+		lastID = pendingBatch.Messages[numOfOrdinaryMsgs-1].ID
 	}
 
 	b.logger.Info(
@@ -818,7 +817,7 @@ func (b *bridgeEventManager) buildRetryBridgeBatch(primaryHash types.Hash, block
 		"direction", fmt.Sprintf("%d -> %d", rb.SourceChainID.Uint64(), rb.DestinationChainID.Uint64()),
 		"total number of messages", len(pendingBatch.Messages),
 		"number of ordinary", fmt.Sprintf("%d (%s-%s)", numOfOrdinaryMsgs, firstID.String(), lastID.String()),
-		"number of rollback", len(pendingBatch.Messages)-int(numOfOrdinaryMsgs),
+		"number of rollback", len(pendingBatch.Messages)-numOfOrdinaryMsgs,
 		"threshold", pendingBatch.Threshold,
 		"base hash", primaryHash.String(),
 		"full hash", hash.String(),
