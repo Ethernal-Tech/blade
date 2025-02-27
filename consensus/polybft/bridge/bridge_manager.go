@@ -326,9 +326,6 @@ func (b *bridgeEventManager) verifyVoteSignature(valSet validator.ValidatorSet, 
 
 // BridgeBatch returns a batch to be submitted if there is a pending batch with quorum
 func (b *bridgeEventManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSigned, error) {
-	b.lock.RLock()
-	defer b.lock.RUnlock()
-
 	getLargestPendingBatchFn := func(pendingBatches []*PendingBridgeBatch, sourceChainId uint64) (*BridgeBatchSigned,
 		error) {
 		var (
@@ -585,23 +582,32 @@ func (b *bridgeEventManager) buildBridgeBatch(
 
 	pendingBatch := &PendingBridgeBatch{
 		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-			Messages:           messages,
-			SourceChainID:      big.NewInt(int64(sourceChainID)),
-			DestinationChainID: big.NewInt(int64(destinationChainID)),
-			Threshold: new(big.Int).SetUint64(
-				uint64((math.Ceil(float64(blockNumber)/10) * 10)) + b.config.bridgeCfg.BridgeBatchThreshold),
-			NumberOfRegularEvents: big.NewInt(int64(numOfOrdinaryMsgs)),
-			CommitCounter:         big.NewInt(1),
+			Messages:              messages,
+			SourceChainID:         big.NewInt(int64(sourceChainID)),
+			DestinationChainID:    big.NewInt(int64(destinationChainID)),
+			Threshold:             big.NewInt(0),
+			NumberOfRegularEvents: big.NewInt(0),
+			CommitCounter:         big.NewInt(0),
 		},
 		Epoch: epoch,
 	}
 
-	hash, err := pendingBatch.Hash()
+	baseHash, err := pendingBatch.Hash()
 	if err != nil {
 		return fmt.Errorf("could not generate a hash for bridge batch. Error: %w", err)
 	}
 
-	hashBytes := hash.Bytes()
+	pendingBatch.Threshold = new(big.Int).SetUint64(uint64((math.Ceil(float64(blockNumber)/10) * 10)) +
+		b.config.bridgeCfg.BridgeBatchThreshold)
+	pendingBatch.NumberOfRegularEvents = big.NewInt(int64(numOfOrdinaryMsgs))
+	pendingBatch.CommitCounter = big.NewInt(1)
+
+	fullHash, err := pendingBatch.Hash()
+	if err != nil {
+		return fmt.Errorf("could not generate a hash for bridge batch. Error: %w", err)
+	}
+
+	hashBytes := fullHash.Bytes()
 
 	signature, err := b.config.key.SignWithDomain(hashBytes, signer.DomainBridge)
 	if err != nil {
@@ -637,7 +643,7 @@ func (b *bridgeEventManager) buildBridgeBatch(
 
 	if numOfOrdinaryMsgs > 0 {
 		firstID = pendingBatch.Messages[0].ID
-		lastID = pendingBatch.Messages[-1+int(numOfOrdinaryMsgs)].ID
+		lastID = pendingBatch.Messages[int(numOfOrdinaryMsgs)-1].ID
 	}
 
 	b.logger.Info(
@@ -647,18 +653,15 @@ func (b *bridgeEventManager) buildBridgeBatch(
 		"number of ordinary", fmt.Sprintf("%d (%s-%s)", numOfOrdinaryMsgs, firstID.String(), lastID.String()),
 		"number of rollback", len(pendingBatch.Messages)-int(numOfOrdinaryMsgs),
 		"threshold", pendingBatch.Threshold,
-		"hash", hash.String(),
+		"base hash", baseHash.String(),
+		"full hash", fullHash.String(),
 	)
-
-	b.lock.Lock()
 
 	if sourceChainID == b.internalChainID {
 		b.pendingBridgeBatchesI2E = append(b.pendingBridgeBatchesI2E, pendingBatch)
 	} else {
 		b.pendingBridgeBatchesE2I = append(b.pendingBridgeBatchesE2I, pendingBatch)
 	}
-
-	b.lock.Unlock()
 
 	return nil
 }
@@ -675,7 +678,6 @@ func (b *bridgeEventManager) handleRetry(dbTx *bolt.Tx, systemState systemstate.
 	blockNumber := big.NewInt(int64(block.Header.Number))
 
 	b.lock.Lock()
-	defer b.lock.Unlock()
 
 	// If an error occurs inside the loop, we simply log it and proceed to the next iteration.
 	// We do not return immediately upon encountering an error because we want to process all
@@ -721,10 +723,16 @@ func (b *bridgeEventManager) handleRetry(dbTx *bolt.Tx, systemState systemstate.
 			retryBatch.CommitCounter = numOfTries.Add(numOfTries, big.NewInt(1))
 			b.retryBatches[hash] = retryBatch
 			b.pendingRetryBatches[hash] = []*PendingBridgeBatch{}
+
+			b.logger.Info(fmt.Sprintf("Retry mechanism has been successfully started for the batch (%s, %d -> %d)",
+				hash.String(), retryBatch.SourceChainID.Uint64(), retryBatch.DestinationChainID.Uint64()))
+
 		} else {
 			i++
 		}
 	}
+
+	b.lock.Unlock()
 
 	if !b.runtime.IsActiveValidator() {
 		return
@@ -788,6 +796,33 @@ func (b *bridgeEventManager) buildRetryBridgeBatch(primaryHash types.Hash, block
 
 	pendingRetryBatches := b.pendingRetryBatches[primaryHash]
 	b.pendingRetryBatches[primaryHash] = append(pendingRetryBatches, &pendingBatch)
+
+	numOfOrdinaryMsgs := 0
+
+	for _, message := range pendingBatch.Messages {
+		if !message.IsRollback {
+			numOfOrdinaryMsgs++
+		}
+	}
+
+	firstID := big.NewInt(0)
+	lastID := big.NewInt(0)
+
+	if numOfOrdinaryMsgs > 0 {
+		firstID = pendingBatch.Messages[0].ID
+		lastID = pendingBatch.Messages[int(numOfOrdinaryMsgs)-1].ID
+	}
+
+	b.logger.Info(
+		"New (retry) Bridge batch created and multicasted",
+		"direction", fmt.Sprintf("%d -> %d", rb.SourceChainID.Uint64(), rb.DestinationChainID.Uint64()),
+		"total number of messages", len(pendingBatch.Messages),
+		"number of ordinary", fmt.Sprintf("%d (%s-%s)", numOfOrdinaryMsgs, firstID.String(), lastID.String()),
+		"number of rollback", len(pendingBatch.Messages)-int(numOfOrdinaryMsgs),
+		"threshold", pendingBatch.Threshold,
+		"base hash", primaryHash.String(),
+		"full hash", hash.String(),
+	)
 
 	return nil
 }
@@ -931,8 +966,7 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Lo
 
 		b.logger.Info(
 			"Caught Bridge batch processed event",
-			"success", event.Success,
-			"hash", fmt.Sprintf("%v", event.BatchHash),
+			"hash", fmt.Sprintf("0x%s", hex.EncodeToString(event.BatchHash)),
 			"direction", fmt.Sprintf("%d -> %d", sid.Uint64(), did.Uint64()),
 		)
 
@@ -970,57 +1004,63 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Lo
 		sid := bridgeBatch.Batch.SourceChainID
 		did := bridgeBatch.Batch.DestinationChainID
 
+		baseUnexecutedBatch := &PendingBridgeBatch{
+			BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
+				Messages:              bridgeBatch.Batch.Messages,
+				SourceChainID:         bridgeBatch.Batch.SourceChainID,
+				DestinationChainID:    bridgeBatch.Batch.DestinationChainID,
+				Threshold:             big.NewInt(0),
+				NumberOfRegularEvents: big.NewInt(0),
+				CommitCounter:         big.NewInt(0),
+			},
+		}
+
+		baseHash, err := baseUnexecutedBatch.Hash()
+		if err != nil {
+			b.logger.Error("could not calculate a hash for the bridge batch", "err", err)
+
+			return err
+		}
+
+		fullUnexecutedBatch := &PendingBridgeBatch{
+			BridgeMessageBatch: bridgeBatch.Batch,
+		}
+
+		fullHash, err := fullUnexecutedBatch.Hash()
+		if err != nil {
+			b.logger.Error("could not calculate a hash for the bridge batch", "err", err)
+
+			return err
+		}
+
 		if bridgeBatch.Batch.SourceChainID.Uint64() == b.internalChainID &&
 			bridgeBatch.Batch.DestinationChainID.Uint64() == b.externalChainID {
-			b.lock.Lock()
-
-			unexecutedBatch := &PendingBridgeBatch{
-				BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-					Messages:              bridgeBatch.Batch.Messages,
-					SourceChainID:         bridgeBatch.Batch.SourceChainID,
-					DestinationChainID:    bridgeBatch.Batch.DestinationChainID,
-					Threshold:             big.NewInt(0),
-					NumberOfRegularEvents: big.NewInt(0),
-					CommitCounter:         big.NewInt(0),
-				},
-				Epoch: b.epoch,
-			}
-
 			if bridgeBatch.Batch.CommitCounter.Cmp(big.NewInt(1)) > 0 {
-				hash, err := unexecutedBatch.Hash()
-				if err != nil {
-					b.logger.Error("could not calculate a hash for the bridge batch", "err", err)
+				delete(b.retryBatches, baseHash)
+				delete(b.pendingRetryBatches, baseHash)
 
-					b.lock.Unlock()
-
-					return err
-				}
-
-				delete(b.retryBatches, hash)
-				delete(b.pendingRetryBatches, hash)
-
-				b.logger.Info(fmt.Sprintf("Batch (%s, %s, %d, %d -> %d) has been successfully removed from the retry map",
-					event.ID.String(), bridgeBatch.Batch.CommitCounter.String(),
-					len(bridgeBatch.Batch.Messages), sid.Uint64(), did.Uint64()))
+				b.logger.Info(fmt.Sprintf("Batch (%s, %s, %s, %s, %d -> %d) has been successfully removed from the retry map",
+					event.ID.String(), baseHash.String(), bridgeBatch.Batch.CommitCounter.String(),
+					fullHash.String(), sid.Uint64(), did.Uint64()))
 			} else {
-				if unexecutedBatch.SourceChainID.Cmp(big.NewInt(int64(b.internalChainID))) == 0 {
+				if baseUnexecutedBatch.SourceChainID.Cmp(big.NewInt(int64(b.internalChainID))) == 0 {
 					b.pendingBridgeBatchesI2E = nil
 				} else {
 					b.pendingBridgeBatchesE2I = nil
 				}
 			}
 
-			unexecutedBatch.Threshold = bridgeBatch.Batch.Threshold
-			unexecutedBatch.NumberOfRegularEvents = bridgeBatch.Batch.NumberOfRegularEvents
-			unexecutedBatch.CommitCounter = bridgeBatch.Batch.CommitCounter
+			fullUnexecutedBatch.Epoch = b.epoch
 
-			b.unexecutedBatches = append(b.unexecutedBatches, unexecutedBatch)
+			b.lock.Lock()
 
-			b.logger.Info(fmt.Sprintf("Batch (%s, %s, %d, %d -> %d) has been successfully added to the unexecuted list",
-				event.ID.String(), bridgeBatch.Batch.CommitCounter.String(),
-				len(bridgeBatch.Batch.Messages), sid.Uint64(), did.Uint64()))
+			b.unexecutedBatches = append(b.unexecutedBatches, fullUnexecutedBatch)
 
 			b.lock.Unlock()
+
+			b.logger.Info(fmt.Sprintf("Batch (%s, %s, %s, %s, %d -> %d) has been successfully added to the unexecuted list",
+				event.ID.String(), baseHash.String(), bridgeBatch.Batch.CommitCounter.String(),
+				fullHash.String(), sid.Uint64(), did.Uint64()))
 		}
 
 		if bridgeBatch.Batch.CommitCounter.Cmp(big.NewInt(1)) == 0 {
@@ -1035,9 +1075,9 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Lo
 			}
 		}
 
-		b.logger.Info(fmt.Sprintf("Commitment of the batch (%s, %s, %d, %d -> %d) has been successfully processed",
-			event.ID.String(), bridgeBatch.Batch.CommitCounter.String(),
-			len(bridgeBatch.Batch.Messages), sid.Uint64(), did.Uint64()))
+		b.logger.Info(fmt.Sprintf("Commitment of the batch (%s, %s, %s, %s, %d -> %d) has been successfully processed",
+			event.ID.String(), baseHash.String(), bridgeBatch.Batch.CommitCounter.String(),
+			fullHash.String(), sid.Uint64(), did.Uint64()))
 
 	default:
 		b.logger.Error("unknown bridge event")
@@ -1121,8 +1161,7 @@ func (b *bridgeEventManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error
 
 		b.logger.Info(
 			"Caught Bridge batch processed event",
-			"success", event.Success,
-			"hash", fmt.Sprintf("%v", event.BatchHash),
+			"hash", fmt.Sprintf("0x%s", hex.EncodeToString(event.BatchHash)),
 			"direction", fmt.Sprintf("%d -> %d", sid.Uint64(), did.Uint64()),
 		)
 
@@ -1145,8 +1184,8 @@ func (b *bridgeEventManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error
 
 		b.lock.Unlock()
 
-		b.logger.Info(fmt.Sprintf("Batch (%v, %v, %d -> %d) has been successfully removed from the unexecuted list",
-			event.Success, event.BatchHash, sid.Uint64(), did.Uint64()))
+		b.logger.Info(fmt.Sprintf("Batch (0x%s, %d -> %d) has been successfully removed from the unexecuted list",
+			hex.EncodeToString(event.BatchHash), sid.Uint64(), did.Uint64()))
 
 	default:
 		b.logger.Error(fmt.Sprintf("unknown bridge event came from the external chain %d", chainID.Uint64()))
