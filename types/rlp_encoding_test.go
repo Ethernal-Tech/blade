@@ -289,9 +289,9 @@ func TestRLPMarshall_Unmarshall_Missing_Data(t *testing.T) {
 					"GasFeeCap":  txType != DynamicFeeTxType,
 					"GasPrice":   txType == DynamicFeeTxType,
 					"AccessList": txType != DynamicFeeTxType,
-					"From":       txType != StateTxType,
+					"From":       (txType != StateTxType && txType != BridgeTxType),
 				},
-				fromAddrSet: txType == StateTxType,
+				fromAddrSet: (txType == StateTxType || txType == BridgeTxType),
 			},
 			{
 				name:        fmt.Sprintf("[%s] Address set for state tx only", txType),
@@ -302,9 +302,9 @@ func TestRLPMarshall_Unmarshall_Missing_Data(t *testing.T) {
 					"GasFeeCap":  txType != DynamicFeeTxType,
 					"GasPrice":   txType == DynamicFeeTxType,
 					"AccessList": txType != DynamicFeeTxType,
-					"From":       txType != StateTxType,
+					"From":       (txType != StateTxType && txType != BridgeTxType),
 				},
-				fromAddrSet: txType == StateTxType,
+				fromAddrSet: (txType == StateTxType || txType == BridgeTxType),
 			},
 		}
 
