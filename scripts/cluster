@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 dp_error_flag=0
+relayer_address="0x51Cb1B1194672b6F82C542c6c74dB580fF12945c" 
+relayer_private_key="4fa45b4ec0579cc33115e38257e2759d086bf4dd11be116d1686e183937be5ad"
 
 # Check if jq is installed
 if [[ "$1" == "polybft" ]] && ! command -v jq >/dev/null 2>&1; then
@@ -61,7 +63,9 @@ function createGenesis() {
   ./blade genesis $genesis_params \
     --block-gas-limit 50000000 \
     --premine 0x85da99c8a7c2c95964c8efd687e95e632fc533d6 \
+    --premine 0xdb74B1a3f34D8a20a99B2d5A52e67697e951fd99 \
     --premine 0x0000000000000000000000000000000000000000 \
+    --premine $relayer_address \
     --epoch-size 10 \
     --epoch-reward 1000000000 \
     --reward-wallet 0xDEADBEEF \
@@ -70,6 +74,31 @@ function createGenesis() {
     --proxy-contracts-admin 0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed \
     --base-fee-config 1000000000 \
     --burn-contract "0:0x0000000000000000000000000000000000000000"
+}
+
+function handleSigInt() {
+  echo "Caught SIGINT signal!"
+
+  rm -f relayer.db genesis.json
+  docker rm -v -f $(docker ps -aq)
+  exit 0
+}
+
+trap handleSigInt SIGINT
+
+function initRelayer() {
+  echo "Initializing relayer"
+  echo "Relayer address: "
+  
+  sleep 10s
+  current_dir=$(pwd)
+  ./blade bridge-relayer \
+    --genesis-path $current_dir/genesis.json \
+    --private-key $relayer_private_key \
+    --internal-chain-rpc http://localhost:10002 \
+    --external-chain-id 101 \
+    --poll-interval 5 \
+    --database-path $current_dir/relayer.db
 }
 
 function initBridge() {
@@ -94,8 +123,8 @@ function initBridge() {
   proxyContractsAdmin=0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed
 
   ./blade bridge fund \
-    --addresses ${address1},${address2},${address3},${address4} \
-    --amounts 1000000000000000000000000,1000000000000000000000000,1000000000000000000000000,1000000000000000000000000
+    --addresses ${address1},${address2},${address3},${address4},0xdb74B1a3f34D8a20a99B2d5A52e67697e951fd99,$relayer_address \
+    --amounts 1000000000000000000000000,1000000000000000000000000,1000000000000000000000000,1000000000000000000000000,1000000000000000000000000,1000000000000000000000000
 
   ./blade bridge deploy \
     --proxy-contracts-admin ${proxyContractsAdmin} \
@@ -143,6 +172,7 @@ function startNodes() {
 
   done
 
+  initRelayer & >/dev/null
   wait
 }
 
@@ -172,7 +202,7 @@ fi
 
 # Reset test-dirs
 rm -rf test-chain-*
-rm -f genesis.json
+# rm -f genesis.json
 
 # Build binary
 make build

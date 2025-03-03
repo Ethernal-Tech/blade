@@ -1,0 +1,282 @@
+#!/bin/zsh
+export FOUNDRY_DISABLE_NIGHTLY_WARNING=true
+
+# rpcs
+geth_rpc="http://127.0.0.1:8545"
+blade_rpc="http://127.0.0.1:10002"
+
+# keys
+priv_key="342605fcc263dd89b9ac7d975a4eb084b5ab6f6113dd278a8442ac4a8a8223f7"
+pub_key="0xdb74B1a3f34D8a20a99B2d5A52e67697e951fd99"
+
+# contracts
+native_erc20="0x0000000000000000000000000000000000000106"
+erc20_pred="0x0000000000000000000000000000000000005038"
+external_mint_erc20_pred=$(cat genesis.json | grep externalMintableERC20PredicateAddr | sed -E 's/.*"externalMintableERC20PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
+external_erc20_pred=$(cat genesis.json | grep externalERC20PredicateAddr | sed -E 's/.*"externalERC20PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
+
+# functions
+approve_func="function approve(address,uint256)"
+deposit_func="function deposit(address,uint256)"
+withdraw_func="function withdraw(address,uint256)"
+src2dest="sourceTokenToDestinationToken(address)(address)"
+balance_of="function balanceOf(address)(uint256)"
+mint_func="function mint(address,uint256)(bool)"
+
+# codes
+mock_erc20="contracts/mocks/MockERC20.sol:MockERC20"
+mock_erc20_addr=""
+
+# amounts
+one_eth=1000000000000000000000000 # amount in wei, 1 ETH
+half_eth=500000000000000000000000 # amount in wei, 0.5 ETH
+
+# colors
+RED="\033[31m"
+GREEN="\033[32m"
+BLUE="\033[34m"
+RESET="\033[0m" 
+
+function success {
+    echo "${GREEN}$1${RESET}"
+}
+
+function error {
+    echo "${RED}$1${RESET}"
+}
+
+function info {
+    echo "${BLUE}$1${RESET}"
+}
+
+# Mock ERC20 contract:
+function create_mock_erc20 {
+    cd blade-contracts
+    mock_erc20_addr=$(forge create --private-key $priv_key --rpc-url $geth_rpc $mock_erc20 --broadcast | grep Deployed | sed -e 's/Deployed to: //')
+    success "Mock ERC20 contract address: $mock_erc20_addr"
+}
+
+# Approve ERC20 contract:
+function approve_erc20 {
+    info "Approving ERC20 contract..."
+    if [[ $1 == "i" ]]; then
+        info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$native_erc20 \$approve_func \$erc20_pred \$one_eth"
+        echo
+
+        cast send --private-key $priv_key --rpc-url $blade_rpc $native_erc20 $approve_func $erc20_pred $one_eth | grep status
+    else
+        if [[ $mock_erc20_addr == "" ]]; then
+            error "Mock ERC20 contract not created"
+            return
+        fi
+
+        info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$mock_erc20_addr \$approve_func \$external_erc20_pred \$one_eth"
+        echo
+
+        cast send --private-key $priv_key --rpc-url $geth_rpc $mock_erc20_addr $approve_func $external_erc20_pred $one_eth | grep status
+    fi
+}
+
+# Deposit ERC20 contract:
+function deposit_erc20 {
+    info "Depositing ERC20 contract..."
+    if [[ $1 == "i" ]]; then
+        info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$native_erc20 \$deposit_func \$erc20_pred \$half_eth"
+
+        cast send --private-key $priv_key --rpc-url $blade_rpc $erc20_pred $deposit_func $native_erc20 $half_eth | grep status
+    else
+        if [[ $mock_erc20_addr == "" ]]; then
+            error "Mock ERC20 contract not created"
+            return
+        fi
+
+        info "Minting before depositing..."
+        info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$external_erc20_pred \$deposit_func \$mock_erc20_addr \$half_eth "
+        echo
+
+        # mint
+        cast send --private-key $priv_key --rpc-url $geth_rpc $mock_erc20_addr $mint_func $pub_key $half_eth | grep status
+
+        info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$external_erc20_pred \$deposit_func \$mock_erc20_addr \$half_eth "
+        echo
+
+        cast send --private-key $priv_key --rpc-url $geth_rpc $external_erc20_pred $deposit_func $mock_erc20_addr $half_eth | grep status
+    fi
+}
+
+# Check ERC20 balance on external contract:
+function check_balance_erc20 {
+    info "Checking ERC20 balance..."
+    if [[ $1 == "i" ]]; then
+        info "RUN: external_token_addr=\$(cast call \$erc20_pred --rpc-url \$blade_rpc \$src2dest \$native_erc20)"
+        info "RUN: cast call \$external_token_addr --rpc-url \$geth_rpc"
+
+        external_token_addr=$(cast call $erc20_pred --rpc-url $blade_rpc $src2dest $native_erc20)    
+        success "External token address: $external_token_addr"
+
+        cast call $external_token_addr --rpc-url $geth_rpc $balance_of $pub_key
+    else 
+        if [[ $mock_erc20_addr == "" ]]; then
+            error "Mock ERC20 contract not created"
+            return
+        fi
+
+        internal_token_addr=$(cast call $external_erc20_pred --rpc-url $geth_rpc $src2dest $mock_erc20_addr)    
+        success "Internal token address: $internal_token_addr"
+
+        info "RUN: cast call \$internal_token_addr --rpc-url \$blade_rpc \$balance_of \$pub_key"
+        cast call $internal_token_addr --rpc-url $blade_rpc $balance_of $pub_key
+    fi
+}
+
+# Withdraw ERC20 contract:
+function withdraw_erc20 {
+    info "Withdrawing ERC20 contract..."
+    if [[ $1 == "i" ]]; then
+        info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$external_mint_erc20_pred \$withdraw_func \$native_erc20 \$half_eth"
+
+        external_token_addr=$(cast call $erc20_pred --rpc-url $blade_rpc $src2dest $native_erc20)    
+        success "External token address: $external_token_addr"
+
+        cast send --private-key $priv_key --rpc-url $geth_rpc $external_mint_erc20_pred $withdraw_func $external_token_addr $half_eth | grep status
+    else
+        if [[ $mock_erc20_addr == "" ]]; then
+            error "Mock ERC20 contract not created"
+            return
+        fi
+
+        internal_token_addr=$(cast call $external_erc20_pred --rpc-url $geth_rpc $src2dest $mock_erc20_addr)
+        success "Internal token address: $internal_token_addr"
+
+        info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$internal_token_addr \$withdraw_func \$pub_key \$half_eth"
+        cast send --private-key $priv_key --rpc-url $blade_rpc $erc20_pred $withdraw_func $internal_token_addr $half_eth | grep status
+    fi
+}
+
+function native_balance {
+    info "Checking native balance..."
+    
+    if [[ $1 != "e" ]]; then
+        info "RUN: cast balance --rpc-url \$blade_rpc \$pub_key"
+        cast balance --rpc-url $blade_rpc $pub_key
+    else
+        info "RUN: cast balance --rpc-url \$geth_rpc \$pub_key"
+        cast balance --rpc-url $geth_rpc $pub_key
+    fi
+}
+
+function mock {
+    if [[ $1 == "erc20" ]]; then
+        create_mock_erc20 $2
+    elif [[ $1 == "erc721" ]]; then
+        create_mock_erc721 $2
+    else
+        error "Invalid contract type"
+    fi
+}
+
+function approve {
+    if [[ $1 == "erc20" ]]; then
+        approve_erc20 $2
+    elif [[ $1 == "erc721" ]]; then
+        approve_erc721 $2
+    else
+        error "Invalid contract type"
+    fi
+}
+
+function deposit {
+    if [[ $1 == "erc20" ]]; then
+        deposit_erc20 $2
+    elif [[ $1 == "erc721" ]]; then
+        deposit_erc721 $2
+    else
+        error "Invalid contract type"
+    fi
+}
+
+function check_balance {
+    if [[ $1 == "erc20" ]]; then
+        check_balance_erc20 $2
+    elif [[ $1 == "erc721" ]]; then
+        check_balance_erc721 $2
+    else
+        error "Invalid contract type"
+    fi
+}
+
+function withdraw {
+    if [[ $1 == "erc20" ]]; then
+        withdraw_erc20 $2
+    elif [[ $1 == "erc721" ]]; then
+        withdraw_erc721 $2
+    else
+        error "Invalid contract type"
+    fi
+}
+
+while true; do
+    info "Options:"
+    info "1. Mock"
+    info "2. Approve"
+    info "3. Deposit"
+    info "4. Withdraw"
+    info "5. Check balance"
+    info "6. Balance native"
+    info "7. Exit"
+
+    read option
+    contract_type="erc20"
+
+    if [[ $option < 1 || $option > 7 ]]; then
+        error "Invalid option"
+        exit 1
+    fi
+
+    if [[ $option < 6 ]]; then
+        info "Enter contract type (1. erc20, 2. erc721):"
+        read type
+
+        if [[ $type == "1" ]]; then
+            contract_type="erc20"
+        elif [[ $type == "2" ]]; then
+            contract_type="erc721"
+        else
+            error "Invalid contract type"
+            exit 1
+        fi
+    fi
+
+    info "Enter (i for i2e, e for e2i):"
+    read direction
+
+    case $option in
+        1)
+            mock $contract_type $direction
+            ;;
+        2)
+            approve $contract_type $direction
+            ;;
+        3)
+            deposit $contract_type $direction
+            ;;
+        4)
+            withdraw $contract_type $direction
+            ;;
+        5)
+            check_balance $contract_type $direction
+            ;;
+        6)
+            native_balance $direction
+            ;;
+        7)
+            exit 0;;
+        *)
+            echo "Invalid option"
+            exit 1
+    esac
+
+    echo
+    success "Done"
+    echo
+done
