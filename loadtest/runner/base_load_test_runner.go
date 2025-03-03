@@ -287,7 +287,8 @@ func (r *BaseLoadTestRunner) waitForReceiptsParallel() {
 				continue
 			}
 
-			if (len(block.Transactions) == 1 && block.Transactions[0].Type() == types.StateTxType) ||
+			if (len(block.Transactions) == 1 && block.Transactions[0].Type() == types.StateTxType ||
+				block.Transactions[0].Type() == types.BridgeTxType) ||
 				len(block.Transactions) == 0 {
 				sequentialEmptyBlocks++
 				currentBlock++

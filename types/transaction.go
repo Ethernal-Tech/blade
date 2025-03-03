@@ -14,6 +14,8 @@ import (
 const (
 	// StateTransactionGasLimit is arbitrary default gas limit for state transactions
 	StateTransactionGasLimit = 5000000
+	// BridgeTransactionGasLimit is arbitrary default gas limit for state transactions
+	BridgeTransactionGasLimit = 5000000
 )
 
 // TxType is the transaction type.
@@ -24,6 +26,7 @@ const (
 	LegacyTxType     TxType = 0x0
 	AccessListTxType TxType = 0x01
 	DynamicFeeTxType TxType = 0x02
+	BridgeTxType     TxType = 0x7e
 	StateTxType      TxType = 0x7f
 )
 
@@ -31,7 +34,7 @@ func txTypeFromByte(b byte) (TxType, error) {
 	tt := TxType(b)
 
 	switch tt {
-	case LegacyTxType, StateTxType, DynamicFeeTxType, AccessListTxType:
+	case LegacyTxType, StateTxType, BridgeTxType, DynamicFeeTxType, AccessListTxType:
 		return tt, nil
 	default:
 		return tt, fmt.Errorf("unknown transaction type: %d", b)
@@ -45,6 +48,8 @@ func (t TxType) String() (s string) {
 		return "LegacyTx"
 	case StateTxType:
 		return "StateTx"
+	case BridgeTxType:
+		return "BridgeTx"
 	case DynamicFeeTxType:
 		return "DynamicFeeTx"
 	case AccessListTxType:
@@ -85,6 +90,8 @@ func (t *Transaction) InitInnerData(txType TxType) {
 		t.Inner = NewAccessListTx()
 	case StateTxType:
 		t.Inner = NewStateTx()
+	case BridgeTxType:
+		t.Inner = NewBridgeTx()
 	case LegacyTxType:
 		t.Inner = NewLegacyTx()
 	default:

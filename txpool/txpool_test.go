@@ -157,9 +157,9 @@ func TestAddTxErrors(t *testing.T) {
 
 		pool := setupPool()
 
-		tx := newTx(defaultAddr, 0, 1, types.StateTxType)
+		stateTx := newTx(defaultAddr, 0, 1, types.StateTxType)
 
-		err := pool.addTx(local, signTx(tx))
+		err := pool.addTx(local, signTx(stateTx))
 
 		assert.ErrorContains(t,
 			err,
@@ -167,7 +167,20 @@ func TestAddTxErrors(t *testing.T) {
 		)
 		assert.ErrorContains(t,
 			err,
-			"state transactions are not expected to be added to the pool",
+			"state/bridge transactions are not expected to be added to the pool",
+		)
+
+		bridgeTx := newTx(defaultAddr, 0, 1, types.BridgeTxType)
+
+		err = pool.addTx(local, signTx(bridgeTx))
+
+		assert.ErrorContains(t,
+			err,
+			ErrInvalidTxType.Error(),
+		)
+		assert.ErrorContains(t,
+			err,
+			"state/bridge transactions are not expected to be added to the pool",
 		)
 	})
 

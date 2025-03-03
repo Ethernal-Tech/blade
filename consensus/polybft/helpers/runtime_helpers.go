@@ -61,3 +61,17 @@ func CreateStateTransactionWithData(target types.Address, inputData []byte) *typ
 
 	return tx.ComputeHash()
 }
+
+// CreateBridgeTransactionWithData creates a bridge transaction
+// with provided target address and inputData parameter which is ABI encoded byte array.
+func CreateBridgeTransactionWithData(target types.Address, inputData []byte) *types.Transaction {
+	tx := types.NewTx(types.NewBridgeTx(
+		types.WithGasPrice(big.NewInt(0)),
+		types.WithFrom(contracts.SystemCaller),
+		types.WithTo(&target),
+		types.WithInput(inputData),
+		types.WithGas(types.StateTransactionGasLimit),
+	))
+
+	return tx.ComputeHash()
+}

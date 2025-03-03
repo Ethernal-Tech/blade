@@ -67,6 +67,13 @@ issues:
         - wsl
         - lll
         - stylecheck
+    # bridge_tx.go and state_tx.go are currently the same (at some point this will surely change)
+    - path: types/bridge_tx.go
+      linters:
+        - dupl
+    - path: types/state_tx.go
+      linters:
+        - dupl
   include:
     - EXC0012 # Exported (.+) should have comment( \(or a comment on this block\))? or be unexported
     - EXC0013 # Package comment should be of the form "(.+)...

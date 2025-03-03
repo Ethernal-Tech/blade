@@ -639,11 +639,11 @@ func (p *TxPool) ClearProposed() {
 // validateTx ensures the transaction conforms to specific
 // constraints before entering the pool.
 func (p *TxPool) validateTx(tx *types.Transaction) error {
-	// Check the transaction type. State transactions are not expected to be added to the pool
-	if tx.Type() == types.StateTxType {
+	// Check the transaction type. State/bridge transactions are not expected to be added to the pool
+	if tx.Type() == types.StateTxType || tx.Type() == types.BridgeTxType {
 		metrics.IncrCounter([]string{txPoolMetrics, "invalid_tx_type"}, 1)
 
-		return fmt.Errorf("%w: type %d rejected, state transactions are not expected to be added to the pool",
+		return fmt.Errorf("%w: type %d rejected, state/bridge transactions are not expected to be added to the pool",
 			ErrInvalidTxType, tx.Type())
 	}
 

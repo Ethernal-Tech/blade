@@ -170,6 +170,20 @@ func TestRLPMarshall_And_Unmarshall_TypedTransaction(t *testing.T) {
 				R:     big.NewInt(27),
 			},
 		}),
+		NewTx(&BridgeTx{
+			GasPrice: big.NewInt(11),
+			BaseTx: &BaseTx{
+				Nonce: 0,
+				Gas:   11,
+				To:    &addrTo,
+				From:  addrFrom,
+				Value: big.NewInt(1),
+				Input: []byte{1, 2},
+				V:     big.NewInt(25),
+				S:     big.NewInt(26),
+				R:     big.NewInt(27),
+			},
+		}),
 		NewTx(&LegacyTx{
 			GasPrice: big.NewInt(11),
 			BaseTx: &BaseTx{
@@ -245,6 +259,7 @@ func TestRLPMarshall_Unmarshall_Missing_Data(t *testing.T) {
 
 	txTypes := []TxType{
 		StateTxType,
+		BridgeTxType,
 		LegacyTxType,
 		DynamicFeeTxType,
 	}
@@ -330,6 +345,10 @@ func TestRLPMarshall_And_Unmarshall_TxType(t *testing.T) {
 		{
 			name:   "StateTx",
 			txType: StateTxType,
+		},
+		{
+			name:   "BridgeTx",
+			txType: BridgeTxType,
 		},
 		{
 			name:   "LegacyTx",
