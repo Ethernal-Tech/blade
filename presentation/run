@@ -11,9 +11,18 @@ pub_key="0xdb74B1a3f34D8a20a99B2d5A52e67697e951fd99"
 
 # contracts
 native_erc20="0x0000000000000000000000000000000000000106"
-erc20_pred="0x0000000000000000000000000000000000005038"
+erc20_mint_pred="0x0000000000000000000000000000000000005038"
+erc20_pred=$(cat genesis.json | grep internalERC20PredicateAddr | sed -E 's/.*"internalERC20PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
+
 external_mint_erc20_pred=$(cat genesis.json | grep externalMintableERC20PredicateAddr | sed -E 's/.*"externalMintableERC20PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
 external_erc20_pred=$(cat genesis.json | grep externalERC20PredicateAddr | sed -E 's/.*"externalERC20PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
+
+external_erc721_pred=$(cat genesis.json | grep externalERC721PredicateAddr | sed -E 's/.*"externalERC721PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
+external_mint_erc721_pred=$(cat genesis.json | grep externalMintableERC721PredicateAddr | sed -E 's/.*"externalMintableERC721PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
+
+erc721_nonmint_pred=$(cat genesis.json | grep internalERC721PredicateAddr | sed -E 's/.*"internalERC721PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
+erc721_pred=$(cat genesis.json | grep internalERC721PredicateAddr | sed -E 's/.*"internalERC721PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
+
 
 # functions
 approve_func="function approve(address,uint256)"
@@ -23,13 +32,37 @@ src2dest="sourceTokenToDestinationToken(address)(address)"
 balance_of="function balanceOf(address)(uint256)"
 mint_func="function mint(address,uint256)(bool)"
 
+# events
+result_event_sig=0xc291164f30f10fd321c213fe9e048d68a831508af3aa2616356f843d1e06036d
+
 # codes
 mock_erc20="contracts/mocks/MockERC20.sol:MockERC20"
 mock_erc20_addr=""
 
+mock_erc721="contracts/mocks/MockERC721.sol:MockERC721"
+mock_erc721_addr=""
+ext_mock_erc721_addr=""
+
 # amounts
 one_eth=1000000000000000000000000 # amount in wei, 1 ETH
 half_eth=500000000000000000000000 # amount in wei, 0.5 ETH
+
+# nft
+nft_token_id=0x493c33455448
+nft_token_id2=0x493c3345544831
+
+function addresses {
+    echo
+    info "Geth RPC: $geth_rpc"
+    info "Blade RPC: $blade_rpc"
+    info "Private key: $priv_key"
+    info "Public key: $pub_key"
+    info "Native ERC20: $native_erc20"
+    info "ERC20 predicate: $erc20_mint_pred"
+    info "External mintable ERC20 predicate: $external_mint_erc20_pred"
+    info "External ERC20 predicate: $external_erc20_pred"
+    info "Mock ERC20: $mock_erc20_addr"
+}
 
 # colors
 RED="\033[31m"
@@ -54,6 +87,15 @@ function create_mock_erc20 {
     cd blade-contracts
     mock_erc20_addr=$(forge create --private-key $priv_key --rpc-url $geth_rpc $mock_erc20 --broadcast | grep Deployed | sed -e 's/Deployed to: //')
     success "Mock ERC20 contract address: $mock_erc20_addr"
+    cd ..
+}
+
+# Mock ERC721 contract:
+function create_mock_erc721 {
+    cd blade-contracts
+    mock_erc721_addr=$(forge create --private-key $priv_key --rpc-url $geth_rpc $mock_erc721 --broadcast | grep Deployed | sed -e 's/Deployed to: //')
+    success "Mock ERC721 contract address: $mock_erc721_addr"
+    cd ..
 }
 
 # Approve ERC20 contract:
@@ -63,18 +105,44 @@ function approve_erc20 {
         info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$native_erc20 \$approve_func \$erc20_pred \$one_eth"
         echo
 
-        cast send --private-key $priv_key --rpc-url $blade_rpc $native_erc20 $approve_func $erc20_pred $one_eth | grep status
-    else
-        if [[ $mock_erc20_addr == "" ]]; then
-            error "Mock ERC20 contract not created"
+        cast send --private-key $priv_key --rpc-url $blade_rpc $native_erc20 $approve_func $erc20_mint_pred $one_eth | grep status
+        return
+    elif [[ $mock_erc20_addr == "" ]]; then
+        error "Mock ERC20 contract not created"
+        return
+    fi
+
+    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$mock_erc20_addr \$approve_func \$external_erc20_pred \$one_eth"
+    echo
+
+    cast send --private-key $priv_key --rpc-url $geth_rpc $mock_erc20_addr $approve_func $external_erc20_pred $one_eth | grep status
+}
+
+# Approve ERC721 contract:
+function approve_erc721 {
+    info "Approving ERC20 contract..."
+    if [[ $1 == "i" ]]; then
+        if [[ $mock_erc721_addr == "" ]]; then
+            error "Internal mock ERC721 contract not created"
             return
         fi
 
-        info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$mock_erc20_addr \$approve_func \$external_erc20_pred \$one_eth"
+        info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$mock_erc721_addr \$approve_func \$erc721_pred "
         echo
 
-        cast send --private-key $priv_key --rpc-url $geth_rpc $mock_erc20_addr $approve_func $external_erc20_pred $one_eth | grep status
+        cast send --private-key $priv_key --rpc-url $blade_rpc $mock_erc721_addr $approve_func $erc721_pred | grep status
+        return
     fi
+
+    if [[ $ext_mock_erc721_addr == "" ]]; then
+        error "External mock ERC721 contract not created"
+        return
+    fi
+
+    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$ext_mock_erc721_addr \$approve_func \$external_erc721_pred "
+    echo
+
+    cast send --private-key $priv_key --rpc-url $geth_rpc $ext_mock_erc721_addr $approve_func $external_erc721_pred | grep status
 }
 
 # Deposit ERC20 contract:
@@ -83,25 +151,63 @@ function deposit_erc20 {
     if [[ $1 == "i" ]]; then
         info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$native_erc20 \$deposit_func \$erc20_pred \$half_eth"
 
-        cast send --private-key $priv_key --rpc-url $blade_rpc $erc20_pred $deposit_func $native_erc20 $half_eth | grep status
-    else
-        if [[ $mock_erc20_addr == "" ]]; then
-            error "Mock ERC20 contract not created"
+        cast send --private-key $priv_key --rpc-url $blade_rpc $erc20_mint_pred $deposit_func $native_erc20 $half_eth | grep status
+        return
+    elif [[ $mock_erc20_addr == "" ]]; then
+        error "Mock ERC20 contract not created"
+        return
+    fi
+
+    info "Minting before depositing..."
+    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$external_erc20_pred \$deposit_func \$mock_erc20_addr \$half_eth "
+    echo
+
+    # mint
+    cast send --private-key $priv_key --rpc-url $geth_rpc $mock_erc20_addr $mint_func $pub_key $half_eth | grep status
+
+    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$external_erc20_pred \$deposit_func \$mock_erc20_addr \$half_eth "
+    echo
+
+    cast send --private-key $priv_key --rpc-url $geth_rpc $external_erc20_pred $deposit_func $mock_erc20_addr $half_eth | grep status
+}
+
+function deposit_erc721 {
+    info "Depositing ERC721 contract..."
+    if [[ $1 == "i" ]]; then
+        if [[ $mock_erc721_addr == "" ]]; then
+            error "Internal mock ERC721 contract not created"
             return
         fi
 
         info "Minting before depositing..."
-        info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$external_erc20_pred \$deposit_func \$mock_erc20_addr \$half_eth "
+        info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$mock_erc721_addr \$mint_func \$pub_key \$nft_token_id"
         echo
 
         # mint
-        cast send --private-key $priv_key --rpc-url $geth_rpc $mock_erc20_addr $mint_func $pub_key $half_eth | grep status
+        cast send --private-key $priv_key --rpc-url $blade_rpc $mock_erc721_addr $mint_func $pub_key $nft_token_id | grep status
 
-        info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$external_erc20_pred \$deposit_func \$mock_erc20_addr \$half_eth "
-        echo
+        info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$erc721_mint_pred \$deposit_func \$mock_erc721_addr \$nft_token_id"
 
-        cast send --private-key $priv_key --rpc-url $geth_rpc $external_erc20_pred $deposit_func $mock_erc20_addr $half_eth | grep status
+        cast send --private-key $priv_key --rpc-url $blade_rpc $erc721_mint_pred $deposit_func $mock_erc721_addr $nft_token_id | grep status
+        return
     fi
+
+    if [[ $ext_mock_erc721_addr == "" ]]; then
+        error "External mock ERC721 contract not created"
+        return
+    fi
+
+    info "Minting before depositing..."
+    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$external_erc721_pred \$deposit_func \$mock_erc721_addr \$half_eth "
+    echo
+
+    # mint
+    cast send --private-key $priv_key --rpc-url $geth_rpc $ext_mock_erc721_addr $mint_func $pub_key $nft_token_id2 | grep status
+
+    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$external_erc721_pred \$deposit_func \$mock_erc721_addr \$half_eth "
+    echo
+
+    cast send --private-key $priv_key --rpc-url $geth_rpc $external_erc721_pred $deposit_func $mock_erc721_addr $nft_token_id2 | grep status
 }
 
 # Check ERC20 balance on external contract:
@@ -111,22 +217,21 @@ function check_balance_erc20 {
         info "RUN: external_token_addr=\$(cast call \$erc20_pred --rpc-url \$blade_rpc \$src2dest \$native_erc20)"
         info "RUN: cast call \$external_token_addr --rpc-url \$geth_rpc"
 
-        external_token_addr=$(cast call $erc20_pred --rpc-url $blade_rpc $src2dest $native_erc20)    
+        external_token_addr=$(cast call $erc20_mint_pred --rpc-url $blade_rpc $src2dest $native_erc20)    
         success "External token address: $external_token_addr"
 
         cast call $external_token_addr --rpc-url $geth_rpc $balance_of $pub_key
-    else 
-        if [[ $mock_erc20_addr == "" ]]; then
-            error "Mock ERC20 contract not created"
-            return
-        fi
-
-        internal_token_addr=$(cast call $external_erc20_pred --rpc-url $geth_rpc $src2dest $mock_erc20_addr)    
-        success "Internal token address: $internal_token_addr"
-
-        info "RUN: cast call \$internal_token_addr --rpc-url \$blade_rpc \$balance_of \$pub_key"
-        cast call $internal_token_addr --rpc-url $blade_rpc $balance_of $pub_key
+        return
+    elif [[ $mock_erc20_addr == "" ]]; then
+        error "Mock ERC20 contract not created"
+        return
     fi
+
+    internal_token_addr=$(cast call $external_erc20_pred --rpc-url $geth_rpc $src2dest $mock_erc20_addr)    
+    success "Internal token address: $internal_token_addr"
+
+    info "RUN: cast call \$internal_token_addr --rpc-url \$blade_rpc \$balance_of \$pub_key"
+    cast call $internal_token_addr --rpc-url $blade_rpc $balance_of $pub_key
 }
 
 # Withdraw ERC20 contract:
@@ -135,22 +240,21 @@ function withdraw_erc20 {
     if [[ $1 == "i" ]]; then
         info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$external_mint_erc20_pred \$withdraw_func \$native_erc20 \$half_eth"
 
-        external_token_addr=$(cast call $erc20_pred --rpc-url $blade_rpc $src2dest $native_erc20)    
+        external_token_addr=$(cast call $erc20_mint_pred --rpc-url $blade_rpc $src2dest $native_erc20)    
         success "External token address: $external_token_addr"
 
         cast send --private-key $priv_key --rpc-url $geth_rpc $external_mint_erc20_pred $withdraw_func $external_token_addr $half_eth | grep status
-    else
-        if [[ $mock_erc20_addr == "" ]]; then
-            error "Mock ERC20 contract not created"
-            return
-        fi
-
-        internal_token_addr=$(cast call $external_erc20_pred --rpc-url $geth_rpc $src2dest $mock_erc20_addr)
-        success "Internal token address: $internal_token_addr"
-
-        info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$internal_token_addr \$withdraw_func \$pub_key \$half_eth"
-        cast send --private-key $priv_key --rpc-url $blade_rpc $erc20_pred $withdraw_func $internal_token_addr $half_eth | grep status
+        return
+    elif [[ $mock_erc20_addr == "" ]]; then
+        error "Mock ERC20 contract not created"
+        return
     fi
+
+    internal_token_addr=$(cast call $external_erc20_pred --rpc-url $geth_rpc $src2dest $mock_erc20_addr)
+    success "Internal token address: $internal_token_addr"
+
+    info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$erc20_nonmint_pred \$withdraw_func \$internal_token_addr \$half_eth"
+    cast send --private-key $priv_key --rpc-url $blade_rpc $erc20_pred $withdraw_func $internal_token_addr $half_eth | grep status
 }
 
 function native_balance {
@@ -159,10 +263,11 @@ function native_balance {
     if [[ $1 != "e" ]]; then
         info "RUN: cast balance --rpc-url \$blade_rpc \$pub_key"
         cast balance --rpc-url $blade_rpc $pub_key
-    else
-        info "RUN: cast balance --rpc-url \$geth_rpc \$pub_key"
-        cast balance --rpc-url $geth_rpc $pub_key
+        return
     fi
+    
+    info "RUN: cast balance --rpc-url \$geth_rpc \$pub_key"
+    cast balance --rpc-url $geth_rpc $pub_key
 }
 
 function mock {
@@ -215,6 +320,10 @@ function withdraw {
     fi
 }
 
+function print_logs {
+    cast logs --rpc-url $geth_rpc $result_event_sig
+}
+
 while true; do
     info "Options:"
     info "1. Mock"
@@ -223,12 +332,14 @@ while true; do
     info "4. Withdraw"
     info "5. Check balance"
     info "6. Balance native"
-    info "7. Exit"
+    info "7. Addresses"
+    info "8. Logs"
+    info "9. Exit"
 
     read option
     contract_type="erc20"
 
-    if [[ $option < 1 || $option > 7 ]]; then
+    if [[ $option < 1 || $option > 8 ]]; then
         error "Invalid option"
         exit 1
     fi
@@ -247,8 +358,10 @@ while true; do
         fi
     fi
 
-    info "Enter (i for i2e, e for e2i):"
-    read direction
+    if [[ $option < 7 ]]; then
+        info "Enter (i for i2e, e for e2i):"
+        read direction
+    fi
 
     case $option in
         1)
@@ -270,6 +383,12 @@ while true; do
             native_balance $direction
             ;;
         7)
+            addresses 
+            ;;
+        8)
+            print_logs
+            ;;
+        9)
             exit 0;;
         *)
             echo "Invalid option"

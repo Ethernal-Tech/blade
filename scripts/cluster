@@ -81,6 +81,9 @@ function handleSigInt() {
 
   rm -f relayer.db genesis.json
   docker rm -v -f $(docker ps -aq)
+  clear
+  echo "Properly closed!"
+  rm validator-*.log
   exit 0
 }
 
@@ -202,6 +205,7 @@ fi
 
 # Reset test-dirs
 rm -rf test-chain-*
+
 # rm -f genesis.json
 
 # Build binary
