@@ -207,7 +207,7 @@ func TestVerifyTransactions(t *testing.T) {
 			},
 			setupMocks: func(bridge *bridge, blockInfo *oracle.NewBlockInfo) []*types.Transaction {
 				return []*types.Transaction{
-					types.NewTx(types.NewStateTx(types.WithInput([]byte{0, 1, 2}))),
+					types.NewTx(types.NewBridgeTx(types.WithInput([]byte{0, 1, 2}))),
 				}
 			},
 			expectedError: helpers.ErrStateTransactionInputInvalid.Error(),
@@ -224,7 +224,7 @@ func TestVerifyTransactions(t *testing.T) {
 				require.NoError(t, err)
 
 				return []*types.Transaction{
-					types.NewTx(types.NewStateTx(types.WithInput(input), types.WithTo(&contracts.BridgeStorageContract))),
+					types.NewTx(types.NewBridgeTx(types.WithInput(input), types.WithTo(&contracts.BridgeStorageContract))),
 				}
 			},
 			expectedError: errBridgeBatchTxInNonSprintBlock.Error(),
@@ -246,7 +246,7 @@ func TestVerifyTransactions(t *testing.T) {
 				blockInfo.CurrentEpochValidatorSet = validators.ToValidatorSet()
 
 				return []*types.Transaction{
-					types.NewTx(types.NewStateTx(types.WithInput(input), types.WithTo(&contracts.BridgeStorageContract))),
+					types.NewTx(types.NewBridgeTx(types.WithInput(input), types.WithTo(&contracts.BridgeStorageContract))),
 				}
 			},
 		},
@@ -285,7 +285,7 @@ func TestVerifyTransactions(t *testing.T) {
 				require.NoError(t, err)
 
 				return []*types.Transaction{
-					types.NewTx(types.NewStateTx(types.WithInput(input), types.WithTo(&contracts.BridgeStorageContract))),
+					types.NewTx(types.NewBridgeTx(types.WithInput(input), types.WithTo(&contracts.BridgeStorageContract))),
 				}
 			},
 		},
@@ -307,7 +307,7 @@ func TestVerifyTransactions(t *testing.T) {
 				require.NoError(t, err)
 
 				return []*types.Transaction{
-					types.NewTx(types.NewStateTx(types.WithInput(input), types.WithTo(&contracts.BridgeStorageContract))),
+					types.NewTx(types.NewBridgeTx(types.WithInput(input), types.WithTo(&contracts.BridgeStorageContract))),
 				}
 			},
 			expectedError: errCommitValidatorSetTxNotExpected.Error(),
@@ -330,7 +330,7 @@ func TestVerifyTransactions(t *testing.T) {
 				require.NoError(t, err)
 
 				return []*types.Transaction{
-					types.NewTx(types.NewStateTx(types.WithInput(input), types.WithTo(&contracts.BridgeStorageContract))),
+					types.NewTx(types.NewBridgeTx(types.WithInput(input), types.WithTo(&contracts.BridgeStorageContract))),
 				}
 			},
 			expectedError: errCommitValidatorSetTxInvalid.Error(),
@@ -354,7 +354,7 @@ func TestVerifyTransactions(t *testing.T) {
 				require.NoError(t, err)
 
 				return []*types.Transaction{
-					types.NewTx(types.NewStateTx(types.WithInput(input), types.WithTo(&contracts.BridgeStorageContract))),
+					types.NewTx(types.NewBridgeTx(types.WithInput(input), types.WithTo(&contracts.BridgeStorageContract))),
 				}
 			},
 			expectedError: "missing in the commit validator set transaction",

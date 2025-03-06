@@ -71,7 +71,7 @@ func (signer *FrontierSigner) Sender(tx *types.Transaction) (types.Address, erro
 
 // sender returns the sender of the transaction
 func (signer *FrontierSigner) sender(tx *types.Transaction, isHomestead bool) (types.Address, error) {
-	if tx.Type() != types.LegacyTxType && tx.Type() != types.StateTxType {
+	if !IsLegacyLikeTx(tx) {
 		return types.ZeroAddress, types.ErrTxTypeNotSupported
 	}
 
@@ -97,7 +97,7 @@ func (signer *FrontierSigner) SignTx(tx *types.Transaction, privateKey *ecdsa.Pr
 // signTxInternal takes the original transaction as input and returns its signed version
 func (signer *FrontierSigner) signTxInternal(tx *types.Transaction,
 	privateKey *ecdsa.PrivateKey) (*types.Transaction, error) {
-	if tx.Type() != types.LegacyTxType && tx.Type() != types.StateTxType {
+	if !IsLegacyLikeTx(tx) {
 		return nil, types.ErrTxTypeNotSupported
 	}
 
@@ -117,7 +117,7 @@ func (signer *FrontierSigner) signTxInternal(tx *types.Transaction,
 func (signer *FrontierSigner) SignTxWithCallback(
 	tx *types.Transaction,
 	signFn func(hash types.Hash) (sig []byte, err error)) (*types.Transaction, error) {
-	if tx.Type() != types.LegacyTxType && tx.Type() != types.StateTxType {
+	if !IsLegacyLikeTx(tx) {
 		return nil, types.ErrTxTypeNotSupported
 	}
 
@@ -144,4 +144,8 @@ func (signer *FrontierSigner) calculateV(parity byte) []byte {
 	result.Add(big.NewInt(int64(parity)), big27)
 
 	return result.Bytes()
+}
+
+func IsLegacyLikeTx(tx *types.Transaction) bool {
+	return tx.Type() == types.LegacyTxType || tx.Type() == types.StateTxType || tx.Type() == types.BridgeTxType
 }

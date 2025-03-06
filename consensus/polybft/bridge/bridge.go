@@ -230,8 +230,8 @@ func (b *bridge) VerifyTransactions(blockInfo oracle.NewBlockInfo, txs []*types.
 	)
 
 	for _, tx := range txs {
-		if tx.Type() != types.StateTxType {
-			continue // not a state transaction, we don't care about it
+		if tx.Type() != types.BridgeTxType {
+			continue // not a bridge transaction, we don't care about it
 		}
 
 		txData := tx.Input()
@@ -301,10 +301,10 @@ func createBridgeBatchTx(internalGatewayAddr types.Address,
 	}
 
 	if signedBridgeBatch.IsE2IBatch() {
-		return helpers.CreateStateTransactionWithData(internalGatewayAddr, inputData), nil
+		return helpers.CreateBridgeTransactionWithData(internalGatewayAddr, inputData), nil
 	}
 
-	return helpers.CreateStateTransactionWithData(contracts.BridgeStorageContract, inputData), nil
+	return helpers.CreateBridgeTransactionWithData(contracts.BridgeStorageContract, inputData), nil
 }
 
 // VerifyBridgeBatchTx validates bridge batch transaction
@@ -377,7 +377,7 @@ func createCommitValidatorSetTxn(bi oracle.NewBlockInfo) (*types.Transaction, er
 		return nil, fmt.Errorf("failed to encode input data for BridgeStorage validator set update: %w", err)
 	}
 
-	return helpers.CreateStateTransactionWithData(contracts.BridgeStorageContract, inputData), nil
+	return helpers.CreateBridgeTransactionWithData(contracts.BridgeStorageContract, inputData), nil
 }
 
 // verifyCommitValidatorSetTx verifies commit validator set state transaction

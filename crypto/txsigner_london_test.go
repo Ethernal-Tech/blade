@@ -56,6 +56,16 @@ func TestLondonSignerSender(t *testing.T) {
 			types.StateTxType,
 		},
 		{
+			"kovan",
+			big.NewInt(42),
+			types.BridgeTxType,
+		},
+		{
+			"geth private",
+			big.NewInt(1337),
+			types.BridgeTxType,
+		},
+		{
 			"mega large",
 			big.NewInt(0).Exp(big.NewInt(2), big.NewInt(20), nil), // 2**20
 			types.AccessListTxType,
@@ -88,6 +98,12 @@ func TestLondonSignerSender(t *testing.T) {
 				))
 			case types.StateTxType:
 				txn = types.NewTx(types.NewStateTx(
+					types.WithGasPrice(big.NewInt(5)),
+					types.WithTo(&recipient),
+					types.WithValue(big.NewInt(1)),
+				))
+			case types.BridgeTxType:
+				txn = types.NewTx(types.NewBridgeTx(
 					types.WithGasPrice(big.NewInt(5)),
 					types.WithTo(&recipient),
 					types.WithValue(big.NewInt(1)),

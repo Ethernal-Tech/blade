@@ -177,7 +177,7 @@ func (e *Executor) ProcessBlock(
 			return nil, runtime.ErrOutOfGas
 		}
 
-		if t.From() == emptyFrom && t.Type() != types.StateTxType {
+		if t.From() == emptyFrom && t.Type() != types.StateTxType && t.Type() != types.BridgeTxType {
 			if poolTx, ok := e.GetPendingTxHook(t.Hash()); ok {
 				t.SetFrom(poolTx.From())
 			}
@@ -387,7 +387,7 @@ var emptyFrom = types.Address{}
 
 // Write writes another transaction to the executor
 func (t *Transition) Write(txn *types.Transaction) error {
-	if txn.From() == emptyFrom && txn.Type() != types.StateTxType {
+	if txn.From() == emptyFrom && txn.Type() != types.StateTxType && txn.Type() != types.BridgeTxType {
 		// Decrypt the from address
 		signer := crypto.NewSigner(t.config, uint64(t.ctx.ChainID))
 
@@ -665,7 +665,7 @@ func NewGasLimitReachedTransitionApplicationError(err error) *GasLimitReachedTra
 func (t *Transition) apply(msg *types.Transaction) (*runtime.ExecutionResult, error) {
 	var err error
 
-	if msg.Type() == types.StateTxType {
+	if msg.Type() == types.StateTxType || msg.Type() == types.BridgeTxType {
 		err = checkAndProcessStateTx(msg)
 	} else {
 		err = checkAndProcessTx(msg, t)
@@ -764,7 +764,8 @@ func (t *Transition) apply(msg *types.Transaction) (*runtime.ExecutionResult, er
 
 	// Burn some amount if the london hardfork is applied and token is non mintable.
 	// Basically, burn amount is just transferred to the current burn contract.
-	if t.isL1OriginatedToken && t.config.London && msg.Type() != types.StateTxType {
+	if t.isL1OriginatedToken && t.config.London && msg.Type() != types.StateTxType &&
+		msg.Type() != types.BridgeTxType {
 		burnAmount := new(big.Int).Mul(new(big.Int).SetUint64(result.GasUsed), t.ctx.BaseFee)
 		t.state.AddBalance(t.ctx.BurnContract, burnAmount)
 	}
