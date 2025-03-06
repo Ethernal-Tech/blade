@@ -18,11 +18,11 @@ erc20_mint_pred=$(cat genesis.json | grep internalMintableERC20PredicateAddr | s
 erc721_pred=$(cat genesis.json | grep internalERC721PredicateAddr | sed -E 's/.*"internalERC721PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
 erc721_mint_pred=$(cat genesis.json | grep internalMintableERC721PredicateAddr | sed -E 's/.*"internalMintableERC721PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
 
-external_erc20_pred=$(cat genesis.json | grep externalERC20PredicateAddr | sed -E 's/.*"externalERC20PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
-external_mint_erc20_pred=$(cat genesis.json | grep externalMintableERC20PredicateAddr | sed -E 's/.*"externalMintableERC20PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
+ext_erc20_pred=$(cat genesis.json | grep externalERC20PredicateAddr | sed -E 's/.*"externalERC20PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
+ext_mint_erc20_pred=$(cat genesis.json | grep externalMintableERC20PredicateAddr | sed -E 's/.*"externalMintableERC20PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
 
-external_erc721_pred=$(cat genesis.json | grep externalERC721PredicateAddr | sed -E 's/.*"externalERC721PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
-external_mint_erc721_pred=$(cat genesis.json | grep externalMintableERC721PredicateAddr | sed -E 's/.*"externalMintableERC721PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
+ext_erc721_pred=$(cat genesis.json | grep externalERC721PredicateAddr | sed -E 's/.*"externalERC721PredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
+ext_mint_erc721_pred=$(cat genesis.json | grep externalERC721MintablePredicateAddr | sed -E 's/.*"externalERC721MintablePredicateAddress": "(0x[0-9a-fA-F]+)".*/\1/')
 
 # functions
 approve_func="function approve(address,uint256)"
@@ -31,6 +31,8 @@ withdraw_func="function withdraw(address,uint256)"
 src2dest="sourceTokenToDestinationToken(address)(address)"
 balance_of="function balanceOf(address)(uint256)"
 mint_func="function mint(address,uint256)(bool)"
+set_approval_for_all="function setApprovalForAll(address,bool)(bool)"
+mint_nft_func="function mint(address)"
 
 # events
 result_event_sig=0xc291164f30f10fd321c213fe9e048d68a831508af3aa2616356f843d1e06036d
@@ -48,8 +50,9 @@ one_eth=1000000000000000000000000 # amount in wei, 1 ETH
 half_eth=500000000000000000000000 # amount in wei, 0.5 ETH
 
 # nft
-nft_token_id=0x0000000000000000000000000000000000000000000000000000000000000001
-nft_token_id2=0x0000000000000000000000000000000000000000000000000000000000000002
+nft_token_id=0
+# nft_token_id=1
+nft_token_id2=1
 
 function addresses {
     echo
@@ -57,17 +60,18 @@ function addresses {
     info "Blade RPC: $blade_rpc"
     info "Private key: $priv_key"
     info "Public key: $pub_key"
-    info "Native ERC20: $native_erc20"
     info "Internal mintable ERC20 predicate: $erc20_mint_pred"
     info "Internal ERC20 predicate: $erc20_pred"
     info "Internal mintable ERC721 predicate: $erc721_mint_pred"
     info "Internal ERC721 predicate: $erc721_pred"
-    info "External ERC20 predicate: $external_erc20_pred"
-    info "External mintable ERC20 predicate: $external_mint_erc20_pred"
-    info "External ERC721 predicate: $external_erc721_pred"
-    info "External mintable ERC721 predicate: $external_mint_erc721_pred"
-    info "Mock ERC20: $mock_erc20_addr"
+    info "External ERC20 predicate: $ext_erc20_pred"
+    info "External mintable ERC20 predicate: $ext_mint_erc20_pred"
+    info "External ERC721 predicate: $ext_erc721_pred"
+    info "External mintable ERC721 predicate: $ext_mint_erc721_pred"
+    info "Native ERC20: $native_erc20"
     info "Mock ERC721: $mock_erc721_addr"
+    info "External Mock ERC20: $mock_erc20_addr"
+    info "External Mock ERC721: $ext_mock_erc721_addr"
 }
 
 # colors
@@ -99,8 +103,15 @@ function create_mock_erc20 {
 # Mock ERC721 contract:
 function create_mock_erc721 {
     cd blade-contracts
-    mock_erc721_addr=$(forge create --private-key $priv_key --rpc-url $geth_rpc $mock_erc721 --broadcast | grep Deployed | sed -e 's/Deployed to: //')
-    success "Mock ERC721 contract address: $mock_erc721_addr"
+    if [[ $1 == "i" ]]; then
+        mock_erc721_addr=$(forge create --private-key $priv_key --rpc-url $blade_rpc $mock_erc721 --broadcast | grep Deployed | sed -e 's/Deployed to: //')
+        success "Mock ERC721 contract address: $mock_erc721_addr"
+        cd ..
+        return
+    fi
+
+    ext_mock_erc721_addr=$(forge create --private-key $priv_key --rpc-url $geth_rpc $mock_erc721 --broadcast | grep Deployed | sed -e 's/Deployed to: //')
+    success "External mock ERC721 contract address: $ext_mock_erc721_addr"
     cd ..
 }
 
@@ -108,7 +119,7 @@ function create_mock_erc721 {
 function approve_erc20 {
     info "Approving ERC20 contract..."
     if [[ $1 == "i" ]]; then
-        info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$native_erc20 \$approve_func \$erc20_pred \$one_eth"
+        info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$native_erc20 \$approve_func \$erc20_mint_pred \$one_eth"
         echo
 
         cast send --private-key $priv_key --rpc-url $blade_rpc $native_erc20 $approve_func $erc20_mint_pred $one_eth | grep status
@@ -118,10 +129,10 @@ function approve_erc20 {
         return
     fi
 
-    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$mock_erc20_addr \$approve_func \$external_erc20_pred \$one_eth"
+    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$mock_erc20_addr \$approve_func \$ext_erc20_pred \$one_eth"
     echo
 
-    cast send --private-key $priv_key --rpc-url $geth_rpc $mock_erc20_addr $approve_func $external_erc20_pred $one_eth | grep status
+    cast send --private-key $priv_key --rpc-url $geth_rpc $mock_erc20_addr $approve_func $ext_erc20_pred $one_eth | grep status
 }
 
 # Approve ERC721 contract:
@@ -132,18 +143,14 @@ function approve_erc721 {
             error "Internal mock ERC721 contract not created"
             return
         fi
-
-        info "Minting before depositing..."
-        info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$mock_erc721_addr \$mint_func \$pub_key \$nft_token_id"
-        echo
-
         # mint
-        cast send --private-key $priv_key --rpc-url $blade_rpc $mock_erc721_addr $mint_func $pub_key $nft_token_id | grep status
+        info "Minting before approve..."
+        info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$mock_erc721_addr \$mint_nft_func \$pub_key "
+        cast send --private-key $priv_key --rpc-url $blade_rpc $mock_erc721_addr $mint_nft_func $pub_key | grep status
 
-        info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$mock_erc721_addr \$approve_func \$erc721_pred "
-        echo
-
-        cast send --private-key $priv_key --rpc-url $blade_rpc $mock_erc721_addr $approve_func $erc721_mint_pred $nft_token_id | grep status
+        info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$mock_erc721_addr \$set_approval_for_all \$erc721_mint_pred true"
+        cast send --private-key $priv_key --rpc-url $blade_rpc $mock_erc721_addr $set_approval_for_all $erc721_mint_pred true | grep status
+       
         return
     fi
 
@@ -152,17 +159,13 @@ function approve_erc721 {
         return
     fi
 
-    info "Minting before depositing..."
-    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$external_erc721_pred \$deposit_func \$mock_erc721_addr \$half_eth "
-    echo
-
     # mint
-    cast send --private-key $priv_key --rpc-url $geth_rpc $ext_mock_erc721_addr $mint_func $pub_key $nft_token_id2 | grep status
+    info "Minting before approve..."
+    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$ext_mock_erc721_addr \$mint_nft_func \$pub_key"
+    cast send --private-key $priv_key --rpc-url $geth_rpc $ext_mock_erc721_addr $mint_nft_func $pub_key | grep status
 
-    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$ext_mock_erc721_addr \$approve_func \$external_erc721_pred "
-    echo
-
-    cast send --private-key $priv_key --rpc-url $geth_rpc $ext_mock_erc721_addr $approve_func $external_erc721_pred $nft_token_id2 | grep status
+    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$ext_mock_erc721_addr \$set_approval_for_all \$ext_mint_erc721_pred true"
+    cast send --private-key $priv_key --rpc-url $geth_rpc $ext_mock_erc721_addr $set_approval_for_all $ext_erc721_pred true | grep status
 }
 
 # Deposit ERC20 contract:
@@ -179,16 +182,16 @@ function deposit_erc20 {
     fi
 
     info "Minting before depositing..."
-    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$external_erc20_pred \$deposit_func \$mock_erc20_addr \$half_eth "
+    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$mock_erc20_addr \$mint_func \$pub_key \$half_eth"
     echo
 
     # mint
     cast send --private-key $priv_key --rpc-url $geth_rpc $mock_erc20_addr $mint_func $pub_key $half_eth | grep status
 
-    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$external_erc20_pred \$deposit_func \$mock_erc20_addr \$half_eth "
+    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$ext_erc20_pred \$deposit_func \$mock_erc20_addr \$half_eth"
     echo
 
-    cast send --private-key $priv_key --rpc-url $geth_rpc $external_erc20_pred $deposit_func $mock_erc20_addr $half_eth | grep status
+    cast send --private-key $priv_key --rpc-url $geth_rpc $ext_erc20_pred $deposit_func $mock_erc20_addr $half_eth | grep status
 }
 
 function deposit_erc721 {
@@ -200,7 +203,6 @@ function deposit_erc721 {
         fi
 
         info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$erc721_mint_pred \$deposit_func \$mock_erc721_addr \$nft_token_id"
-
         cast send --private-key $priv_key --rpc-url $blade_rpc $erc721_mint_pred $deposit_func $mock_erc721_addr $nft_token_id | grep status
         return
     fi
@@ -210,22 +212,19 @@ function deposit_erc721 {
         return
     fi
 
-    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$external_erc721_pred \$deposit_func \$mock_erc721_addr \$half_eth "
-    echo
+    info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$ext_erc721_pred \$deposit_func \$ext_mock_erc721_addr \$nft_token_id"
 
-    cast send --private-key $priv_key --rpc-url $geth_rpc $external_erc721_pred $deposit_func $mock_erc721_addr $nft_token_id2 | grep status
+    cast send --private-key $priv_key --rpc-url $geth_rpc $ext_erc721_pred $deposit_func $ext_mock_erc721_addr $nft_token_id | grep status
 }
 
 # Check ERC20 balance on external contract:
 function check_balance_erc20 {
     info "Checking ERC20 balance..."
     if [[ $1 == "i" ]]; then
-        info "RUN: external_token_addr=\$(cast call \$erc20_pred --rpc-url \$blade_rpc \$src2dest \$native_erc20)"
-        info "RUN: cast call \$external_token_addr --rpc-url \$geth_rpc"
-
         external_token_addr=$(cast call $erc20_mint_pred --rpc-url $blade_rpc $src2dest $native_erc20)    
         success "External token address: $external_token_addr"
 
+        info "RUN: cast call \$external_token_addr --rpc-url \$geth_rpc \$balance_of \$pub_key"
         cast call $external_token_addr --rpc-url $geth_rpc $balance_of $pub_key
         return
     elif [[ $mock_erc20_addr == "" ]]; then
@@ -233,7 +232,7 @@ function check_balance_erc20 {
         return
     fi
 
-    internal_token_addr=$(cast call $external_erc20_pred --rpc-url $geth_rpc $src2dest $mock_erc20_addr)    
+    internal_token_addr=$(cast call $ext_erc20_pred --rpc-url $geth_rpc $src2dest $mock_erc20_addr)    
     success "Internal token address: $internal_token_addr"
 
     info "RUN: cast call \$internal_token_addr --rpc-url \$blade_rpc \$balance_of \$pub_key"
@@ -249,12 +248,10 @@ function check_balance_erc721 {
             return
         fi
 
-        info "RUN: external_token_addr=\$(cast call \$erc721_pred --rpc-url \$blade_rpc \$src2dest \$mock_erc721_addr)"
-        info "RUN: cast call \$external_token_addr --rpc-url \$geth_rpc"
-
         external_token_addr=$(cast call $erc721_mint_pred --rpc-url $blade_rpc $src2dest $mock_erc721_addr)    
         success "External token address: $external_token_addr"
 
+        info "RUN: cast call \$external_token_addr --rpc-url \$geth_rpc \$balance_of \$pub_key"
         cast call $external_token_addr --rpc-url $geth_rpc $balance_of $pub_key
         return
     fi
@@ -264,12 +261,11 @@ function check_balance_erc721 {
         return
     fi
 
-    info "RUN: external_token_addr=\$(cast call \$external_erc721_pred --rpc-url \$geth_rpc \$src2dest \$ext_mock_erc721_addr)"
-    info "RUN: cast call \$external_token_addr --rpc-url \$blade_rpc"
 
-    external_token_addr=$(cast call $external_erc721_pred --rpc-url $geth_rpc $src2dest $ext_mock_erc721_addr)    
+    external_token_addr=$(cast call $ext_erc721_pred --rpc-url $geth_rpc $src2dest $ext_mock_erc721_addr)    
     success "External token address: $external_token_addr"
 
+    info "RUN: cast call \$external_token_addr --rpc-url \$blade_rpc \$balance_of \$pub_key"
     cast call $external_token_addr --rpc-url $blade_rpc $balance_of $pub_key
 }
 
@@ -280,15 +276,15 @@ function withdraw_erc20 {
         external_token_addr=$(cast call $erc20_mint_pred --rpc-url $blade_rpc $src2dest $native_erc20)    
         success "External token address: $external_token_addr"
 
-        info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$external_mint_erc20_pred \$withdraw_func \$external_token_addr \$half_eth"
-        cast send --private-key $priv_key --rpc-url $geth_rpc $external_mint_erc20_pred $withdraw_func $external_token_addr $half_eth | grep status
+        info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$ext_mint_erc20_pred \$withdraw_func \$external_token_addr \$half_eth "
+        cast send --private-key $priv_key --rpc-url $geth_rpc $ext_mint_erc20_pred $withdraw_func $external_token_addr $half_eth | grep status
         return
     elif [[ $mock_erc20_addr == "" ]]; then
         error "Mock ERC20 contract not created"
         return
     fi
 
-    internal_token_addr=$(cast call $external_erc20_pred --rpc-url $geth_rpc $src2dest $mock_erc20_addr)
+    internal_token_addr=$(cast call $ext_erc20_pred --rpc-url $geth_rpc $src2dest $mock_erc20_addr)
     success "Internal token address: $internal_token_addr"
 
     info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$erc20_pred \$withdraw_func \$internal_token_addr \$half_eth"
@@ -304,12 +300,11 @@ function withdraw_erc721 {
             return
         fi
 
-        info "RUN: external_token_addr=\$(cast call \$erc721_pred --rpc-url \$blade_rpc \$src2dest \$mock_erc721_addr)"
-        info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$erc721_mint_pred \$withdraw_func \$external_token_addr \$nft_token_id"
 
         external_token_addr=$(cast call $erc721_mint_pred --rpc-url $blade_rpc $src2dest $mock_erc721_addr)    
         success "External token address: $external_token_addr"
 
+        info "RUN: cast send --private-key \$priv_key --rpc-url \$geth_rpc \$erc721_mint_pred \$withdraw_func \$external_token_addr \$nft_token_id"
         cast send --private-key $priv_key --rpc-url $geth_rpc $erc721_mint_pred $withdraw_func $external_token_addr $nft_token_id | grep status
         return
     fi
@@ -319,13 +314,12 @@ function withdraw_erc721 {
         return
     fi
 
-    info "RUN: external_token_addr=\$(cast call \$external_erc721_pred --rpc-url \$geth_rpc \$src2dest \$ext_mock_erc721_addr)"
-    info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$erc721_nonmint_pred \$withdraw_func \$external_token_addr \$nft_token_id2"
 
-    external_token_addr=$(cast call $external_erc721_pred --rpc-url $geth_rpc $src2dest $ext_mock_erc721_addr)    
+    external_token_addr=$(cast call $ext_erc721_pred --rpc-url $geth_rpc $src2dest $ext_mock_erc721_addr)    
     success "External token address: $external_token_addr"
 
-    cast send --private-key $priv_key --rpc-url $blade_rpc $erc721_pred $withdraw_func $external_token_addr $nft_token_id2 | grep status
+    info "RUN: cast send --private-key \$priv_key --rpc-url \$blade_rpc \$erc721_pred \$withdraw_func \$external_token_addr \$nft_token_id"
+    cast send --private-key $priv_key --rpc-url $blade_rpc $erc721_pred $withdraw_func $external_token_addr $nft_token_id | grep status
 }
 
 function native_balance {
@@ -411,8 +405,9 @@ while true; do
     contract_type="erc20"
 
     if [[ $option < 1 || $option > 8 ]]; then
-        error "Invalid option"
-        exit 1
+        info "RUN: $option"
+        eval "$option"
+        continue
     fi
 
     if [[ $option < 6 ]]; then
