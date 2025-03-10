@@ -92,6 +92,26 @@ function info {
     echo "${BLUE}$1${RESET}"
 }
 
+trap handleSigInt SIGINT
+
+function handleSigInt() {
+    echo "For quitting use command"
+}
+
+function mock_everything {
+    cd blade-contracts
+    mock_erc20_addr=$(forge create --private-key $priv_key --rpc-url $geth_rpc $mock_erc20 --broadcast | grep Deployed | sed -e 's/Deployed to: //')
+    mock_erc721_addr=$(forge create --private-key $priv_key --rpc-url $blade_rpc $mock_erc721 --broadcast | grep Deployed | sed -e 's/Deployed to: //')
+    ext_mock_erc721_addr=$(forge create --private-key $priv_key --rpc-url $geth_rpc $mock_erc721 --broadcast | grep Deployed | sed -e 's/Deployed to: //')
+    success "Everything mocked"
+    info "Native ERC20: $native_erc20"
+    info "Mock ERC721: $mock_erc721_addr"
+    info "External Mock ERC20: $mock_erc20_addr"
+    info "External Mock ERC721: $ext_mock_erc721_addr"
+    cd ..
+}
+mock_everything
+
 # Mock ERC20 contract:
 function create_mock_erc20 {
     cd blade-contracts
@@ -386,7 +406,8 @@ function withdraw {
 }
 
 function print_logs {
-    cast logs --rpc-url $geth_rpc $result_event_sig
+    bn=$(cast block-number --rpc-url $blade_rpc)
+    success "Block number (BLADE): $bn"
 }
 
 while true; do
@@ -398,13 +419,13 @@ while true; do
     info "5. Check balance"
     info "6. Balance native"
     info "7. Addresses"
-    info "8. Logs"
+    info "8. Block number (BLADE)"
     info "9. Exit"
 
     read option
     contract_type="erc20"
 
-    if [[ $option < 1 || $option > 8 ]]; then
+    if [[ $option < 1 || $option > 9 ]]; then
         info "RUN: $option"
         eval "$option"
         continue
