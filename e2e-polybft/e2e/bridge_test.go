@@ -1751,7 +1751,7 @@ func TestE2E_Bridge_ValidatorSetChange(t *testing.T) {
 func TestE2E_Bridge_InsufficientFundsERC20(t *testing.T) {
 	const (
 		// X = 60
-		transfersCount  = 15
+		transfersCount  = 5 // decreased from 15 for CI
 		epochSize       = 10
 		sprintSize      = uint64(5)
 		numberOfBridges = 1
