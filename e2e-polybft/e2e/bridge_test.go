@@ -1747,3 +1747,327 @@ func TestE2E_Bridge_ValidatorSetChange(t *testing.T) {
 	require.Equal(t, afterBridgeStorageValidatorSetHash, afterInternalGatewayValidatorSetHash)
 	require.Equal(t, afterBridgeStorageValidatorSetHash, afterExternalGatewayValidatorSetHash)
 }
+
+func TestE2E_Bridge_InsufficientFundsERC20(t *testing.T) {
+	const (
+		// X = 60
+		transfersCount  = 15
+		epochSize       = 10
+		sprintSize      = uint64(5)
+		numberOfBridges = 1
+
+		erc20Amount    = int64(1000)
+		erc20AmountStr = "1000"
+	)
+
+	accountAddrs := make([]types.Address, transfersCount)
+	accounts := make([]string, transfersCount)
+	accountKeys := make([]string, transfersCount)
+	amounts := make([]string, transfersCount)
+
+	for i := 0; i < transfersCount; i++ {
+		key, err := crypto.GenerateECDSAKey()
+		require.NoError(t, err)
+
+		rawKey, err := key.MarshallPrivateKey()
+		require.NoError(t, err)
+
+		accountKeys[i] = hex.EncodeToString(rawKey)
+		accountAddrs[i] = key.Address()
+		accounts[i] = key.Address().String()
+		amounts[i] = fmt.Sprintf("%d", erc20Amount)
+
+		t.Logf("Receiver#%d=%s\n", i+1, accounts[i])
+	}
+
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
+	cluster := framework.NewTestCluster(t, 5,
+		framework.WithEpochSize(epochSize),
+		framework.WithBridges(numberOfBridges),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
+		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
+			for i := 0; i < len(addrs); i++ {
+				tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
+			}
+
+			tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
+
+			tcc.Premine = append(tcc.Premine, accounts...)
+			tcc.Premine = append(tcc.Premine, relayerPrivateKey.String())
+		}))
+
+	defer cluster.Stop()
+
+	cluster.WaitForReady(t)
+
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	require.NoError(t, err)
+
+	internalJSONRPCAddr := cluster.Servers[0].JSONRPCAddr()
+	internalEndpoint := cluster.Servers[0].JSONRPC()
+
+	externalJSONRPCAddr := cluster.Bridges[0].JSONRPCAddr()
+	externalEndpoint, err := jsonrpc.NewEthClient(externalJSONRPCAddr)
+	require.NoError(t, err)
+
+	externalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(externalEndpoint))
+	require.NoError(t, err)
+
+	internalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(internalEndpoint))
+	require.NoError(t, err)
+
+	externalChainID, err := externalChainTxRelayer.Client().ChainID()
+	require.NoError(t, err)
+
+	bridgeCfg := polybftCfg.Bridge[externalChainID.Uint64()]
+
+	bridge := cluster.Bridges[0]
+
+	deployerKey, err := bridgeHelper.DecodePrivateKey("")
+	require.NoError(t, err)
+
+	var (
+		internalERC20Addr types.Address
+		externalERC20Addr types.Address
+	)
+
+	// Deployment of ERC20 token on both chains
+	{
+		// internal ERC20 token
+		deployTx := types.NewTx(types.NewLegacyTx(
+			types.WithTo(nil),
+			types.WithInput(contractsapi.RootERC20.Bytecode),
+		))
+
+		receipt, err := internalChainTxRelayer.SendTransaction(deployTx, deployerKey)
+		require.NoError(t, err)
+		require.NotNil(t, receipt)
+		require.Equal(t, uint64(types.ReceiptSuccess), receipt.Status)
+
+		internalERC20Addr = types.Address(receipt.ContractAddress)
+
+		deployTx = types.NewTx(types.NewLegacyTx(
+			types.WithTo(nil),
+			types.WithInput(contractsapi.RootERC20.Bytecode),
+		))
+		// external ERC20 token
+		receipt, err = externalChainTxRelayer.SendTransaction(deployTx, deployerKey)
+		require.NoError(t, err)
+		require.NotNil(t, receipt)
+		require.Equal(t, uint64(types.ReceiptSuccess), receipt.Status)
+
+		externalERC20Addr = types.Address(receipt.ContractAddress)
+	}
+
+	t.Logf("Internal ERC20 token address: %s\n", internalERC20Addr)
+	t.Logf("External ERC20 token address: %s\n", externalERC20Addr)
+
+	// mint ERC20 tokens
+	mint := func(token types.Address, amount *big.Int, account types.Address, relayer txrelayer.TxRelayer) {
+		mintFn := &contractsapi.MintRootERC20Fn{
+			To:     account,
+			Amount: amount,
+		}
+
+		mintInput, err := mintFn.EncodeAbi()
+		require.NoError(t, err)
+
+		mintTx := types.NewTx(types.NewLegacyTx(
+			types.WithTo(&token),
+			types.WithInput(mintInput),
+		))
+
+		receipt, err := relayer.SendTransaction(mintTx, deployerKey)
+		require.NoError(t, err)
+		require.NotNil(t, receipt)
+		require.Equal(t, uint64(types.ReceiptSuccess), receipt.Status)
+	}
+
+	t.Run("I2E ERC20 token transfers", func(t *testing.T) {
+		// mint
+		for i := range transfersCount {
+			mint(internalERC20Addr, big.NewInt(erc20Amount),
+				accountAddrs[i], internalChainTxRelayer)
+		}
+
+		t.Logf("ERC20 tokens minted")
+
+		// transfer function
+		transferFunc := func(shouldThrowError bool) {
+			for i := range transfersCount {
+				err := bridge.Deposit(
+					common.ERC20,
+					internalERC20Addr,
+					bridgeCfg.InternalMintableERC20PredicateAddr,
+					accountKeys[i],
+					accounts[i],
+					erc20AmountStr,
+					"",
+					internalJSONRPCAddr,
+					"",
+					false,
+				)
+
+				if shouldThrowError {
+					require.Error(t, err)
+				} else {
+					require.NoError(t, err)
+				}
+			}
+		}
+
+		// first transfer - should be processed
+		transferFunc(false)
+
+		t.Logf("ERC20 tokens deposited")
+
+		// should be processed because there are enough ERC20 funds
+		require.NoError(t, cluster.WaitUntil(2*time.Minute, 2*time.Second, func() bool {
+			for i := uint64(1); i <= transfersCount+1; i++ {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
+					return false
+				}
+			}
+
+			return true
+		}))
+
+		t.Logf("All events processed")
+
+		// second transfer - should fail because there are not enough ERC20 funds
+		transferFunc(true)
+
+		t.Logf("Second transfer failed")
+
+		// mint again to have enough funds
+		for i := range transfersCount {
+			mint(internalERC20Addr, big.NewInt(erc20Amount),
+				accountAddrs[i], internalChainTxRelayer)
+		}
+
+		t.Logf("ERC20 tokens minted again")
+
+		// should be processed because there are enough ERC20 funds
+		transferFunc(false)
+
+		t.Logf("ERC20 tokens deposited again")
+
+		nextEventID := uint64(transfersCount + 1)
+		// should be processed because there are enough ERC20 funds
+		require.NoError(t, cluster.WaitUntil(2*time.Minute, 2*time.Second, func() bool {
+			for i := nextEventID + 1; i <= nextEventID+transfersCount; i++ {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
+					return false
+				}
+			}
+
+			return true
+		}))
+
+		t.Logf("All events processed")
+
+		childTokenAddr := getChildToken(t, contractsapi.RootERC20Predicate.Abi, bridgeCfg.InternalMintableERC20PredicateAddr, internalERC20Addr, internalChainTxRelayer)
+
+		for i := range transfersCount {
+			balance := erc20BalanceOf(t, accountAddrs[i], childTokenAddr, externalChainTxRelayer)
+			require.True(t, balance.Cmp(big.NewInt(erc20Amount*2)) == 0)
+		}
+
+		t.Logf("ERC20 tokens balances checked")
+	})
+
+	t.Run("E2I ERC20 token transfers", func(t *testing.T) {
+		// mint
+		for i := range transfersCount {
+			mint(externalERC20Addr, big.NewInt(erc20Amount),
+				accountAddrs[i], externalChainTxRelayer)
+		}
+
+		t.Logf("ERC20 tokens minted")
+
+		// transfer function
+		transferFunc := func(shouldThrowError bool) {
+			for i := range transfersCount {
+				err := bridge.Deposit(
+					common.ERC20,
+					externalERC20Addr,
+					bridgeCfg.ExternalERC20PredicateAddr,
+					accountKeys[i],
+					accounts[i],
+					erc20AmountStr,
+					"",
+					externalJSONRPCAddr,
+					"",
+					false,
+				)
+
+				if shouldThrowError {
+					require.Error(t, err)
+				} else {
+					require.NoError(t, err)
+				}
+			}
+		}
+
+		// first transfer - should be processed
+		transferFunc(false)
+
+		t.Logf("ERC20 tokens deposited")
+
+		// should be processed because there are enough ERC20 funds
+		require.NoError(t, cluster.WaitUntil(2*time.Minute, 2*time.Second, func() bool {
+			for i := uint64(1); i <= transfersCount+1; i++ {
+				if !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i, false) {
+					return false
+				}
+			}
+
+			return true
+		}))
+
+		t.Logf("All events processed")
+
+		// second transfer - should fail because there are not enough ERC20 funds
+		transferFunc(true)
+
+		t.Logf("Second transfer failed")
+
+		// mint again to have enough funds
+		for i := range transfersCount {
+			mint(externalERC20Addr, big.NewInt(erc20Amount),
+				accountAddrs[i], externalChainTxRelayer)
+		}
+
+		t.Logf("ERC20 tokens minted again")
+
+		// should be processed because there are enough ERC20 funds
+		transferFunc(false)
+
+		t.Logf("ERC20 tokens deposited again")
+
+		nextEventID := uint64(transfersCount + 1)
+		// should be processed because there are enough ERC20 funds
+		require.NoError(t, cluster.WaitUntil(2*time.Minute, 2*time.Second, func() bool {
+			for i := nextEventID + 1; i <= nextEventID+transfersCount; i++ {
+				if !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i, false) {
+					return false
+				}
+			}
+
+			return true
+		}))
+
+		t.Logf("All events processed")
+
+		childTokenAddr := getChildToken(t, contractsapi.RootERC20Predicate.Abi, bridgeCfg.ExternalERC20PredicateAddr, externalERC20Addr, externalChainTxRelayer)
+
+		for i := range transfersCount {
+			balance := erc20BalanceOf(t, accountAddrs[i], childTokenAddr, internalChainTxRelayer)
+			require.True(t, balance.Cmp(big.NewInt(erc20Amount*2)) == 0)
+		}
+
+		t.Logf("ERC20 tokens balances checked")
+	})
+}
