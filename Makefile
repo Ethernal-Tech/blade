@@ -72,6 +72,12 @@ benchmark-test: check-go
 fuzz-test: check-go
 	./scripts/fuzzAll
 
+.PHONY: test-e2e-bridge
+test-e2e-bridge: check-go
+	go build -o artifacts/blade .
+	env EDGE_BINARY=${PWD}/artifacts/blade E2E_TESTS=true E2E_LOGS=true \
+	go test -v -timeout=1h30m ./e2e-polybft/bridge/...
+
 .PHONY: test-e2e-legacy
 test-e2e-legacy: check-go
 	go build -race -o artifacts/blade .
@@ -126,6 +132,7 @@ help:
 	@printf "  %-35s - %s\n" "generate-bsd-licenses" "Generate BSD licenses"
 	@printf "  %-35s - %s\n" "unit-test" "Run unit tests"
 	@printf "  %-35s - %s\n" "fuzz-test" "Run fuzz tests"
+	@printf "  %-35s - %s\n" "test-e2e-bridge" "Run end-to-end tests for bridge"
 	@printf "  %-35s - %s\n" "test-e2e-legacy" "Run end-to-end Legacy tests"
 	@printf "  %-35s - %s\n" "test-e2e-polybft" "Run end-to-end tests for PolyBFT"
 	@printf "  %-35s - %s\n" "test-property-polybft" "Run property tests for PolyBFT"

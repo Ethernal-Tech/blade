@@ -211,7 +211,7 @@ func (t *TestServer) Start(ctx context.Context) error {
 	args := []string{
 		serverCmd.Use,
 		// add custom chain
-		"--chain", filepath.Join(t.Config.RootDir, "genesis.json"),
+		"--chain", filepath.Join(t.Config.RootDir, command.DefaultGenesisFileName),
 		// enable grpc
 		"--grpc-address", t.GrpcAddr(),
 		// enable libp2p
