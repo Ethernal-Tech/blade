@@ -176,7 +176,7 @@ func TestE2E_Consensus_RegisterValidator(t *testing.T) {
 	relayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(owner.JSONRPCAddr()))
 	require.NoError(t, err)
 
-	polybftConfig, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	polybftConfig, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
 
 	// create the first account and extract the address
@@ -317,7 +317,7 @@ func TestE2E_Consensus_Validator_Unstake(t *testing.T) {
 		}),
 	)
 
-	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
 
 	srv := cluster.Servers[0]

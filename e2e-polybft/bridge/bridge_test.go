@@ -1,4 +1,4 @@
-package e2e
+package bridge
 
 import (
 	"encoding/hex"
@@ -29,19 +29,11 @@ import (
 	"github.com/0xPolygon/polygon-edge/types"
 )
 
-const (
-	chainConfigFileName = "genesis.json"
-)
-
 func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 	const (
 		transfersCount        = 5
 		numBlockConfirmations = 2
-		// make epoch size long enough, so that all exit events are processed within the same epoch
-		epochSize             = 40
 		sprintSize            = uint64(5)
-		numberOfAttempts      = 7
-		stateSyncedLogsCount  = 2 // map token and deposit
 		numberOfBridges       = 1
 		numberOfMapTokenEvent = 1
 	)
@@ -77,7 +69,6 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithTestRewardToken(),
 		framework.WithNumBlockConfirmations(numBlockConfirmations),
-		framework.WithEpochSize(epochSize),
 		framework.WithBridges(numberOfBridges),
 		framework.WithBridgeBatchThreshold(100),
 		framework.WithRelayerPrivateKey(relayerPrivateKey),
@@ -99,7 +90,7 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 
 	cluster.WaitForReady(t)
 
-	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
 
 	validatorSrv := cluster.Servers[0]
@@ -364,7 +355,7 @@ func TestE2E_Bridge_ERC721Transfer(t *testing.T) {
 
 	cluster.WaitForReady(t)
 
-	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
 
 	externalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(cluster.Bridges[bridgeOne].JSONRPCAddr()))
@@ -548,7 +539,7 @@ func TestE2E_Bridge_ERC1155Transfer(t *testing.T) {
 
 	cluster.WaitForReady(t)
 
-	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
 
 	externalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(cluster.Bridges[bridgeOne].JSONRPCAddr()))
@@ -753,7 +744,7 @@ func TestE2E_Bridge_InternalChainTokensTransfer(t *testing.T) {
 
 	bridgeOne := 0
 
-	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
 
 	validatorSrv := cluster.Servers[0]
@@ -1068,7 +1059,7 @@ func TestE2E_Bridge_Transfers_AccessLists(t *testing.T) {
 
 	cluster.WaitForReady(t)
 
-	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
 
 	validatorSrv := cluster.Servers[0]
@@ -1317,7 +1308,7 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 
 	cluster.WaitForReady(t)
 
-	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
 
 	bridgeCfg := polybftCfg.Bridge[chainID.Uint64()]
@@ -1564,7 +1555,7 @@ func TestE2E_Bridge_L1OriginatedNativeToken_ERC20StakingToken(t *testing.T) {
 
 	cluster.WaitForReady(t)
 
-	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
 
 	// first validator server(minter)
@@ -1656,7 +1647,7 @@ func TestE2E_Bridge_ValidatorSetChange(t *testing.T) {
 
 	validatorEndpoint := validatorSrv.JSONRPC()
 
-	polycfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	polycfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
 
 	internalTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(validatorEndpoint))

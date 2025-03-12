@@ -1,4 +1,4 @@
-package e2e
+package bridge
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xPolygon/polygon-edge/command"
 	"github.com/0xPolygon/polygon-edge/command/bridge/common"
 	bridgeHelper "github.com/0xPolygon/polygon-edge/command/bridge/helper"
 	polycfg "github.com/0xPolygon/polygon-edge/consensus/polybft/config"
@@ -132,7 +133,7 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 
 	cluster.WaitForReady(t)
 
-	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
 
 	externalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(cluster.Bridges[0].JSONRPCAddr()))
@@ -414,7 +415,7 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 	bridgeOne := 0
 	bridge := cluster.Bridges[bridgeOne]
 
-	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
 
 	validatorSrv := cluster.Servers[0]
@@ -614,7 +615,7 @@ func TestE2E_Retry_I2E(t *testing.T) {
 
 	bridge := cluster.Bridges[0]
 
-	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
 
 	validatorSrv := cluster.Servers[0]
