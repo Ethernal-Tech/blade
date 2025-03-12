@@ -1,4 +1,4 @@
-package e2e
+package bridge
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xPolygon/polygon-edge/command"
 	"github.com/0xPolygon/polygon-edge/command/bridge/common"
 	bridgeHelper "github.com/0xPolygon/polygon-edge/command/bridge/helper"
 	polycfg "github.com/0xPolygon/polygon-edge/consensus/polybft/config"
@@ -80,7 +81,7 @@ func TestE2E_BridgeLoad_MultipleDepositBothEnds(t *testing.T) {
 
 	cluster.WaitForReady(t)
 
-	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFileName))
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
 
 	validatorSrv := cluster.Servers[0]

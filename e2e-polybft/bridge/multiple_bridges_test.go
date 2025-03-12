@@ -1,4 +1,4 @@
-package e2e
+package bridge
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xPolygon/polygon-edge/command"
 	"github.com/0xPolygon/polygon-edge/command/bridge/common"
 	bridgeHelper "github.com/0xPolygon/polygon-edge/command/bridge/helper"
 	polycfg "github.com/0xPolygon/polygon-edge/consensus/polybft/config"
@@ -22,10 +23,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xPolygon/polygon-edge/helper/hex"
-)
-
-const (
-	chainConfigFile = "genesis.json"
 )
 
 // The purpose of this test is to verify the correctness of bridging different token types (ERC20, ERC721, ERC1155) between
@@ -107,7 +104,7 @@ func TestE2E_Multiple_Bridges_ExternalToInternalTokenTransfer(t *testing.T) {
 
 	cluster.WaitForReady(t)
 
-	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFile))
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
 
 	// Creating a relayer to allow transactions to be sent to the internal chain (Servers[0] represents the first of the
@@ -663,7 +660,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalTokenTransfer(t *testing.T) {
 
 	cluster.WaitForReady(t)
 
-	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFile))
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
 
 	// Creating a relayer to allow transactions to be sent to the internal chain (Servers[0] represents the first of the
@@ -1201,7 +1198,7 @@ func TestE2E_Multiple_Bridges_InternalToExternalNativeTokenTransfer(t *testing.T
 
 	cluster.WaitForReady(t)
 
-	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFile))
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
 
 	// Creating a relayer to allow transactions to be sent to the internal chain (Servers[0] represents the first of the

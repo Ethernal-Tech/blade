@@ -27,6 +27,10 @@ on: # yamllint disable-line rule:truthy
         description: E2E PolyBFT Tests
         type: boolean
         default: true
+      e2e_bridge_test:
+        description: E2E Bridge Tests
+        type: boolean
+        default: true
       e2e_legacy_test:
         description: E2E Legacy Tests
         type: boolean
@@ -60,6 +64,10 @@ on: # yamllint disable-line rule:truthy
         description: E2E PolyBFT Tests
         type: boolean
         required: true
+      e2e_bridge_test:
+        description: E2E Bridge Tests
+        type: boolean
+        required: true
       e2e_legacy_test:
         description: E2E Legacy Tests
         type: boolean
@@ -89,6 +97,9 @@ on: # yamllint disable-line rule:truthy
       e2e_polybft_test:
         description: E2E PolyBFT Tests output
         value: ${{ jobs.e2e_polybft_test.outputs.workflow_output }}
+      e2e_bridge_test:
+        description: E2E Bridge Tests output
+        value: ${{ jobs.e2e_bridge_test.outputs.workflow_output }}
       e2e_legacy_test:
         description: E2E Legacy Tests output
         value: ${{ jobs.e2e_legacy_test.outputs.workflow_output }}
@@ -132,6 +143,14 @@ jobs:
     needs: build_blade
     if: |
       inputs.e2e_polybft_test || 
+      github.event_name == 'pull_request' || 
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+  e2e_bridge_test:
+    name: E2E Bridge Tests
+    uses: ./.github/workflows/e2e-bridge-test.yml
+    needs: build_blade
+    if: |
+      inputs.e2e_bridge_test || 
       github.event_name == 'pull_request' || 
       (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
   e2e_legacy_test:

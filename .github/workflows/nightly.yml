@@ -15,6 +15,7 @@ jobs:
       lint: true
       unit_test: true
       e2e_polybft_test: true
+      e2e_bridge_test: true
       e2e_legacy_test: true
       property_polybft_test: true
       fuzz_test: true
@@ -190,6 +191,7 @@ jobs:
       lint_output: ${{ needs.ci.outputs.lint }}
       unit_test_output: ${{ needs.ci.outputs.unit_test }}
       e2e_polybft_test_output: ${{ needs.ci.outputs.e2e_polybft_test }}
+      e2e_bridge_test_output: ${{ needs.ci.outputs.e2e_bridge_test }}
       e2e_legacy_test_output: ${{ needs.ci.outputs.e2e_legacy_test }}
       property_polybft_test_output: ${{ needs.ci.outputs.property_polybft_test }}
       fuzz_test_output: ${{ needs.ci.outputs.fuzz_test }}

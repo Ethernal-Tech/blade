@@ -592,7 +592,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		require.NoError(t, err)
 	}
 
-	genesisPath := path.Join(config.TmpDir, "genesis.json")
+	genesisPath := path.Join(config.TmpDir, command.DefaultGenesisFileName)
 
 	{
 		// run genesis configuration population
@@ -872,7 +872,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 		bridgeRelayer := NewTestBridgeRelayer(t,
 			cluster.Config,
 			1,
-			cluster.Config.Dir("genesis.json"),
+			cluster.Config.Dir(command.DefaultGenesisFileName),
 			cluster.Config.RelayerPrivateKey,
 			cluster.Servers[0].JSONRPCAddr())
 
@@ -888,7 +888,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 			bridgeRelayer := NewTestBridgeRelayer(t,
 				cluster.Config,
 				i+1,
-				cluster.Config.Dir("genesis.json"),
+				cluster.Config.Dir(command.DefaultGenesisFileName),
 				key,
 				cluster.Servers[0].JSONRPCAddr())
 
@@ -932,7 +932,7 @@ func (c *TestCluster) InitTestServer(t *testing.T,
 	srv := NewTestServer(t, c.Config, bridgeJSONRPCs, func(config *TestServerConfig) {
 		config.DataDir = dataDir
 		config.Validator = nodeType.IsSet(Validator)
-		config.Chain = c.Config.Dir("genesis.json")
+		config.Chain = c.Config.Dir(command.DefaultGenesisFileName)
 		config.P2PPort = c.getOpenPort()
 		config.LogLevel = logLevel
 		config.NumBlockConfirmations = c.Config.NumBlockConfirmations
