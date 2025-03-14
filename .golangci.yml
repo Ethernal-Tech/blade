@@ -43,8 +43,12 @@ linters-settings:
       ruleguard:
         rules: "./gorules/rules.go"
   gosec:
-     excludes:
-      - G115  # Potential integer overflow when converting between integer types
+    excludes:
+      - G115 # Potential integer overflow when converting between integer types
+  misspell:
+    ignore-words:
+      - premine
+      - premines
 
 issues:
   exclude-dirs:

@@ -22,6 +22,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestE2E_BridgeLoad_MultipleDepositBothEnds is an end-to-end test that validates the functionality
+// of a bridge under load by performing multiple deposit operations in both directions (external to internal
+// and internal to external). The test ensures that deposits are processed correctly and balances are updated
+// as expected.
+//
+// The test performs the following steps:
+//   - Generates a set of test accounts and premines them with sufficient funds for withdrawals.
+//   - Sets up a test cluster with a single bridge and a relayer private key.
+//   - Deploys a RootERC20 token contract on the external chain.
+//   - Performs deposits from the external chain to the internal chain for all test accounts and verifies
+//     that the balances on the internal chain match the expected deposit amounts.
+//   - Performs deposits from the internal chain to the external chain for all test accounts and verifies
+//     that the balances on the external chain match the expected deposit amounts.
+//   - Continuously restarts the bridge relayer during the test to simulate real-world scenarios and ensure
+//     robustness.
+//   - Waits for all deposits to be processed and verifies the success of the bridge events.
+//
+// The test uses channels to handle errors from concurrent deposit operations and ensures that all operations
+// complete successfully within a specified timeout. If any operation fails or the timeout is reached, the test
+// fails.
 func TestE2E_BridgeLoad_MultipleDepositBothEnds(t *testing.T) {
 	const (
 		transfersCount  = 10
