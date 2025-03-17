@@ -75,13 +75,112 @@ func TestSystemState_GetNextCommittedIndex(t *testing.T) {
 	_, err = provider.Call(ethgo.Address(result.Address), input, &contract.CallOpts{})
 	assert.NoError(t, err)
 
-	nextExternalCommittedIndex, err := systemState.GetNextCommittedIndex(0, External)
+	nextExternalCommittedIndex, err := systemState.GetNextCommittedIndex(0, E2I)
 	assert.NoError(t, err)
 	assert.Equal(t, currentExternalCommitIntex+1, nextExternalCommittedIndex)
 
-	nextInternalCommittedIndex, err := systemState.GetNextCommittedIndex(0, Internal)
+	nextInternalCommittedIndex, err := systemState.GetNextCommittedIndex(0, I2E)
 	assert.NoError(t, err)
 	assert.Equal(t, currentInternalCommitIntex+1, nextInternalCommittedIndex)
+}
+
+func TestSystemState_GetConfirmedRollbacked(t *testing.T) {
+	t.Parallel()
+
+	method, err := abi.NewMethod("function init() public payable")
+	require.NoError(t, err)
+
+	cc := &testutil.Contract{}
+	cc.AddCallback(func() string {
+		return `
+			mapping(uint256 => uint256[]) public rollbackedI2E;
+			mapping(uint256 => uint256[]) public rollbackedE2I;
+			
+			function init() public payable {
+				rollbackedI2E[1] = [10, 20];
+				rollbackedI2E[2] = [11, 10];
+
+				rollbackedE2I[1] = [10, 13];
+				rollbackedE2I[3] = [11, 24];
+			}
+
+			function getConfirmedRollbackedI2E(uint256 chainId, uint256 id) external view returns (bool) {
+				uint256[] storage rollbacked = rollbackedI2E[chainId];
+				for (uint256 i = 0; i < rollbacked.length; i++) {
+					if (rollbacked[i] == id) {
+                		return true;
+					}
+				}
+
+				return false;
+			}
+
+			function getConfirmedRollbackedE2I(uint256 chainId, uint256 id) external view returns (bool) {
+				uint256[] storage rollbacked = rollbackedE2I[chainId];
+				for (uint256 i = 0; i < rollbacked.length; i++) {
+					if (rollbacked[i] == id) {
+						return true;
+					}
+				}
+
+				return false;
+			}
+		`
+	})
+
+	solcContract, err := cc.Compile()
+	require.NoError(t, err)
+
+	bin, err := hex.DecodeString(solcContract.Bin)
+	require.NoError(t, err)
+
+	transition := NewTestTransition(t, nil)
+
+	result := transition.Create2(types.Address{}, bin, big.NewInt(0), 1000000000)
+	assert.NoError(t, result.Err)
+
+	provider := &stateProvider{transition: transition}
+
+	systemState := NewSystemState(types.ZeroAddress, result.Address, provider)
+
+	input, err := method.Encode([1]interface{}{})
+	require.NoError(t, err)
+
+	_, err = provider.Call(ethgo.Address(result.Address), input, &contract.CallOpts{})
+	require.NoError(t, err)
+
+	tests := []struct {
+		chainID  uint64
+		id       int64
+		i2e      bool
+		expected bool
+	}{
+		{1, 20, true, true},
+		{1, 15, true, false},
+		{3, 16, true, false},
+		{3, 17, false, false},
+		{2, 11, true, true},
+		{3, 24, false, true},
+		{3, 10, false, false},
+	}
+
+	for _, test := range tests {
+		id := big.NewInt(test.id)
+
+		var (
+			committed bool
+			err       error
+		)
+
+		if test.i2e {
+			committed, err = systemState.GetConfirmedRollbackedI2E(test.chainID, id)
+		} else {
+			committed, err = systemState.GetConfirmedRollbackedE2I(test.chainID, id)
+		}
+
+		require.NoError(t, err)
+		require.EqualValues(t, test.expected, committed)
+	}
 }
 
 func TestSystemState_GetBridgeBatchByNumber(t *testing.T) {

@@ -50,7 +50,7 @@ var (
 	newValidatorSetStoredEventSig = new(contractsapi.NewValidatorSetStoredEvent).Sig()
 )
 
-const maxNumberOfBatchEvents = 10
+const maxNumberOfBatchEvents = 7
 
 type Runtime interface {
 	IsActiveValidator() bool
@@ -154,7 +154,7 @@ func newBridgeManager(
 	}
 }
 
-// Start starts the bridge event manager
+// Start starts the bridge event manager.
 func (b *bridgeEventManager) Start(runtimeConfig *config.Runtime) error {
 	if err := b.initTransport(); err != nil {
 		return fmt.Errorf("failed to initialize bridge event transport layer. Error: %w", err)
@@ -182,12 +182,12 @@ func (b *bridgeEventManager) GetInternalGatewayAddr() types.Address {
 	return b.config.bridgeCfg.InternalGatewayAddr
 }
 
-// Close stops the bridge manager
+// Close stops the bridge event manager.
 func (b *bridgeEventManager) Close() {
 	b.tracker.Close()
 }
 
-// initTracker starts a new event tracker (to receive bridge events from external chain)
+// initTracker starts a new event tracker (to receive bridge events the from external chain.
 func (b *bridgeEventManager) initTracker(runtimeCfg *config.Runtime) (*tracker.EventTracker, error) {
 	store, err := store.NewBoltDBEventTrackerStore(path.Join(runtimeCfg.StateDataDir,
 		fmt.Sprintf("/bridge-%d.db", b.externalChainID)))
@@ -206,7 +206,7 @@ func (b *bridgeEventManager) initTracker(runtimeCfg *config.Runtime) (*tracker.E
 			PollInterval:           runtimeCfg.GenesisConfig.BlockTrackerPollInterval.Duration,
 			LogFilter: map[ethgo.Address][]ethgo.Hash{
 				ethgo.Address(b.config.bridgeCfg.ExternalGatewayAddr): {bridgeMessageEventSig,
-					bridgeBatchProcessedEventSig, newBatchEventSig, bridgeMessageResultEventSig},
+					bridgeMessageResultEventSig},
 			},
 		},
 		store, b.config.bridgeCfg.EventTrackerStartBlocks[b.config.bridgeCfg.ExternalGatewayAddr],
@@ -219,11 +219,11 @@ func (b *bridgeEventManager) initTracker(runtimeCfg *config.Runtime) (*tracker.E
 	return eventTracker, eventTracker.Start()
 }
 
-// initTransport subscribes to bridge topics (getting votes for batches)
+// initTransport subscribes to bridge topics to receive votes for batches.
 func (b *bridgeEventManager) initTransport() error {
 	return b.config.topic.Subscribe(func(obj interface{}, _ peer.ID) {
 		if !b.runtime.IsActiveValidator() {
-			// don't save votes if not a validator
+			// Don't save votes if not a validator.
 			return
 		}
 
@@ -247,7 +247,7 @@ func (b *bridgeEventManager) initTransport() error {
 	})
 }
 
-// saveVote saves the gotten vote to boltDb for later quorum check and signature aggregation
+// saveVote saves the gotten vote to the boltDB for later quorum check and signature aggregation.
 func (b *bridgeEventManager) saveVote(vote *BridgeBatchVote) error {
 	b.lock.RLock()
 	epoch := b.epoch
@@ -255,12 +255,12 @@ func (b *bridgeEventManager) saveVote(vote *BridgeBatchVote) error {
 	b.lock.RUnlock()
 
 	if valSet == nil || vote.EpochNumber < epoch || vote.EpochNumber > epoch+1 {
-		// Epoch metadata is undefined or received a vote for the irrelevant epoch
+		// Epoch metadata is undefined or received a vote for the irrelevant epoch.
 		return nil
 	}
 
 	if !b.isRelevantChainID(vote.SourceChainID) || !b.isRelevantChainID(vote.DestinationChainID) {
-		// Vote is for irrelevant chain, skip it
+		// Vote is for irrelevant chain, skip it.
 		return nil
 	}
 
@@ -270,7 +270,8 @@ func (b *bridgeEventManager) saveVote(vote *BridgeBatchVote) error {
 		}
 	}
 
-	if err := b.verifyVoteSignature(valSet, types.StringToAddress(vote.Sender), vote.Signature, vote.Hash); err != nil {
+	if err := b.verifyVoteSignature(valSet,
+		types.StringToAddress(vote.Sender), vote.Signature, vote.Hash); err != nil {
 		return fmt.Errorf("error verifying vote signature: %w", err)
 	}
 
@@ -299,14 +300,18 @@ func (b *bridgeEventManager) saveVote(vote *BridgeBatchVote) error {
 	return nil
 }
 
-// isRelevantChainID checks whether internal or external chain id corresponds to the given chain id
+// isRelevantChainID checks whether internal or external chain id corresponds to the given chain ID.
 func (b *bridgeEventManager) isRelevantChainID(chainID uint64) bool {
 	return b.internalChainID == chainID || b.externalChainID == chainID
 }
 
-// Verifies signature of the message against the public key of the signer and checks if the signer is a validator
-func (b *bridgeEventManager) verifyVoteSignature(valSet validator.ValidatorSet, signerAddr types.Address,
-	signature []byte, hash []byte) error {
+// verifyVoteSignature verifies signature of the message against the public key of the signer and
+// checks if the signer is a validator.
+func (b *bridgeEventManager) verifyVoteSignature(
+	valSet validator.ValidatorSet,
+	signerAddr types.Address,
+	signature []byte,
+	hash []byte) error {
 	validator := valSet.Accounts().GetValidatorMetadata(signerAddr)
 	if validator == nil {
 		return fmt.Errorf("unable to resolve validator %s", signerAddr)
@@ -324,21 +329,23 @@ func (b *bridgeEventManager) verifyVoteSignature(valSet validator.ValidatorSet, 
 	return nil
 }
 
-// BridgeBatch returns a batch to be submitted if there is a pending batch with quorum
+// BridgeBatch returns a list of batches to be submitted.
 func (b *bridgeEventManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSigned, error) {
-	getLargestPendingBatchFn := func(pendingBatches []*PendingBridgeBatch, sourceChainId uint64) (*BridgeBatchSigned,
-		error) {
+	// BBB - just for "easy-to-search" purposes
+	getLargestPendingBatchFn := func(
+		pendingBatches []*PendingBridgeBatch,
+		sourceChainId uint64) (*BridgeBatchSigned, error) {
 		var (
 			largestBridgeBatch *BridgeBatchSigned
 			err                error
 		)
 
-		// We start from the end, since last pending batch is the most relevant one.
+		// We start from the end, since the last pending batch is the most relevant one.
 		for i := len(pendingBatches) - 1; i >= 0; i-- {
 			if pendingBatches[i].SourceChainID.Uint64() == sourceChainId {
-				var aggregatedSignature polytypes.Signature
+				var sig polytypes.Signature
 
-				aggregatedSignature, err = b.getAggSignatureForBridgeBatchMessage(blockNumber, pendingBatches[i])
+				sig, err = b.getAggSignatureForBridgeBatch(blockNumber, pendingBatches[i])
 				if err != nil {
 					if errors.Is(err, errQuorumNotReached) {
 						err = nil
@@ -353,7 +360,7 @@ func (b *bridgeEventManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSign
 
 				largestBridgeBatch = &BridgeBatchSigned{
 					BridgeMessageBatch: pendingBatches[i].BridgeMessageBatch,
-					AggSignature:       aggregatedSignature,
+					AggSignature:       sig,
 					InternalChainID:    b.internalChainID,
 				}
 
@@ -366,12 +373,12 @@ func (b *bridgeEventManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSign
 
 	largestI2EBatch, err := getLargestPendingBatchFn(b.pendingBridgeBatchesI2E, b.internalChainID)
 	if err != nil {
-		return nil, fmt.Errorf("could not get largest internal-to-external pending batch. Error: %w", err)
+		return nil, fmt.Errorf("could not get largest I2E pending batch. Error: %w", err)
 	}
 
 	largestE2IBatch, err := getLargestPendingBatchFn(b.pendingBridgeBatchesE2I, b.externalChainID)
 	if err != nil {
-		return nil, fmt.Errorf("could not get largest external-to-internal pending batch. Error: %w", err)
+		return nil, fmt.Errorf("could not get largest E2I pending batch. Error: %w", err)
 	}
 
 	signedBridgeBatches := make([]*BridgeBatchSigned, 0, 2)
@@ -398,9 +405,10 @@ func (b *bridgeEventManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSign
 	return signedBridgeBatches, nil
 }
 
-// getAggSignatureForBridgeBatchMessage checks if pending batch has quorum,
-// and if it does, aggregates the signatures
-func (b *bridgeEventManager) getAggSignatureForBridgeBatchMessage(blockNumber uint64,
+// getAggSignatureForBridgeBatch checks if the given pending batch has a quorum and, if it does,
+// aggregates and returns the signature.
+func (b *bridgeEventManager) getAggSignatureForBridgeBatch(
+	blockNumber uint64,
 	pendingBridgeBatch *PendingBridgeBatch) (polytypes.Signature, error) {
 	validatorSet := b.validatorSet
 
@@ -416,7 +424,7 @@ func (b *bridgeEventManager) getAggSignatureForBridgeBatchMessage(blockNumber ui
 		return polytypes.Signature{}, err
 	}
 
-	// get all the votes from the database for batch
+	// Get all the votes from the database for batch.
 	votes, err := b.state.getMessageVotes(
 		pendingBridgeBatch.Epoch,
 		bridgeBatchHash.Bytes(),
@@ -434,7 +442,8 @@ func (b *bridgeEventManager) getAggSignatureForBridgeBatchMessage(blockNumber ui
 	for _, vote := range votes {
 		index, exists := validatorAddrToIndex[vote.Sender]
 		if !exists {
-			continue // don't count this vote, because it does not belong to validator
+			// Don't count this vote, because it does not belong to validator.
+			continue
 		}
 
 		signature, err := bls.UnmarshalSignature(vote.Signature)
@@ -465,8 +474,8 @@ func (b *bridgeEventManager) getAggSignatureForBridgeBatchMessage(blockNumber ui
 	return result, nil
 }
 
-// PostEpoch notifies the bridge event manager that an epoch has changed,
-// so that it can discard any previous epoch bridge batch, and build a new one (since validator set changed)
+// PostEpoch notifies the bridge event manager that an epoch has changed, so that it can discard
+// any previous epoch bridge batch, and build a new one (since validator set changed)
 func (b *bridgeEventManager) PostEpoch(req *oracle.PostEpochRequest) error {
 	if err := b.state.insertEpoch(req.NewEpochID, req.DBTx, b.externalChainID); err != nil {
 		return fmt.Errorf("an error occurred while inserting new epoch in db, chainID: %d. Reason: %w",
@@ -489,9 +498,9 @@ func (b *bridgeEventManager) PostEpoch(req *oracle.PostEpochRequest) error {
 	return nil
 }
 
-// PostBlock creates batch from internal events.
+// PostBlock creates I2E, E2I and retry batches.
 func (b *bridgeEventManager) PostBlock(req *oracle.PostBlockRequest) error {
-	var systemState systemstate.SystemState
+	var sysState systemstate.SystemState
 
 	if req.FullBlock.Block.Header.Number > 1 {
 		provider, err := b.blockchain.GetStateProviderForBlock(req.FullBlock.Block.Header)
@@ -499,48 +508,45 @@ func (b *bridgeEventManager) PostBlock(req *oracle.PostBlockRequest) error {
 			return err
 		}
 
-		systemState = b.blockchain.GetSystemState(provider)
+		sysState = b.blockchain.GetSystemState(provider)
 
-		b.nextEventIDI2E, err = systemState.GetNextCommittedIndex(b.externalChainID, systemstate.Internal)
+		b.nextEventIDI2E, err = sysState.GetNextCommittedIndex(b.externalChainID, systemstate.I2E)
 		if err != nil {
 			return err
 		}
 
-		b.nextEventIDE2I, err = systemState.GetNextCommittedIndex(b.externalChainID, systemstate.External)
+		b.nextEventIDE2I, err = sysState.GetNextCommittedIndex(b.externalChainID, systemstate.E2I)
 		if err != nil {
 			return err
 		}
 	}
 
 	if err := b.buildI2EBridgeBatch(req.DBTx); err != nil {
-		// we don't return an error here. If bridge message event is inserted in db,
-		// we will just try to build a batch on next block or next event arrival
 		b.logger.Error("could not build an internal chain originated batch on PostBlock",
 			"err", err)
 	}
 
 	if err := b.buildE2IBridgeBatch(req.DBTx); err != nil {
-		// we don't return an error here. If bridge message event is inserted in db,
-		// we will just try to build a batch on next block or next event arrival
 		b.logger.Error("could not build an external chain originated batch on PostBlock",
 			"err", err)
 	}
 
-	b.handleRetry(req.DBTx, systemState)
+	b.handleRetry(req.DBTx, sysState)
 
 	return nil
 }
 
-// buildE2IBridgeBatch builds a new external to internal bridge batch, signs it and gossips its vote for it
+// buildE2IBridgeBatch builds, signs, and multicasts the E2I batch.
 func (b *bridgeEventManager) buildE2IBridgeBatch(dbTx *bolt.Tx) error {
 	return b.buildBridgeBatch(dbTx, b.externalChainID, b.internalChainID, b.nextEventIDE2I)
 }
 
-// buildI2EBridgeBatch builds a new internal to external bridge batch, signs it and gossips its vote for it
+// buildI2EBridgeBatch builds, signs, and multicasts the I2E batch.
 func (b *bridgeEventManager) buildI2EBridgeBatch(dbTx *bolt.Tx) error {
 	return b.buildBridgeBatch(dbTx, b.internalChainID, b.externalChainID, b.nextEventIDI2E)
 }
 
+// buildBridgeBatch builds, signs, and multicasts the batch.
 func (b *bridgeEventManager) buildBridgeBatch(
 	dbTx *bolt.Tx,
 	sourceChainID, destinationChainID uint64,
@@ -623,7 +629,6 @@ func (b *bridgeEventManager) buildBridgeBatch(
 		return fmt.Errorf("could not insert signature for bridge batch. Error: %w", err)
 	}
 
-	// gossip message
 	b.multicast(&BridgeBatchVote{
 		Hash: hashBytes,
 		BridgeBatchVoteConsensusData: &BridgeBatchVoteConsensusData{
@@ -666,7 +671,11 @@ func (b *bridgeEventManager) buildBridgeBatch(
 	return nil
 }
 
-func (b *bridgeEventManager) handleRetry(dbTx *bolt.Tx, systemState systemstate.SystemState) {
+// handleRetry handles the complete logic related to checking whether a batch is ready for retry,
+// as well as building and broadcasting retry candidates.
+func (b *bridgeEventManager) handleRetry(
+	dbTx *bolt.Tx,
+	sysState systemstate.SystemState) {
 	block, err := b.externalClient.GetBlockByNumber(jsonrpc.BlockNumber(ethgo.Latest), false)
 	if err != nil {
 		// Log the error, but won't return because it might be just a temporary problem.
@@ -690,6 +699,9 @@ func (b *bridgeEventManager) handleRetry(dbTx *bolt.Tx, systemState systemstate.
 		// We add a random small number (salt) for extra security. This is not required.
 		rt.Add(rt, big.NewInt(2))
 
+		// For each batch from the unexecuted list, we check whether the number of the current
+		// block on the external chain is greater than (equal to) the batch threshold (including
+		// salt and potential reorganization). If so, batch is ready for retry.
 		if blockNumber.Cmp(rt) >= 0 {
 			retryBatch := *b.unexecutedBatches[i]
 			retryBatch.NumberOfRegularEvents = big.NewInt(0)
@@ -705,7 +717,7 @@ func (b *bridgeEventManager) handleRetry(dbTx *bolt.Tx, systemState systemstate.
 				continue
 			}
 
-			numOfTries, err := systemState.GetBatchCommitCounter(hash)
+			numOfTries, err := sysState.GetBatchCommitCounter(hash)
 			if err != nil {
 				b.logger.Error("could not get a number of retries for bridge batch", "err", err)
 
@@ -721,11 +733,16 @@ func (b *bridgeEventManager) handleRetry(dbTx *bolt.Tx, systemState systemstate.
 			b.unexecutedBatches = append(b.unexecutedBatches[:i], b.unexecutedBatches[i+1:]...)
 
 			retryBatch.CommitCounter = numOfTries.Add(numOfTries, big.NewInt(1))
+			// Storing the retry template for the given batch.
 			b.retryBatches[hash] = retryBatch
+			// Storing the list that will contain retry candidates for the given batch.
 			b.pendingRetryBatches[hash] = []*PendingBridgeBatch{}
 
-			b.logger.Info(fmt.Sprintf("Retry mechanism has been successfully started for the batch (%s, %d -> %d)",
-				hash.String(), retryBatch.SourceChainID.Uint64(), retryBatch.DestinationChainID.Uint64()))
+			b.logger.Info(
+				fmt.Sprintf("Retry mechanism has been successfully started for the batch (%s, %d -> %d)",
+					hash.String(),
+					retryBatch.SourceChainID.Uint64(),
+					retryBatch.DestinationChainID.Uint64()))
 		} else {
 			i++
 		}
@@ -737,6 +754,7 @@ func (b *bridgeEventManager) handleRetry(dbTx *bolt.Tx, systemState systemstate.
 		return
 	}
 
+	// Creating a new retry candidate for each batch that is ready for the retry.
 	for hash := range b.retryBatches {
 		err = b.buildRetryBridgeBatch(hash, blockNumber.Uint64(), dbTx)
 		if err != nil {
@@ -745,15 +763,25 @@ func (b *bridgeEventManager) handleRetry(dbTx *bolt.Tx, systemState systemstate.
 	}
 }
 
-func (b *bridgeEventManager) buildRetryBridgeBatch(primaryHash types.Hash, blockNumber uint64, dbTx *bolt.Tx) error {
-	rb := b.retryBatches[primaryHash]
+// buildRetryBridgeBatch builds, signs, and multicasts a retry version of the batch.
+func (b *bridgeEventManager) buildRetryBridgeBatch(
+	baseHash types.Hash,
+	blockNumber uint64,
+	dbTx *bolt.Tx) error {
+
+	// Bulding a retry batch is actually based just on taking a retry template for the given
+	// batch and calculating a new threshold.
+
+	// Taking a retry template.
+	rb := b.retryBatches[baseHash]
 	pendingBatch := PendingBridgeBatch{
 		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
 			Messages:           rb.Messages,
 			SourceChainID:      rb.SourceChainID,
 			DestinationChainID: rb.DestinationChainID,
 			Threshold: new(big.Int).SetUint64(
-				uint64((math.Ceil(float64(blockNumber)/10) * 10)) + b.config.bridgeCfg.BridgeBatchThreshold),
+				uint64((math.Ceil(float64(blockNumber)/10) * 10)) +
+					b.config.bridgeCfg.BridgeBatchThreshold),
 			NumberOfRegularEvents: rb.NumberOfRegularEvents,
 			CommitCounter:         rb.CommitCounter,
 		},
@@ -781,7 +809,6 @@ func (b *bridgeEventManager) buildRetryBridgeBatch(primaryHash types.Hash, block
 		return fmt.Errorf("could not insert signature for retry bridge batch. Error: %w", err)
 	}
 
-	// gossip message
 	b.multicast(&BridgeBatchVote{
 		Hash: hashBytes,
 		BridgeBatchVoteConsensusData: &BridgeBatchVoteConsensusData{
@@ -793,8 +820,8 @@ func (b *bridgeEventManager) buildRetryBridgeBatch(primaryHash types.Hash, block
 		DestinationChainID: b.externalChainID,
 	})
 
-	pendingRetryBatches := b.pendingRetryBatches[primaryHash]
-	b.pendingRetryBatches[primaryHash] = append(pendingRetryBatches, &pendingBatch)
+	pendingRetryBatches := b.pendingRetryBatches[baseHash]
+	b.pendingRetryBatches[baseHash] = append(pendingRetryBatches, &pendingBatch)
 
 	numOfOrdinaryMsgs := 0
 
@@ -819,15 +846,15 @@ func (b *bridgeEventManager) buildRetryBridgeBatch(primaryHash types.Hash, block
 		"number of ordinary", fmt.Sprintf("%d (%s-%s)", numOfOrdinaryMsgs, firstID.String(), lastID.String()),
 		"number of rollback", len(pendingBatch.Messages)-numOfOrdinaryMsgs,
 		"threshold", pendingBatch.Threshold,
-		"base hash", primaryHash.String(),
+		"base hash", baseHash.String(),
 		"full hash", hash.String(),
 	)
 
 	return nil
 }
 
-// multicast publishes given message to the rest of the network
-func (b *bridgeEventManager) multicast(msg interface{}) {
+// multicast publishes (broadcasts) a given message to the rest of the network.
+func (b *bridgeEventManager) multicast(msg any) {
 	data, err := json.Marshal(msg)
 	if err != nil {
 		b.logger.Warn("failed to marshal bridge message", "err", err)
@@ -841,18 +868,12 @@ func (b *bridgeEventManager) multicast(msg interface{}) {
 	}
 }
 
-// EventSubscriber implementation
-
-// GetLogFilters returns a map of log filters for getting desired events,
-// where the key is the address of contract that emits desired events,
-// and the value is a slice of signatures of events we want to get.
-// This function is the implementation of EventSubscriber interface
+// GetLogFilters returns a map of log filters for getting desired events from the internal chain.
 func (b *bridgeEventManager) GetLogFilters() map[types.Address][]types.Hash {
 	return map[types.Address][]types.Hash{
 		b.config.bridgeCfg.InternalGatewayAddr: {
 			types.Hash(bridgeMessageEventSig),
 			types.Hash(bridgeMessageResultEventSig),
-			types.Hash(bridgeBatchProcessedEventSig),
 		},
 		contracts.BridgeStorageContract: {
 			types.Hash(newBatchEventSig),
@@ -860,11 +881,14 @@ func (b *bridgeEventManager) GetLogFilters() map[types.Address][]types.Hash {
 	}
 }
 
-// ProcessLog method is responsible for processing bridge events originating from the internal (Blade)
-// chain. An event provider is responsible for collecting these events.
-func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Log, dbTx *bolt.Tx) error {
+// ProcessLog method is responsible for processing bridge events originating from the internal
+// (Blade) chain. An event provider is responsible for collecting these events.
+func (b *bridgeEventManager) ProcessLog(
+	header *types.Header,
+	eventLog *ethgo.Log,
+	dbTx *bolt.Tx) error {
 	isEventMine := func(chainID *big.Int) bool {
-		// If the event (bridge message) is related to an external chain that is not managed by the
+		// If the event is related to an external (non-Blade) chain that is not managed by the
 		// current bridge manager, it should be immediately discarded.
 		if b.externalChainID != chainID.Uint64() {
 			return false
@@ -873,42 +897,20 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Lo
 		return true
 	}
 
-	// We process four types of events:
+	// We process three types of events:
 	// 1. bridgeMessageEventSig (`BridgeMsg`)
 	//	  - This event is emitted by the `sendBridgeMsg` method of the Gateway smart contract on
-	//	 	an internal chain. It is triggered when users submit a transaction to transfer tokens
-	//  	from the internal to the external chain. The only required action in this case is to
-	//		store the event (bridge message) in the local database.
+	//	 	an internal chain. It is triggered when user submit a transaction to transfer tokens
+	//  	from the internal to the external chain.
 	// 2. bridgeMessageResultEventSig (`BridgeMessageResult`)
-	//	  - This event is emitted by the `_executeBridgeMessage` or `_executeRollbackBridgeMessage`
-	// 		method of the Gateway smart contract on an internal chain. It is triggered when a normal
-	//		(ordinary) or rollback message is transferred from the external to the internal chain
-	//		and executed there. The processing of this event depends on whether it is a normal or
-	//		rollback message, as well as whether the message was successfully executed or not.
-	// 3. bridgeBatchProcessedEventSig (`BridgeBatchProcessed`)
-	//	  - This event is emitted by the `receiveBatch` method of the Gateway smart contract on an
-	// 		internal chain. It is triggered after a batch transferring messages from the external
-	// 		to the internal chain has been successfully bridged and validated on the internal chain.
-	// 		Success of executing individual messages from a batch do not affect this event in any
-	// 		way. Since external-to-internal batches are executed immediately after the quorum number
-	//		of signatures is obtained, and therefore these batches are not stored in the unexecuted
-	// 		list, no additional steps need to be taken. Event is used for logging purposes only.
-	// 4. newBatchEventSig (`NewBatch`)
-	//	  - This event is emitted by the `commitBatch` method of the BridgeStorage smart contract on
-	//		an internal chain. It is triggered after the quorum number of signatures for a batch is
-	//		collected and the block proposer on the sprint block commits the given batch. The actions
-	//		to be taken depend on the batch direction and whether the batch is being committed for the
-	//		first time, i.e. whether it is a retry batch or not. We add a batch to the unexecuted list
-	//		only if it is an outgoing batch, i.e. a batch that goes to and is executed on an external
-	//		chain. Incoming batches (external-to-internal batches) are executed immediately upon receiving
-	//		a quorum of votes (execution and commit to bridge storage occur within the same transaction),
-	//		thus adding to unexecuted list is not required. Additionally, regardless of direction, all
-	//		rollback messages that were committed in a given batch are deleted from the local database,
-	//		but only if the batch is being committed for the first time (not a retry batch). Also, in
-	//		case it is a retry batch, it is deleted from the retry map together with all its pending
-	//		retry batches. Otherwise, if it is a regular batch, then, depending on the batch direction
-	// 		(whether it goes from the internal to the external chain or vice-verse) the I2E/E2I pending
-	//		list is restarted (cleared).
+	//	  - This event is emitted by the `_executeBridgeMessage`/`_executeRollbackBridgeMessage`
+	// 		method of the Gateway smart contract on an internal chain. It is triggered when the
+	//		ordinary or rollback message is transferred from the external to the internal chain
+	//		and executed there.
+	// 3. newBatchEventSig (`NewBatch`)
+	//	  - This event is emitted by the `commitBatch` method of the BridgeStorage smart contract
+	// 		on an internal chain. It is triggered after the quorum number of signatures for the
+	//		given batch is collected and the block proposer commits it on the sprint block.
 	switch eventLog.Topics[0] {
 	case bridgeMessageEventSig:
 		event := &contractsapi.BridgeMsgEvent{}
@@ -924,7 +926,10 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Lo
 			return nil
 		}
 
-		if err := b.handleBridgeMessageEvent(event, dbTx); err != nil {
+		b.lock.Lock()
+		defer b.lock.Unlock()
+
+		if err := b.handleBridgeMessageEvent(header, event, dbTx); err != nil {
 			return err
 		}
 
@@ -942,32 +947,16 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Lo
 			return nil
 		}
 
-		if err := b.handleBridgeMessageResultEvent(event, dbTx); err != nil {
+		b.lock.Lock()
+		defer b.lock.Unlock()
+
+		if err := b.handleBridgeMessageResultEvent(header, event, dbTx); err != nil {
 			return err
 		}
 
-	case bridgeBatchProcessedEventSig:
-		event := &contractsapi.BridgeBatchProcessedEvent{}
-
-		doesMatch, err := event.ParseLog(eventLog)
-		if !doesMatch || err != nil {
-			b.logger.Error("could not decode bridge batch processed event", "err", err)
-
-			return err
-		}
-
-		if !isEventMine(event.SourceChainID) {
-			return nil
-		}
-
-		sid := event.SourceChainID
-		did := event.DestinationChainID
-
-		b.logger.Info(
-			"Caught Bridge batch processed event",
-			"hash", fmt.Sprintf("0x%s", hex.EncodeToString(event.BatchHash)),
-			"direction", fmt.Sprintf("%d -> %d", sid.Uint64(), did.Uint64()),
-		)
+		// Unlike handling in AddLog, in this case there is no check related to the unexecuted
+		// list. The reason lies in the fact that E2I batches are executed immediately, so they
+		// are not even written to the unexecuted list.
 
 	case newBatchEventSig:
 		event := &contractsapi.NewBatchEvent{}
@@ -984,16 +973,20 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Lo
 			return err
 		}
 
-		ss := systemstate.NewSystemState(contracts.EpochManagerContract, contracts.BridgeStorageContract, provider)
+		ss := b.blockchain.GetSystemState(provider)
 
 		bridgeBatch, err := ss.GetBridgeBatchByNumber(event.ID)
 		if err != nil {
 			return err
 		}
 
-		if !isEventMine(bridgeBatch.Batch.SourceChainID) && !isEventMine(bridgeBatch.Batch.DestinationChainID) {
+		if !isEventMine(bridgeBatch.Batch.SourceChainID) &&
+			!isEventMine(bridgeBatch.Batch.DestinationChainID) {
 			return nil
 		}
+
+		b.lock.Lock()
+		defer b.lock.Unlock()
 
 		b.logger.Info(
 			"Caught New batch event",
@@ -1032,40 +1025,88 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Lo
 			return err
 		}
 
+		// Handling this event is a bit tricky, but the behavior is as follows. First, we check
+		// whether it's I2E batch or not. If it's not, we simply restart pendingBridgeBatchesE2I
+		// because a new E2I batch has been found and committed. If it is an I2E batch, we check
+		// whether it's a retry batch or not. For E2I, this check doesn't exist because batches
+		// are executed immediately, therefore they are not written to the unexecuted list, thus
+		// cannot be retries. Checking whether it's a retry batch is done by looking at whether
+		// the batch's commit counter is greater than 1. If it's a retry batch, we delete it from
+		// the map of batches that are ready for retry (retryBatches), because a new version of
+		// the batch has just been committed. Additionally, we also delete the retry candidates
+		// for the given batch (pendingRetryBatches). The previous two deletions are implemented
+		// only if the node had previously initiated a retry for the given batch (during syncing,
+		// it can happen that the retry mechanism for a batch hasn't been initiated at all, even
+		// though it was initiated on synchronized nodes). If it's not an I2E retry batch, we
+		// simply restart (set to nil) pendingBridgebatchesI2E because a new (regular) I2E batch
+		// has been found and committed. Since the above has been done, the I2E batch should be
+		// inserted into the unexecuted list. However, it is inserted into this list only if at
+		// least one of its messages hasn't been executed. If all messages have been executed,
+		// then the batch is also executed, so adding it to the given list would be incorrect.
+
 		if bridgeBatch.Batch.SourceChainID.Uint64() == b.internalChainID &&
 			bridgeBatch.Batch.DestinationChainID.Uint64() == b.externalChainID {
 			if bridgeBatch.Batch.CommitCounter.Cmp(big.NewInt(1)) > 0 {
-				delete(b.retryBatches, baseHash)
-				delete(b.pendingRetryBatches, baseHash)
+				if _, ok := b.retryBatches[baseHash]; ok {
+					delete(b.retryBatches, baseHash)
+					delete(b.pendingRetryBatches, baseHash)
 
-				b.logger.Info(fmt.Sprintf("Batch (%s, %s, %s, %s, %d -> %d) has been successfully removed from the retry map",
-					event.ID.String(), baseHash.String(), bridgeBatch.Batch.CommitCounter.String(),
-					fullHash.String(), sid.Uint64(), did.Uint64()))
-			} else {
-				if baseUnexecutedBatch.SourceChainID.Cmp(big.NewInt(int64(b.internalChainID))) == 0 {
-					b.pendingBridgeBatchesI2E = nil
-				} else {
-					b.pendingBridgeBatchesE2I = nil
+					b.logger.Info(
+						fmt.Sprintf(
+							"Batch (%s, %s, %s, %s, %d -> %d)"+
+								"has been successfully removed from the retry map",
+							event.ID.String(),
+							baseHash.String(),
+							bridgeBatch.Batch.CommitCounter.String(),
+							fullHash.String(),
+							sid.Uint64(),
+							did.Uint64()))
 				}
+			} else {
+				b.pendingBridgeBatchesI2E = nil
 			}
 
 			fullUnexecutedBatch.Epoch = b.epoch
 
-			b.lock.Lock()
+			alreadyExecuted := true
 
-			b.unexecutedBatches = append(b.unexecutedBatches, fullUnexecutedBatch)
+			for _, msg := range bridgeBatch.Batch.Messages {
+				if !b.state.isBridgeMessageExecuted(msg, dbTx) {
+					alreadyExecuted = false
 
-			b.lock.Unlock()
+					break
+				}
+			}
 
-			b.logger.Info(fmt.Sprintf("Batch (%s, %s, %s, %s, %d -> %d) has been successfully added to the unexecuted list",
-				event.ID.String(), baseHash.String(), bridgeBatch.Batch.CommitCounter.String(),
-				fullHash.String(), sid.Uint64(), did.Uint64()))
+			if !alreadyExecuted {
+				b.unexecutedBatches = append(b.unexecutedBatches, fullUnexecutedBatch)
+
+				b.logger.Info(
+					fmt.Sprintf("Batch (%s, %s, %s, %s, %d -> %d)"+
+						"has been successfully added to the unexecuted list",
+						event.ID.String(),
+						baseHash.String(),
+						bridgeBatch.Batch.CommitCounter.String(),
+						fullHash.String(),
+						sid.Uint64(),
+						did.Uint64()))
+			}
+		} else {
+			b.pendingBridgeBatchesE2I = nil
 		}
+
+		// The next step is to delete committed rollback messages from the bolt bucket related
+		// to rollback messages.
 
 		if bridgeBatch.Batch.CommitCounter.Cmp(big.NewInt(1)) == 0 {
 			for _, m := range bridgeBatch.Batch.Messages {
 				if m.IsRollback {
-					if err := b.state.removeBridgeMessageEvent(m.ID, m.SourceChainID, m.DestinationChainID, true, dbTx); err != nil {
+					if err := b.state.removeBridgeMessageEvent(
+						m.ID,
+						m.SourceChainID,
+						m.DestinationChainID,
+						true,
+						dbTx); err != nil {
 						b.logger.Error("could not remove rollback bridge message", "err", err)
 
 						return err
@@ -1074,9 +1115,46 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Lo
 			}
 		}
 
-		b.logger.Info(fmt.Sprintf("Commitment of the batch (%s, %s, %s, %s, %d -> %d) has been successfully processed",
-			event.ID.String(), baseHash.String(), bridgeBatch.Batch.CommitCounter.String(),
-			fullHash.String(), sid.Uint64(), did.Uint64()))
+		// Finally, for each committed ordinary message, we need to check if it's known to us, as
+		// well as if it has already been executed (this disorder can happen, for example, during
+		// synchronization). For an ordinary message for which the previous two conditions are met,
+		// we proceed to the message finalization phase (see finalizeOrdinaryBridgeMessage for more
+		// information).
+
+		for _, m := range bridgeBatch.Batch.Messages {
+			if m.IsRollback {
+				continue
+			}
+
+			if !b.state.isBridgeMessageKnown(m, dbTx) {
+				continue
+			}
+
+			if !b.state.isBridgeMessageExecuted(m, dbTx) {
+				continue
+			}
+
+			result, err := b.state.getBridgeMessageResult(m, dbTx)
+			if err != nil {
+				b.logger.Error("could not get bridge message result", "err", err)
+
+				continue
+			}
+
+			if err := b.finalizeOrdinaryBridgeMessage(header, m, result.Status, dbTx); err != nil {
+				b.logger.Error("could not finalize bridge message", "err", err)
+			}
+		}
+
+		b.logger.Info(
+			fmt.Sprintf("Commitment of the batch (%s, %s, %s, %s, %d -> %d)"+
+				"has been successfully processed",
+				event.ID.String(),
+				baseHash.String(),
+				bridgeBatch.Batch.CommitCounter.String(),
+				fullHash.String(),
+				sid.Uint64(),
+				did.Uint64()))
 
 	default:
 		b.logger.Error("unknown bridge event")
@@ -1087,35 +1165,41 @@ func (b *bridgeEventManager) ProcessLog(header *types.Header, eventLog *ethgo.Lo
 	return nil
 }
 
-// AddLog method is responsible for processing bridge events originating from the external (non-Blade)
+// AddLog is responsible for processing bridge events originating from the external (non-Blade)
 // chain. An event tracker is responsible for collecting these events.
-func (b *bridgeEventManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error {
-	// If the event comes from an external chain that is not managed by the current
-	// bridge manager, it should be immediately discarded.
+func (b *bridgeEventManager) AddLog(
+	chainID *big.Int,
+	eventLog *ethgo.Log) error {
+
+	// If the event comes from an external chain that is not managed by this bridge manager, it
+	// should be immediately discarded.
 	if b.externalChainID != chainID.Uint64() {
 		return nil
 	}
 
-	// We process three types of events:
+	// It's important to first start (open) the bolt DB write transaction and only then lock the
+	// mutex. Otherwise, there is a possibility of a deadlock occurring.
+	dbTx, err := b.state.BeginDBTransaction(true)
+	if err != nil {
+		return err
+	}
+	defer dbTx.Commit() //nolint:errcheck
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	currentBlock := b.blockchain.CurrentHeader()
+
+	// We process two types of events:
 	// 1. bridgeMessageEventSig (`BridgeMsg`)
 	//	  - This event is emitted by the `sendBridgeMsg` method of the Gateway smart contract on
-	//	 	an external chain. It is triggered when users submit a transaction to transfer tokens
-	//  	from the external to the internal chain. The only required action in this case is to
-	//		store the event (bridge message) in the local database.
+	//	 	an external chain. It is triggered when user submit a transaction to transfer tokens
+	//  	from the external to the internal chain.
 	// 2. bridgeMessageResultEventSig (`BridgeMessageResult`)
-	//	  - This event is emitted by the `_executeBridgeMessage` or `_executeRollbackBridgeMessage`
-	// 		method of the Gateway smart contract on an external chain. It is triggered when a normal
-	//		(ordinary) or rollback message is transferred from the internal to the external chain
-	//		and executed there. The processing of this event depends on whether it is a normal or
-	//		rollback message, as well as whether the message was successfully executed or not.
-	// 3. bridgeBatchProcessedEventSig (`BridgeBatchProcessed`)
-	//	  - This event is emitted by the `receiveBatch` method of the Gateway smart contract on an
-	// 		external chain. It is triggered after a batch transferring messages from the internal
-	// 		to the external chain has been successfully bridged and validated on the external chain.
-	// 		Success of executing individual messages from a batch do not affect this event in any
-	// 		way. Event is used as a sign to remove the batch from the unexecuted list, indicating
-	//		that waiting for the batch to process is no longer needed and that the retry mechanism
-	//		does not need to be triggered.
+	//	  - This event is emitted by the `_executeBridgeMessage`/`_executeRollbackBridgeMessage`
+	// 		method of the Gateway smart contract on an internal chain. It is triggered when the
+	//		ordinary or rollback message is transferred from the external to the internal chain
+	//		and executed there.
 	switch eventLog.Topics[0] {
 	case bridgeMessageEventSig:
 		event := &contractsapi.BridgeMsgEvent{}
@@ -1127,7 +1211,7 @@ func (b *bridgeEventManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error
 			return err
 		}
 
-		if err := b.handleBridgeMessageEvent(event, nil); err != nil {
+		if err := b.handleBridgeMessageEvent(currentBlock, event, dbTx); err != nil {
 			return err
 		}
 
@@ -1141,53 +1225,47 @@ func (b *bridgeEventManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error
 			return err
 		}
 
-		if err := b.handleBridgeMessageResultEvent(event, nil); err != nil {
+		if err := b.handleBridgeMessageResultEvent(currentBlock, event, dbTx); err != nil {
 			return err
 		}
 
-	case bridgeBatchProcessedEventSig:
-		event := &contractsapi.BridgeBatchProcessedEvent{}
+		// Since a result has arrived for some newly executed message, we need to go through all
+		// unexecuted batches and check if all messages have been executed for any batch. If so,
+		// that batch is deleted from the list of unexecuted batches. In this way, a given batch
+		// won't be considered for retry anymore.
 
-		doesMatch, err := event.ParseLog(eventLog)
-		if !doesMatch || err != nil {
-			b.logger.Error("could not decode bridge batch processed event", "err", err)
+	ub_loop:
+		for i := 0; i < len(b.unexecutedBatches); {
+			for _, message := range b.unexecutedBatches[i].Messages {
+				if !b.state.isBridgeMessageExecuted(message, dbTx) {
+					i++
 
-			return err
-		}
+					continue ub_loop
+				}
+			}
 
-		sid := event.SourceChainID
-		did := event.DestinationChainID
-
-		b.logger.Info(
-			"Caught Bridge batch processed event",
-			"hash", fmt.Sprintf("0x%s", hex.EncodeToString(event.BatchHash)),
-			"direction", fmt.Sprintf("%d -> %d", sid.Uint64(), did.Uint64()),
-		)
-
-		b.lock.Lock()
-
-		for i := 0; i < len(b.unexecutedBatches); i++ {
 			hash, err := b.unexecutedBatches[i].Hash()
 			if err != nil {
 				b.logger.Error("could not calculate a hash for the bridge batch", "err", err)
 
-				return err
+				i++
+
+				continue
 			}
 
-			if hash == types.Hash(event.BatchHash) {
-				b.unexecutedBatches = append(b.unexecutedBatches[:i], b.unexecutedBatches[i+1:]...)
+			b.logger.Info(
+				fmt.Sprintf("Batch (0x%s, %d -> %d)"+
+					"has been successfully removed from the unexecuted list",
+					hex.EncodeToString(hash.Bytes()),
+					b.unexecutedBatches[i].SourceChainID.Uint64(),
+					b.unexecutedBatches[i].DestinationChainID.Uint64()))
 
-				break
-			}
+			b.unexecutedBatches = append(b.unexecutedBatches[:i], b.unexecutedBatches[i+1:]...)
 		}
 
-		b.lock.Unlock()
-
-		b.logger.Info(fmt.Sprintf("Batch (0x%s, %d -> %d) has been successfully removed from the unexecuted list",
-			hex.EncodeToString(event.BatchHash), sid.Uint64(), did.Uint64()))
-
 	default:
-		b.logger.Error(fmt.Sprintf("unknown bridge event came from the external chain %d", chainID.Uint64()))
+		b.logger.Error(fmt.Sprintf("unknown bridge event came from the external chain %d",
+			chainID.Uint64()))
 
 		return errUnknownBridgeEvent
 	}
@@ -1195,7 +1273,19 @@ func (b *bridgeEventManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error
 	return nil
 }
 
-func (b *bridgeEventManager) handleBridgeMessageEvent(event *contractsapi.BridgeMsgEvent, dbTx *bolt.Tx) error {
+// handleBridgeMessageEvent handles the BridgeMsg event emitted by the Gateway SC on the internal
+// (Blade) and all external chains.
+func (b *bridgeEventManager) handleBridgeMessageEvent(
+	header *types.Header,
+	event *contractsapi.BridgeMsgEvent,
+	dbTx *bolt.Tx) error {
+
+	// Handling the arrival of a new message is basically only focused on writing the message to
+	// the bucket related to ordinary messages. However, in certain situations (e.g. syncing) it
+	// may happen that the given message has already been previously committed or even executed.
+	// If the previous two conditions are met, we proceed to the message finalization phase (see
+	// finalizeOrdinaryBridgeMessage for more information).
+
 	id := event.ID
 	sid := event.SourceChainID
 	did := event.DestinationChainID
@@ -1212,13 +1302,53 @@ func (b *bridgeEventManager) handleBridgeMessageEvent(event *contractsapi.Bridge
 		return err
 	}
 
-	b.logger.Info(fmt.Sprintf("Bridge message %s has been successfully stored to the ordinary bucket", id.String()))
+	msg := &contractsapi.BridgeMessage{
+		ID:                 id,
+		SourceChainID:      sid,
+		DestinationChainID: did,
+		IsRollback:         false,
+	}
 
-	return nil
+	committed, err := b.isBridgeMessageCommitted(header, msg)
+	if err != nil {
+		return err
+	}
+
+	if !committed {
+		return nil
+	}
+
+	if !b.state.isBridgeMessageExecuted(msg, dbTx) {
+		return nil
+	}
+
+	result, err := b.state.getBridgeMessageResult(msg, dbTx)
+	if err != nil {
+		b.logger.Error("could not get bridge message result", "err", err)
+
+		return err
+	}
+
+	return b.finalizeOrdinaryBridgeMessage(header, msg, result.Status, dbTx)
 }
 
-func (b *bridgeEventManager) handleBridgeMessageResultEvent(event *contractsapi.BridgeMessageResultEvent,
+// handleBridgeMessageResultEvent handles the BridgeMessageResult event emitted by the Gateway SC
+// on the internal (Blade) and all external chains.
+func (b *bridgeEventManager) handleBridgeMessageResultEvent(
+	header *types.Header,
+	event *contractsapi.BridgeMessageResultEvent,
 	dbTx *bolt.Tx) error {
+
+	// Handling the execution result of a message depends on whether it was an ordinary message
+	// or not (rollback message), as well as whether the message was successfully executed or
+	// not. If it's a rollback message, regardless of whether it was successfully executed or
+	// not, only logging is performed (note that we consider that a rollback message will never
+	// fail to execute). If it's a result for an ordinary message, we check whether the given
+	// ordinary message is known (we previously received a BridgeMsg event from the Gateway) and
+	// whether it has been committed (through a batch on BridgeStorage). If either of these two
+	// conditions is not met, the process stops there. Otherwise, we proceed to the finalization
+	// phase (see finalizeOrdinaryBridgeMessage for more information).
+
 	id := event.ID
 	sid := event.SourceChainID
 	did := event.DestinationChainID
@@ -1231,94 +1361,177 @@ func (b *bridgeEventManager) handleBridgeMessageResultEvent(event *contractsapi.
 		"status", event.Status,
 	)
 
+	if err := b.state.insertBridgeMessageResultEvent(event, dbTx); err != nil {
+		b.logger.Error("could not insert bridge message result", "err", err)
+
+		return err
+	}
+
 	switch event.IsRollback {
 	case false:
-		// If the (switch) event is the result of processing a normal (ordinary, non-rollback)
-		// bridge message, there are two possible outcomes. The first possibility is that the
-		// message was successfully executed. In this case, it should simply be deleted from the
-		// local database, specifically from the bucket associated with normal (ordinary) messages.
-		// The second possibility is that the message was not successfully executed. In this case,
-		// the message must first be retrieved from the bucket associated with normal (ordinary)
-		// messages. Then, the source and destination chain IDs must be swapped, as this message
-		// now needs to be executed on the internal chain. Once this is done, the modified message
-		// is inserted into the bucket associated with rollback messages. Finally, the message is
-		// deleted from the bucket associated with normal (ordinary) messages.
-		{
-			if event.Status {
-				if err := b.state.removeBridgeMessageEvent(id, sid, did, false, dbTx); err != nil {
-					b.logger.Error("could not remove ordinary bridge message", "err", err)
-
-					return err
-				}
-
-				b.logger.Info(fmt.Sprintf("Bridge message %s has been successfully processed", id.String()))
-
-				return nil
-			}
-
-			message, err := b.state.getBridgeMessageEvent(id, sid, did, false, dbTx)
-			if err != nil {
-				b.logger.Error("could not get ordinary bridge message", "err", err)
-
-				return err
-			}
-
-			// This can only happen (be nil) if the message was previously removed from the
-			// bucket associated with normal (ordinary) messages. Since deletion from that
-			// bucket occurs only after the message has been written to the rollback bucket,
-			// no further action is required.
-			if message == nil {
-				b.logger.Info(fmt.Sprintf("Bridge message %s is already in the rollback bucket", id.String()))
-
-				return nil
-			}
-
-			message.SourceChainID = did
-			message.DestinationChainID = sid
-
-			if err = b.state.insertBridgeMessageEvent(message, true, dbTx); err != nil {
-				b.logger.Error("could not insert bridge message to rollback bucket", "err", err)
-
-				return err
-			}
-
-			if err = b.state.removeBridgeMessageEvent(id, sid, did, false, dbTx); err != nil {
-				b.logger.Error("could not remove ordinary bridge message", "err", err)
-
-				return err
-			}
-
-			b.logger.Info(fmt.Sprintf("Bridge message %s has been successfully moved to the rollback bucket", id.String()))
+		msg := &contractsapi.BridgeMessage{
+			ID:                 id,
+			SourceChainID:      sid,
+			DestinationChainID: did,
+			IsRollback:         false,
 		}
+
+		if !b.state.isBridgeMessageKnown(msg, dbTx) {
+			return nil
+		}
+
+		committed, err := b.isBridgeMessageCommitted(header, msg)
+		if err != nil {
+			return err
+		}
+
+		if !committed {
+			return nil
+		}
+
+		return b.finalizeOrdinaryBridgeMessage(header, msg, event.Status, dbTx)
 	case true:
-		// If the (switch) event is the result of processing a rollback bridge message, there
-		// are two possible outcomes: either the message is successfully executed or it is not.
-		// In both cases, no action should be taken. We assume that a rollback message can never
-		// fail to execute.
-		{
-			if event.Status {
-				b.logger.Info(fmt.Sprintf("Bridge message %s has been successfully processed", id.String()))
+		if event.Status {
+			b.logger.Info(fmt.Sprintf("Rollback bridge message %s has been successfully processed",
+				id.String()))
 
-				// The following code is currently commented out, because in the current implementation
-				// we remove a message from the rollback bucket once a given rollback message is found
-				// in the batch that has been committed to bridge storage.
-
-				// if err := b.state.removeBridgeMessageEvent(id, sid, did, true, nil); err != nil {
-				// 	b.logger.Error("could not remove rollback bridge message", "err", err)
-
-				// 	return err
-				// }
-
-				return nil
-			}
-
-			// This should never happen.
-
-			b.logger.Info(fmt.Sprintf("Bridge message %s has not been successfully processed", id.String()))
+			return nil
 		}
+
+		// This should never happen.
+
+		b.logger.Info(fmt.Sprintf("Rollback bridge message %s has not been successfully processed",
+			id.String()))
 	}
 
 	return nil
+}
+
+// finalizeOrdinaryBridgeMessage represents the final phase of processing an ordinary message.
+func (b *bridgeEventManager) finalizeOrdinaryBridgeMessage(
+	header *types.Header,
+	msg *contractsapi.BridgeMessage,
+	successful bool,
+	dbTx *bolt.Tx) error {
+
+	// The way the message is processed depends on whether it was successfully executed or not.
+	// If it was successfully executed, it is simply deleted from the bucket related to ordinary
+	// messages. Otherwise, we check if its rollback version is already committed. If not, the
+	// message is deleted from the bucket related to ordinary messages and written to the bucket
+	// related to rollback messages. In other words, it is transferred from the ordinary to the
+	// rollback bucket. If the rollback version is already committed, we do nothing (since the
+	// rollback message is deleted from the rollback bucket upon being committed, writing it at
+	// this point would be incorrect).
+
+	id := msg.ID
+	sid := msg.SourceChainID
+	did := msg.DestinationChainID
+
+	if successful {
+		if err := b.state.removeBridgeMessageEvent(id, sid, did, false, dbTx); err != nil {
+			b.logger.Error("could not remove ordinary bridge message", "err", err)
+
+			return err
+		}
+
+		b.logger.Info(fmt.Sprintf("Bridge message %s has been successfully processed", id.String()))
+
+		return nil
+	}
+
+	msg.SourceChainID = did
+	msg.DestinationChainID = sid
+	msg.IsRollback = true
+
+	committed, err := b.isBridgeMessageCommitted(header, msg)
+	if err != nil {
+		return err
+	}
+
+	if committed {
+		b.logger.Info(fmt.Sprintf("Bridge message %s has already been moved to the rollback bucket",
+			id.String()))
+
+		return nil
+	}
+
+	rollbackMsg, err := b.state.getBridgeMessageEvent(id, sid, did, false, dbTx)
+	if err != nil {
+		b.logger.Error("could not get ordinary bridge message", "err", err)
+
+		return err
+	}
+
+	rollbackMsg.SourceChainID = did
+	rollbackMsg.DestinationChainID = sid
+
+	if err := b.state.insertBridgeMessageEvent(rollbackMsg, true, dbTx); err != nil {
+		b.logger.Error("could not insert bridge message to rollback bucket", "err", err)
+
+		return err
+	}
+
+	if err := b.state.removeBridgeMessageEvent(id, sid, did, false, dbTx); err != nil {
+		b.logger.Error("could not remove ordinary bridge message", "err", err)
+
+		return err
+	}
+
+	b.logger.Info(fmt.Sprintf("Bridge message %s has been successfully moved to the rollback bucket",
+		id.String()))
+
+	return nil
+}
+
+// isBridgeMessageCommitted checks whether the bridge message has been committed up to the given
+// block (including the given block).
+func (b *bridgeEventManager) isBridgeMessageCommitted(
+	blockHeader *types.Header,
+	msg *contractsapi.BridgeMessage) (bool, error) {
+
+	// The verification process for determining whether a message has been committed depends on
+	// whether it is an ordinary or a rollback message.
+	//
+	// For an ordinary message, the verification is done by checking whether the message ID is
+	// smaller than the ID of the next message to be committed on the BridgeStorage.
+	//
+	// For a rollback message, the verification is done by checking whether the message ID is
+	// present in the corresponding list of committed rollback messages on the BridgeStorage.
+
+	provider, err := b.blockchain.GetStateProviderForBlock(blockHeader)
+	if err != nil {
+		return false, err
+	}
+
+	sysState := b.blockchain.GetSystemState(provider)
+
+	if msg.IsRollback {
+		if b.internalChainID == msg.SourceChainID.Uint64() {
+			return sysState.GetConfirmedRollbackedI2E(b.externalChainID, msg.ID)
+		} else {
+			return sysState.GetConfirmedRollbackedE2I(b.externalChainID, msg.ID)
+		}
+	}
+
+	// If it is not a rollback message, the following applies.
+
+	var nextToCommit uint64
+
+	if b.internalChainID == msg.SourceChainID.Uint64() {
+		nextToCommit, err = sysState.GetNextCommittedIndex(b.externalChainID, systemstate.I2E)
+	} else {
+		nextToCommit, err = sysState.GetNextCommittedIndex(b.externalChainID, systemstate.E2I)
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	if msg.ID.Uint64() < nextToCommit {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // createBridgeTxRelayer creates a new instance of txrelayer.TxRelayer

@@ -70,7 +70,7 @@ func CreateBridgeTransactionWithData(target types.Address, inputData []byte) *ty
 		types.WithFrom(contracts.SystemCaller),
 		types.WithTo(&target),
 		types.WithInput(inputData),
-		types.WithGas(types.StateTransactionGasLimit),
+		types.WithGas(types.BridgeTransactionGasLimit),
 	))
 
 	return tx.ComputeHash()

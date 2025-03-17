@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,6 +29,905 @@ import (
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
 )
+
+func TestE2E_Bridge_E2I_I2E_Conc(t *testing.T) {
+	const (
+		numberOfUsers     = 6 // 6
+		numberOfTransfers = 2 // 2
+	)
+
+	initNumOfERC20Events := numberOfUsers + 1
+	initNumOfERC721Events := numberOfUsers*numberOfTransfers + 1
+	initNumOfERC1155Events := numberOfUsers + 1
+	initNumOfNatTokEvents := numberOfUsers + 1
+	totalInitEvents := initNumOfERC20Events + initNumOfERC721Events + initNumOfERC1155Events + initNumOfNatTokEvents
+
+	e2iNum := 4 * numberOfUsers * numberOfTransfers
+	i2eNum := totalInitEvents + (4 * numberOfUsers * numberOfTransfers)
+
+	t.Logf("Number of users per token and direction: %d", numberOfUsers)
+	t.Logf("Number of users per token: %d", numberOfUsers*2)
+	t.Logf("Number of users per direction: %d", numberOfUsers*4)
+	t.Logf("Total number of users: %d", numberOfUsers*8)
+	t.Logf("Number of bridge messages per user: %d\n\n", numberOfTransfers)
+
+	t.Logf("Total number of bridge messages: %d", i2eNum+e2iNum)
+	t.Logf("\t- number of initialization messages: %d", totalInitEvents)
+	t.Logf("\t- number of execution messages: %d", i2eNum+e2iNum-totalInitEvents)
+	t.Logf("\t- number of I2E execution messages: %d", i2eNum-totalInitEvents)
+	t.Logf("\t- number of E2I execution messages: %d", e2iNum)
+
+	var allAddresses []string
+
+	genAccFn := func(accounts []*crypto.ECDSAKey) {
+		for i := range numberOfUsers {
+			ecdsaKey, err := crypto.GenerateECDSAKey()
+			require.NoError(t, err)
+
+			accounts[i] = ecdsaKey
+
+			allAddresses = append(allAddresses, accounts[i].Address().String())
+
+			t.Logf("#%d - %s", i+1, accounts[i].Address().String())
+		}
+	}
+
+	i2eERC20Accounts := make([]*crypto.ECDSAKey, numberOfUsers)
+	e2iERC20Accounts := make([]*crypto.ECDSAKey, numberOfUsers)
+
+	t.Logf("%d I2E ERC20 accounts were created with the following addresses:", numberOfUsers)
+
+	genAccFn(i2eERC20Accounts)
+
+	t.Logf("%d E2I ERC20 accounts were created with the following addresses:", numberOfUsers)
+
+	genAccFn(e2iERC20Accounts)
+
+	i2eERC721Accounts := make([]*crypto.ECDSAKey, numberOfUsers)
+	e2iERC721Accounts := make([]*crypto.ECDSAKey, numberOfUsers)
+
+	t.Logf("%d I2E ERC721 accounts were created with the following addresses:", numberOfUsers)
+
+	genAccFn(i2eERC721Accounts)
+
+	t.Logf("%d E2I ERC721 accounts were created with the following addresses:", numberOfUsers)
+
+	genAccFn(e2iERC721Accounts)
+
+	i2eERC1155Accounts := make([]*crypto.ECDSAKey, numberOfUsers)
+	e2iERC1155Accounts := make([]*crypto.ECDSAKey, numberOfUsers)
+
+	t.Logf("%d I2E ERC1155 accounts were created with the following addresses:", numberOfUsers)
+
+	genAccFn(i2eERC1155Accounts)
+
+	t.Logf("%d E2I ERC1155 accounts were created with the following addresses:", numberOfUsers)
+
+	genAccFn(e2iERC1155Accounts)
+
+	i2eNatTokAccounts := make([]*crypto.ECDSAKey, numberOfUsers)
+	e2iNatTokAccounts := make([]*crypto.ECDSAKey, numberOfUsers)
+
+	t.Logf("%d I2E Native token accounts were created with the following addresses:", numberOfUsers)
+
+	genAccFn(i2eNatTokAccounts)
+
+	t.Logf("%d E2I Native token accounts were created with the following addresses:", numberOfUsers)
+
+	genAccFn(e2iNatTokAccounts)
+
+	deployerKeyERC20, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+	deployerKeyERC721, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+	deployerKeyERC1155, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
+	cluster := framework.NewTestCluster(t, 5,
+		framework.WithTestRewardToken(),
+		framework.WithNumBlockConfirmations(10),
+		framework.WithEpochSize(20),
+		framework.WithBridges(1),
+		framework.WithSecretsCallback(func(_ []types.Address, tcc *framework.TestClusterConfig) {
+			tcc.Premine = append(tcc.Premine, allAddresses...)
+			tcc.Premine = append(tcc.Premine, deployerKeyERC20.Address().String(),
+				deployerKeyERC721.Address().String(),
+				deployerKeyERC1155.Address().String())
+		}))
+
+	defer cluster.Stop()
+
+	cluster.WaitForReady(t)
+
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, chainConfigFile))
+	require.NoError(t, err)
+
+	externalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(cluster.Bridges[0].JSONRPCAddr()))
+	require.NoError(t, err)
+
+	externalChainID, err := externalChainTxRelayer.Client().ChainID()
+	require.NoError(t, err)
+
+	internalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(cluster.Servers[0].JSONRPC()))
+	require.NoError(t, err)
+
+	internalChainID, err := internalChainTxRelayer.Client().ChainID()
+	require.NoError(t, err)
+
+	bridgeConfig := polybftCfg.Bridge[externalChainID.Uint64()]
+
+	deployRootFn := func(contract []byte, deployerKey *crypto.ECDSAKey) types.Address {
+		tx := types.NewTx(types.NewLegacyTx(
+			types.WithTo(nil),
+			types.WithInput(contract),
+		))
+
+		receipt, err := internalChainTxRelayer.SendTransaction(tx, deployerKey)
+		require.NoError(t, err)
+		require.NotNil(t, receipt)
+		require.Equal(t, uint64(types.ReceiptSuccess), receipt.Status)
+
+		return types.Address(receipt.ContractAddress)
+	}
+
+	var (
+		rootERC20Token   types.Address
+		rootERC721Token  types.Address
+		rootERC1155Token types.Address
+		rootNativeToken  types.Address
+	)
+
+	wg := sync.WaitGroup{}
+
+	wg.Add(4)
+
+	timer := time.Now().UTC()
+
+	// ERC20 initialization
+	go func() {
+		defer wg.Done()
+
+		rootERC20Token = deployRootFn(contractsapi.RootERC20.Bytecode, deployerKeyERC20)
+		t.Logf("Root ERC20 smart contract was successfully deployed on the internal chain %d at address %s",
+			internalChainID, rootERC20Token.String())
+
+		pk, err := deployerKeyERC20.MarshallPrivateKey()
+		require.NoError(t, err)
+
+		deployer := hex.EncodeToString(pk)
+
+		for i := range numberOfUsers {
+			require.NoError(t,
+				cluster.Bridges[0].Deposit(
+					common.ERC20,
+					rootERC20Token,
+					bridgeConfig.InternalMintableERC20PredicateAddr,
+					deployer,
+					e2iERC20Accounts[i].Address().String(),
+					"1000000",
+					"",
+					cluster.Servers[0].JSONRPCAddr(),
+					deployer,
+					true,
+				))
+
+			require.NoError(t,
+				cluster.Bridges[0].MintERC20(
+					rootERC20Token,
+					i2eERC20Accounts[i].Address().String(),
+					"1000000",
+					cluster.Servers[0].JSONRPCAddr(),
+					deployer,
+				))
+		}
+	}()
+
+	// ERC721 initialization
+	go func() {
+		defer wg.Done()
+
+		rootERC721Token = deployRootFn(contractsapi.RootERC721.Bytecode, deployerKeyERC721)
+		t.Logf("Root ERC721 smart contract was successfully deployed on the internal chain %d at address %s",
+			internalChainID, rootERC721Token.String())
+
+		pk, err := deployerKeyERC721.MarshallPrivateKey()
+		require.NoError(t, err)
+
+		deployer := hex.EncodeToString(pk)
+
+		var idCounter int64
+
+		for i := range numberOfUsers {
+			for range numberOfTransfers {
+				require.NoError(t,
+					cluster.Bridges[0].MintERC721(
+						rootERC721Token,
+						i2eERC721Accounts[i].Address().String(),
+						cluster.Servers[0].JSONRPCAddr(),
+						deployer,
+					))
+
+				idCounter++
+			}
+		}
+
+		for i := range numberOfUsers {
+			for range numberOfTransfers {
+				require.NoError(t,
+					cluster.Bridges[0].Deposit(
+						common.ERC721,
+						rootERC721Token,
+						bridgeConfig.InternalMintableERC721PredicateAddr,
+						deployer,
+						e2iERC721Accounts[i].Address().String(),
+						"",
+						fmt.Sprintf("%d", idCounter),
+						cluster.Servers[0].JSONRPCAddr(),
+						deployer,
+						true,
+					))
+
+				idCounter++
+			}
+		}
+	}()
+
+	// ERC1155 initialization
+	go func() {
+		defer wg.Done()
+
+		rootERC1155Token = deployRootFn(contractsapi.RootERC1155.Bytecode, deployerKeyERC1155)
+		t.Logf("Root ERC1155 smart contract was successfully deployed on the internal chain %d at address %s",
+			internalChainID, rootERC1155Token.String())
+
+		pk, err := deployerKeyERC1155.MarshallPrivateKey()
+		require.NoError(t, err)
+
+		deployer := hex.EncodeToString(pk)
+
+		for i := range numberOfUsers {
+			require.NoError(t,
+				cluster.Bridges[0].Deposit(
+					common.ERC1155,
+					rootERC1155Token,
+					bridgeConfig.InternalMintableERC1155PredicateAddr,
+					deployer,
+					e2iERC1155Accounts[i].Address().String(),
+					"1000000",
+					"20",
+					cluster.Servers[0].JSONRPCAddr(),
+					deployer,
+					true,
+				))
+
+			require.NoError(t,
+				cluster.Bridges[0].MintERC1155(
+					rootERC1155Token,
+					deployer,
+					i2eERC1155Accounts[i].Address().String(),
+					"20",
+					"1000000",
+					cluster.Servers[0].JSONRPCAddr(),
+				))
+		}
+	}()
+
+	initialBalance, err := internalChainTxRelayer.Client().GetBalance(i2eNatTokAccounts[0].Address(), jsonrpc.LatestBlockNumberOrHash)
+	require.NoError(t, err)
+
+	// Native token initialization
+	go func() {
+		defer wg.Done()
+
+		rootNativeToken = contracts.NativeERC20TokenContract
+		t.Logf("Root Native token smart contract was successfully \"deployed\" on the internal chain %d at address %s",
+			internalChainID, rootNativeToken.String())
+
+		for i := range numberOfUsers {
+			pk, err := e2iNatTokAccounts[i].MarshallPrivateKey()
+			require.NoError(t, err)
+
+			sender := hex.EncodeToString(pk)
+
+			require.NoError(t,
+				cluster.Bridges[0].Deposit(
+					common.ERC20,
+					rootNativeToken,
+					bridgeConfig.InternalMintableERC20PredicateAddr,
+					sender,
+					e2iNatTokAccounts[i].Address().String(),
+					"1000000",
+					"",
+					cluster.Servers[0].JSONRPCAddr(),
+					"",
+					true,
+				))
+		}
+	}()
+
+	wg.Wait()
+
+	require.NoError(t, cluster.WaitUntil(time.Minute*100, time.Second*2, func() bool {
+		for i := range totalInitEvents {
+			if !isEventProcessed(t, bridgeConfig.ExternalGatewayAddr, externalChainTxRelayer, uint64(i+1), false) {
+				return false
+			}
+		}
+
+		return true
+	}))
+
+	childERC20Token := getChildToken(t, contractsapi.RootERC20Predicate.Abi,
+		bridgeConfig.InternalMintableERC20PredicateAddr, rootERC20Token, internalChainTxRelayer)
+
+	t.Logf("Child ERC20 smart contract was successfully deployed on the external chain at address %s", childERC20Token.String())
+
+	for _, account := range e2iERC20Accounts {
+		balance := erc20BalanceOf(t, account.Address(), childERC20Token, externalChainTxRelayer)
+		validBalance, _ := new(big.Int).SetString("1000000", 10)
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("E2I Account %s has the balance of %s tokens on the child ERC20 smart contract", account.Address().String(), balance.String())
+
+		balance = erc20BalanceOf(t, account.Address(), rootERC20Token, internalChainTxRelayer)
+		validBalance, _ = new(big.Int).SetString("0", 10)
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("E2I Account %s has the balance of %s tokens on the root ERC20 smart contract", account.Address().String(), balance.String())
+	}
+
+	for _, account := range i2eERC20Accounts {
+		balance := erc20BalanceOf(t, account.Address(), childERC20Token, externalChainTxRelayer)
+		validBalance, _ := new(big.Int).SetString("0", 10)
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("I2E Account %s has the balance of %s tokens on the child ERC20 smart contract", account.Address().String(), balance.String())
+
+		balance = erc20BalanceOf(t, account.Address(), rootERC20Token, internalChainTxRelayer)
+		validBalance, _ = new(big.Int).SetString("1000000", 10)
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("I2E Account %s has the balance of %s tokens on the root ERC20 smart contract", account.Address().String(), balance.String())
+	}
+
+	childERC721Token := getChildToken(t, contractsapi.RootERC721Predicate.Abi,
+		bridgeConfig.InternalMintableERC721PredicateAddr, rootERC721Token, internalChainTxRelayer)
+
+	t.Logf("Child ERC721 smart contract was successfully deployed on the external chain at address %s", childERC721Token.String())
+
+	idCounter := int64(0)
+
+	for _, account := range i2eERC721Accounts {
+		for range numberOfTransfers {
+			owner := erc721OwnerOf(t, big.NewInt(idCounter), rootERC721Token, internalChainTxRelayer)
+
+			require.Equal(t, account.Address(), owner)
+
+			t.Logf("I2E Account %s is the owner of the ERC721 token with ID %v tokens on the root ERC721 smart contract", account.Address().String(), idCounter)
+
+			idCounter++
+		}
+	}
+
+	for _, account := range e2iERC721Accounts {
+		for range numberOfTransfers {
+			owner := erc721OwnerOf(t, big.NewInt(idCounter), childERC721Token, externalChainTxRelayer)
+
+			require.Equal(t, account.Address(), owner)
+
+			t.Logf("E2I Account %s is the owner of the ERC721 token with ID %v tokens on the child ERC721 smart contract", account.Address().String(), idCounter)
+
+			idCounter++
+		}
+	}
+
+	childERC1155Token := getChildToken(t, contractsapi.RootERC1155Predicate.Abi,
+		bridgeConfig.InternalMintableERC1155PredicateAddr, rootERC1155Token, internalChainTxRelayer)
+
+	t.Logf("Child ERC1155 smart contract was successfully deployed on the external chain at address %s", childERC1155Token.String())
+
+	for _, account := range i2eERC1155Accounts {
+		balanceOfFn := &contractsapi.BalanceOfChildERC1155Fn{
+			Account: account.Address(),
+			ID:      big.NewInt(20),
+		}
+
+		balanceInput, err := balanceOfFn.EncodeAbi()
+		require.NoError(t, err)
+
+		balanceRaw, err := internalChainTxRelayer.Call(types.ZeroAddress, rootERC1155Token, balanceInput)
+		require.NoError(t, err)
+
+		balance, err := helperCommon.ParseUint256orHex(&balanceRaw)
+		require.NoError(t, err)
+
+		validBalance := big.NewInt(1000000)
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("Account %s has the balance of %s tokens on the root ERC1155 smart contract (ID 20)", account.Address().String(), balance.String())
+	}
+
+	for _, account := range e2iERC1155Accounts {
+		balanceOfFn := &contractsapi.BalanceOfChildERC1155Fn{
+			Account: account.Address(),
+			ID:      big.NewInt(20),
+		}
+
+		balanceInput, err := balanceOfFn.EncodeAbi()
+		require.NoError(t, err)
+
+		balanceRaw, err := externalChainTxRelayer.Call(types.ZeroAddress, childERC1155Token, balanceInput)
+		require.NoError(t, err)
+
+		balance, err := helperCommon.ParseUint256orHex(&balanceRaw)
+		require.NoError(t, err)
+
+		validBalance := big.NewInt(1000000)
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("Account %s has the balance of %s tokens on the child ERC1155 smart contract (ID 20)", account.Address().String(), balance.String())
+	}
+
+	childNativeToken := getChildToken(t, contractsapi.RootERC20Predicate.Abi,
+		bridgeConfig.InternalMintableERC20PredicateAddr, rootNativeToken, internalChainTxRelayer)
+
+	t.Logf("Child Native token smart contract was successfully deployed on the external chain at address %s", childERC20Token.String())
+
+	var (
+		postInitI2EInternalBalance, postInitI2EExternalBalance *big.Int
+		postInitE2IInternalBalance, postInitE2IExternalBalance *big.Int
+	)
+
+	postInitI2EInternalBalance = initialBalance
+	postInitI2EExternalBalance = big.NewInt(0)
+
+	transferred, _ := new(big.Int).SetString("1000000", 10)
+	postInitE2IInternalBalance = big.NewInt(0).Sub(initialBalance, transferred)
+	postInitE2IExternalBalance = transferred
+
+	fmt.Println(postInitI2EInternalBalance, postInitI2EExternalBalance, postInitE2IInternalBalance, postInitE2IExternalBalance)
+
+	for _, account := range e2iNatTokAccounts {
+		balance := erc20BalanceOf(t, account.Address(), childNativeToken, externalChainTxRelayer)
+
+		require.Equal(t, postInitE2IExternalBalance, balance)
+
+		t.Logf("E2I Account %s has the balance of %s tokens on the child Native token smart contract", account.Address().String(), balance.String())
+
+		balance, err := internalChainTxRelayer.Client().GetBalance(account.Address(), jsonrpc.LatestBlockNumberOrHash)
+		require.NoError(t, err)
+
+		require.Equal(t, postInitE2IInternalBalance, balance)
+
+		t.Logf("E2I Account %s has the balance of %s tokens on the root Native token smart contract", account.Address().String(), balance.String())
+	}
+
+	for _, account := range i2eERC20Accounts {
+		balance := erc20BalanceOf(t, account.Address(), childNativeToken, externalChainTxRelayer)
+
+		require.Equal(t, postInitI2EExternalBalance, balance)
+
+		t.Logf("I2E Account %s has the balance of %s tokens on the child Native token smart contract", account.Address().String(), balance.String())
+
+		balance, err := internalChainTxRelayer.Client().GetBalance(account.Address(), jsonrpc.LatestBlockNumberOrHash)
+		require.NoError(t, err)
+
+		require.Equal(t, postInitI2EInternalBalance, balance)
+
+		t.Logf("I2E Account %s has the balance of %s tokens on the root Native token smart contract", account.Address().String(), balance.String())
+	}
+
+	t.Logf("END OF INIT PHASE, total time: %v", time.Now().UTC().Sub(timer))
+
+	timer = time.Now().UTC()
+
+	// ERC20
+	for i := range numberOfUsers {
+		wg.Add(2)
+
+		// internal -> external
+		go func() {
+			defer wg.Done()
+
+			sender, err := i2eERC20Accounts[i].MarshallPrivateKey()
+			require.NoError(t, err)
+
+			for range numberOfTransfers {
+				require.NoError(t,
+					cluster.Bridges[0].Deposit(
+						common.ERC20,
+						rootERC20Token,
+						bridgeConfig.InternalMintableERC20PredicateAddr,
+						hex.EncodeToString(sender),
+						i2eERC20Accounts[i].Address().String(),
+						"10",
+						"",
+						cluster.Servers[0].JSONRPCAddr(),
+						"",
+						false,
+					))
+			}
+		}()
+
+		// external -> internal
+		go func() {
+			defer wg.Done()
+
+			sender, err := e2iERC20Accounts[i].MarshallPrivateKey()
+			require.NoError(t, err)
+
+			for range numberOfTransfers {
+				require.NoError(t,
+					cluster.Bridges[0].Withdraw(
+						common.ERC20,
+						hex.EncodeToString(sender),
+						e2iERC20Accounts[i].Address().String(),
+						"10",
+						"",
+						cluster.Bridges[0].JSONRPCAddr(),
+						bridgeConfig.ExternalMintableERC20PredicateAddr,
+						childERC20Token,
+						false))
+			}
+		}()
+	}
+
+	// ERC721
+	for i := range numberOfUsers {
+		wg.Add(2)
+
+		startI2E := i * numberOfTransfers
+		startE2I := i*numberOfTransfers + numberOfUsers*numberOfTransfers
+
+		// internal -> external
+		go func() {
+			defer wg.Done()
+
+			sender, err := i2eERC721Accounts[i].MarshallPrivateKey()
+			require.NoError(t, err)
+
+			for j := range numberOfTransfers {
+				require.NoError(t,
+					cluster.Bridges[0].Deposit(
+						common.ERC721,
+						rootERC721Token,
+						bridgeConfig.InternalMintableERC721PredicateAddr,
+						hex.EncodeToString(sender),
+						i2eERC721Accounts[i].Address().String(),
+						"",
+						fmt.Sprintf("%d", startI2E+j),
+						cluster.Servers[0].JSONRPCAddr(),
+						"",
+						false,
+					))
+			}
+		}()
+
+		// external -> internal
+		go func() {
+			defer wg.Done()
+
+			sender, err := e2iERC721Accounts[i].MarshallPrivateKey()
+			require.NoError(t, err)
+
+			for j := range numberOfTransfers {
+				require.NoError(t,
+					cluster.Bridges[0].Withdraw(
+						common.ERC721,
+						hex.EncodeToString(sender),
+						e2iERC721Accounts[i].Address().String(),
+						"",
+						fmt.Sprintf("%d", startE2I+j),
+						cluster.Bridges[0].JSONRPCAddr(),
+						bridgeConfig.ExternalMintableERC721PredicateAddr,
+						childERC721Token,
+						false))
+			}
+		}()
+	}
+
+	// ERC1155
+	for i := range numberOfUsers {
+		wg.Add(2)
+
+		// internal -> external
+		go func() {
+			defer wg.Done()
+
+			sender, err := i2eERC1155Accounts[i].MarshallPrivateKey()
+			require.NoError(t, err)
+
+			for range numberOfTransfers {
+				require.NoError(t,
+					cluster.Bridges[0].Deposit(
+						common.ERC1155,
+						rootERC1155Token,
+						bridgeConfig.InternalMintableERC1155PredicateAddr,
+						hex.EncodeToString(sender),
+						i2eERC1155Accounts[i].Address().String(),
+						"10",
+						"20",
+						cluster.Servers[0].JSONRPCAddr(),
+						"",
+						false,
+					))
+			}
+		}()
+
+		// external -> internal
+		go func() {
+			defer wg.Done()
+
+			sender, err := e2iERC1155Accounts[i].MarshallPrivateKey()
+			require.NoError(t, err)
+
+			for range numberOfTransfers {
+				require.NoError(t,
+					cluster.Bridges[0].Withdraw(
+						common.ERC1155,
+						hex.EncodeToString(sender),
+						e2iERC1155Accounts[i].Address().String(),
+						"10",
+						"20",
+						cluster.Bridges[0].JSONRPCAddr(),
+						bridgeConfig.ExternalMintableERC1155PredicateAddr,
+						childERC1155Token,
+						false))
+			}
+		}()
+	}
+
+	// Native tokens
+	for i := range numberOfUsers {
+		wg.Add(2)
+
+		// internal -> external
+		go func() {
+			defer wg.Done()
+
+			sender, err := i2eNatTokAccounts[i].MarshallPrivateKey()
+			require.NoError(t, err)
+
+			for range numberOfTransfers {
+				require.NoError(t,
+					cluster.Bridges[0].Deposit(
+						common.ERC20,
+						rootNativeToken,
+						bridgeConfig.InternalMintableERC20PredicateAddr,
+						hex.EncodeToString(sender),
+						i2eNatTokAccounts[i].Address().String(),
+						"10",
+						"",
+						cluster.Servers[0].JSONRPCAddr(),
+						"",
+						false,
+					))
+			}
+		}()
+
+		// external -> internal
+		go func() {
+			defer wg.Done()
+
+			sender, err := e2iNatTokAccounts[i].MarshallPrivateKey()
+			require.NoError(t, err)
+
+			for range numberOfTransfers {
+				require.NoError(t,
+					cluster.Bridges[0].Withdraw(
+						common.ERC20,
+						hex.EncodeToString(sender),
+						e2iNatTokAccounts[i].Address().String(),
+						"10",
+						"",
+						cluster.Bridges[0].JSONRPCAddr(),
+						bridgeConfig.ExternalMintableERC20PredicateAddr,
+						childNativeToken,
+						false))
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	require.NoError(t, cluster.WaitUntil(time.Minute*100, time.Second*2, func() bool {
+		for i := range e2iNum {
+			if !isEventProcessed(t, bridgeConfig.InternalGatewayAddr, internalChainTxRelayer, uint64(i+1), false) {
+				return false
+			}
+		}
+
+		return true
+	}))
+
+	require.NoError(t, cluster.WaitUntil(time.Minute*100, time.Second*2, func() bool {
+		for i := range i2eNum {
+			if !isEventProcessed(t, bridgeConfig.ExternalGatewayAddr, externalChainTxRelayer, uint64(i+1), false) {
+				return false
+			}
+		}
+
+		return true
+	}))
+
+	const diff = numberOfTransfers * 10
+
+	// ERC20 balance check, internal -> external
+	for _, account := range i2eERC20Accounts {
+		balance := erc20BalanceOf(t, account.Address(), childERC20Token, externalChainTxRelayer)
+		validBalance := big.NewInt(diff)
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("I2E Account %s has the balance of %s tokens on the child ERC20 smart contract", account.Address().String(), balance.String())
+
+		balance = erc20BalanceOf(t, account.Address(), rootERC20Token, internalChainTxRelayer)
+		validBalance = big.NewInt(1000000 - diff)
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("I2E Account %s has the balance of %s tokens on the root ERC20 smart contract", account.Address().String(), balance.String())
+	}
+
+	// ERC20 balance check, external -> internal
+	for _, account := range e2iERC20Accounts {
+		balance := erc20BalanceOf(t, account.Address(), childERC20Token, externalChainTxRelayer)
+		validBalance := big.NewInt(1000000 - diff)
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("E2I Account %s has the balance of %s tokens on the child ERC20 smart contract", account.Address().String(), balance.String())
+
+		balance = erc20BalanceOf(t, account.Address(), rootERC20Token, internalChainTxRelayer)
+		validBalance = big.NewInt(diff)
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("E2I Account %s has the balance of %s tokens on the root ERC20 smart contract", account.Address().String(), balance.String())
+	}
+
+	idCounter = 0
+
+	// ERC721 balance check, internal -> external
+	for _, account := range i2eERC721Accounts {
+		for range numberOfTransfers {
+			owner := erc721OwnerOf(t, big.NewInt(idCounter), childERC721Token, externalChainTxRelayer)
+
+			require.Equal(t, account.Address(), owner)
+
+			t.Logf("I2E Account %s is the owner of the ERC721 token with ID %v tokens on the child ERC721 smart contract", account.Address().String(), idCounter)
+
+			idCounter++
+		}
+	}
+
+	// ERC721 balance check, external -> internal
+	for _, account := range e2iERC721Accounts {
+		for range numberOfTransfers {
+			owner := erc721OwnerOf(t, big.NewInt(idCounter), rootERC721Token, internalChainTxRelayer)
+
+			require.Equal(t, account.Address(), owner)
+
+			t.Logf("E2I Account %s is the owner of the ERC721 token with ID %v tokens on the root ERC721 smart contract", account.Address().String(), idCounter)
+
+			idCounter++
+		}
+	}
+
+	// ERC1155 balance check, internal -> external
+	for _, account := range i2eERC1155Accounts {
+		balanceOfFn := &contractsapi.BalanceOfChildERC1155Fn{
+			Account: account.Address(),
+			ID:      big.NewInt(20),
+		}
+
+		balanceInput, err := balanceOfFn.EncodeAbi()
+		require.NoError(t, err)
+
+		balanceRaw, err := internalChainTxRelayer.Call(types.ZeroAddress, rootERC1155Token, balanceInput)
+		require.NoError(t, err)
+
+		balance, err := helperCommon.ParseUint256orHex(&balanceRaw)
+		require.NoError(t, err)
+
+		validBalance := big.NewInt(1000000 - diff)
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("I2E Account %s has the balance of %s tokens on the root ERC1155 smart contract (ID 20)", account.Address().String(), balance.String())
+
+		balanceRaw, err = externalChainTxRelayer.Call(types.ZeroAddress, childERC1155Token, balanceInput)
+		require.NoError(t, err)
+
+		balance, err = helperCommon.ParseUint256orHex(&balanceRaw)
+		require.NoError(t, err)
+
+		validBalance = big.NewInt(diff)
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("I2E Account %s has the balance of %s tokens on the child ERC1155 smart contract (ID 20)", account.Address().String(), balance.String())
+	}
+
+	// ERC1155 balance check, external -> internal
+	for _, account := range e2iERC1155Accounts {
+		balanceOfFn := &contractsapi.BalanceOfChildERC1155Fn{
+			Account: account.Address(),
+			ID:      big.NewInt(20),
+		}
+
+		balanceInput, err := balanceOfFn.EncodeAbi()
+		require.NoError(t, err)
+
+		balanceRaw, err := externalChainTxRelayer.Call(types.ZeroAddress, childERC1155Token, balanceInput)
+		require.NoError(t, err)
+
+		balance, err := helperCommon.ParseUint256orHex(&balanceRaw)
+		require.NoError(t, err)
+
+		validBalance := big.NewInt(1000000 - diff)
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("E2I Account %s has the balance of %s tokens on the child ERC1155 smart contract (ID 20)", account.Address().String(), balance.String())
+
+		balanceRaw, err = internalChainTxRelayer.Call(types.ZeroAddress, rootERC1155Token, balanceInput)
+		require.NoError(t, err)
+
+		balance, err = helperCommon.ParseUint256orHex(&balanceRaw)
+		require.NoError(t, err)
+
+		validBalance = big.NewInt(diff)
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("E2I Account %s has the balance of %s tokens on the root ERC1155 smart contract (ID 20)", account.Address().String(), balance.String())
+	}
+
+	// Native token balance check, internal -> external
+	for _, account := range i2eNatTokAccounts {
+		balance := erc20BalanceOf(t, account.Address(), childNativeToken, externalChainTxRelayer)
+		validBalance := big.NewInt(diff)
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("I2E Account %s has the balance of %s tokens on the child native token smart contract", account.Address().String(), balance.String())
+
+		balance = erc20BalanceOf(t, account.Address(), rootNativeToken, internalChainTxRelayer)
+
+		validBalance.Sub(postInitI2EInternalBalance, big.NewInt(diff))
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("I2E Account %s has the balance of %s tokens on the root native token smart contract", account.Address().String(), balance.String())
+	}
+
+	// Native token balance check, external -> internal
+	for _, account := range e2iNatTokAccounts {
+		balance := erc20BalanceOf(t, account.Address(), childNativeToken, externalChainTxRelayer)
+		validBalance := big.NewInt(0).Sub(postInitE2IExternalBalance, big.NewInt(diff))
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("E2I Account %s has the balance of %s tokens on the child native token smart contract", account.Address().String(), balance.String())
+
+		balance = erc20BalanceOf(t, account.Address(), rootNativeToken, internalChainTxRelayer)
+
+		validBalance.Add(postInitE2IInternalBalance, big.NewInt(diff))
+
+		require.Equal(t, validBalance, balance)
+
+		t.Logf("E2I Account %s has the balance of %s tokens on the root native token smart contract", account.Address().String(), balance.String())
+	}
+
+	t.Logf("END OF EXE PHASE, total time: %v", time.Now().UTC().Sub(timer))
+}
 
 func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 	const (

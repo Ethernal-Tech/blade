@@ -37,7 +37,9 @@ const (
 	StakeTokenFlagDesc      = "address of ERC20 token used for staking"
 	AddressesFlag           = "addresses"
 	AmountsFlag             = "amounts"
-	Erc20TokenFlag          = "erc20-token" //nolint:gosec
+	Erc20TokenFlag          = "erc20-token"   //nolint:gosec
+	Erc721TokenFlag         = "erc721-token"  //nolint:gosec
+	Erc1155TokenFlag        = "erc1155-token" ////nolint:gosec
 	BladeManagerFlagDesc    = "address of blade manager contract on a external chain"
 
 	ExternalChainLabelID     = "external-chain"
@@ -222,19 +224,48 @@ func GetValidatorInfo(validatorAddr types.Address, supernetManagerAddr, stakeMan
 }
 
 // CreateMintTxn encodes parameters for mint function on external chain token contract
-func CreateMintTxn(receiver, erc20TokenAddr types.Address,
+func CreateMintERC20Txn(receiver, tokenAddr types.Address,
 	amount *big.Int, externalChainTx bool) (*types.Transaction, error) {
-	mintFn := &contractsapi.MintRootERC20Fn{
+	m := &contractsapi.MintRootERC20Fn{
 		To:     receiver,
 		Amount: amount,
 	}
 
-	input, err := mintFn.EncodeAbi()
+	return createMintTx(m, tokenAddr, externalChainTx)
+}
+
+func CreateMintERC721Txn(receiver, tokenAddr types.Address, externalChainTx bool) (*types.Transaction, error) {
+	m := &contractsapi.MintRootERC721Fn{
+		To: receiver,
+	}
+
+	return createMintTx(m, tokenAddr, externalChainTx)
+}
+
+func CreateMintERC1155Txn(receiver types.Address, tokens, amounts []*big.Int, tokenAddr types.Address,
+	externalChainTx bool) (*types.Transaction, error) {
+	m := &contractsapi.MintBatchRootERC1155Fn{
+		To:      receiver,
+		Amounts: amounts,
+		IDs:     tokens,
+	}
+
+	return createMintTx(m, tokenAddr, externalChainTx)
+}
+
+type mint interface {
+	Sig() []byte
+	EncodeAbi() ([]byte, error)
+	DecodeAbi(buf []byte) error
+}
+
+func createMintTx(m mint, tokenAddr types.Address, isDynamicTx bool) (*types.Transaction, error) {
+	input, err := m.EncodeAbi()
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode provided parameters: %w", err)
 	}
 
-	txn := CreateTransaction(types.ZeroAddress, &erc20TokenAddr, input, nil, externalChainTx)
+	txn := CreateTransaction(types.ZeroAddress, &tokenAddr, input, nil, isDynamicTx)
 
 	return txn, nil
 }

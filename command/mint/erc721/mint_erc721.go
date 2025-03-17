@@ -20,8 +20,8 @@ var (
 // GetCommand returns the external chain fund command
 func GetCommand() *cobra.Command {
 	mintCmd := &cobra.Command{
-		Use:     "mint-erc20",
-		Short:   "Mints ERC20 tokens to specified addresses",
+		Use:     "mint-erc721",
+		Short:   "Mints ERC721 tokens to specified addresses",
 		PreRunE: preRunCommand,
 		Run:     runCommand,
 	}
@@ -54,18 +54,11 @@ func setFlags(cmd *cobra.Command) {
 		"receivers addresses",
 	)
 
-	cmd.Flags().StringSliceVar(
-		&params.amounts,
-		bridgeHelper.AmountsFlag,
-		nil,
-		"erc20 token amounts",
-	)
-
 	cmd.Flags().StringVar(
 		&params.tokenAddr,
-		bridgeHelper.Erc20TokenFlag,
+		bridgeHelper.Erc721TokenFlag,
 		"",
-		"erc20 token address",
+		"erc721 token address",
 	)
 
 	cmd.Flags().DurationVar(
@@ -75,7 +68,7 @@ func setFlags(cmd *cobra.Command) {
 		helper.TxTimeoutDesc,
 	)
 
-	_ = cmd.MarkFlagRequired(bridgeHelper.Erc20TokenFlag)
+	_ = cmd.MarkFlagRequired(bridgeHelper.Erc721TokenFlag)
 }
 
 func runCommand(cmd *cobra.Command, _ []string) {
@@ -113,9 +106,8 @@ func runCommand(cmd *cobra.Command, _ []string) {
 			default:
 				// mint tokens to address
 				addr := types.StringToAddress(params.addresses[i])
-				amount := params.amountValues[i]
 
-				mintTxn, err := bridgeHelper.CreateMintTxn(addr, tokenAddr, amount, true)
+				mintTxn, err := bridgeHelper.CreateMintERC721Txn(addr, tokenAddr, false)
 				if err != nil {
 					return fmt.Errorf("failed to create mint native tokens transaction for validator '%s'. err: %w",
 						addr, err)
@@ -132,7 +124,6 @@ func runCommand(cmd *cobra.Command, _ []string) {
 
 				results[i] = &mintResult{
 					Address: addr,
-					Amount:  amount,
 					TxHash:  types.Hash(receipt.TransactionHash),
 				}
 
@@ -143,7 +134,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 
 	if err := g.Wait(); err != nil {
 		outputter.SetError(err)
-		_, _ = outputter.Write([]byte("[MINT-ERC20] Successfully minted tokens to following accounts\n"))
+		_, _ = outputter.Write([]byte("[MINT-ERC721] Successfully minted tokens to following accounts\n"))
 
 		for _, result := range results {
 			if result != nil {

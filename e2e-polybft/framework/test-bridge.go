@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"path"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -189,6 +190,98 @@ func (t *TestBridge) Deposit(token bridgeCommon.TokenType, rootTokenAddr, rootPr
 			args = append(args, "--internal-chain-mintable")
 		}
 	}
+
+	return t.cmdRun(args...)
+}
+
+func (t *TestBridge) MintERC20(token types.Address,
+	address, amount, jsonRPCAddr, minterKey string) error {
+	args := []string{}
+
+	if address == "" {
+		return errors.New("address is required")
+	}
+
+	if amount == "" {
+		return errors.New("amount is required")
+	}
+
+	if jsonRPCAddr == "" {
+		return errors.New("provide a JSON RPC endpoint URL")
+	}
+
+	if minterKey == "" {
+		return errors.New("minter key is required")
+	}
+
+	args = append(args,
+		"mint-erc20",
+		"--erc20-token", token.String(),
+		"--addresses", address,
+		"--amounts", amount,
+		"--private-key", minterKey,
+		"--jsonrpc", jsonRPCAddr)
+
+	return t.cmdRun(args...)
+}
+
+func (t *TestBridge) MintERC721(token types.Address,
+	address, jsonRPCAddr, minterKey string) error {
+	args := []string{}
+
+	if address == "" {
+		return errors.New("address is required")
+	}
+
+	if jsonRPCAddr == "" {
+		return errors.New("provide a JSON RPC endpoint URL")
+	}
+
+	if minterKey == "" {
+		return errors.New("minter is required")
+	}
+
+	args = append(args,
+		"mint-erc721",
+		"--erc721-token", token.String(),
+		"--addresses", address,
+		"--private-key", minterKey,
+		"--jsonrpc", jsonRPCAddr)
+
+	return t.cmdRun(args...)
+}
+
+func (t *TestBridge) MintERC1155(ercToken types.Address, minter, address, tokens, amounts, jsonRPCAddr string) error {
+	args := []string{}
+
+	if minter == "" {
+		return errors.New("minter is required")
+	}
+
+	if address == "" {
+		return errors.New("address is required")
+	}
+
+	if tokens == "" {
+		return errors.New("tokens (their IDs) are required")
+	}
+
+	if amounts == "" {
+		return errors.New("amounts are required")
+	}
+
+	if jsonRPCAddr == "" {
+		return errors.New("provide a JSON RPC endpoint URL")
+	}
+
+	args = append(args,
+		"mint-erc1155",
+		"--erc1155-token", ercToken.String(),
+		"--minter", minter,
+		"--address", address,
+		"--tokens", strings.Join(strings.Fields(tokens), ","),
+		"--amounts", strings.Join(strings.Fields(amounts), ","),
+		"--jsonrpc", jsonRPCAddr)
 
 	return t.cmdRun(args...)
 }

@@ -20,8 +20,8 @@ var (
 type ChainType int
 
 const (
-	Internal ChainType = iota // Internal = 0
-	External                  // External = 1
+	I2E ChainType = iota // Internal = 0
+	E2I                  // External = 1
 )
 
 // SystemState is an interface to interact with the consensus system contracts in the chain
@@ -36,6 +36,10 @@ type SystemState interface {
 	GetValidatorSetByNumber(numberOfValidatorSet *big.Int) (*contractsapi.SignedValidatorSet, error)
 
 	GetBatchCommitCounter(batchHash types.Hash) (*big.Int, error)
+
+	GetConfirmedRollbackedI2E(chainID uint64, id *big.Int) (bool, error)
+
+	GetConfirmedRollbackedE2I(chainID uint64, id *big.Int) (bool, error)
 }
 
 var _ SystemState = &SystemStateImpl{}
@@ -85,9 +89,9 @@ func (s *SystemStateImpl) GetNextCommittedIndex(chainID uint64, chainType ChainT
 	var funcName string
 
 	switch chainType {
-	case Internal:
+	case I2E:
 		funcName = "lastCommittedI2E"
-	case External:
+	case E2I:
 		funcName = "lastCommittedE2I"
 	default:
 		return 0, fmt.Errorf("unsupported chain type: %d", chainType)
@@ -164,6 +168,38 @@ func (s *SystemStateImpl) GetBatchCommitCounter(hash types.Hash) (*big.Int, erro
 	}
 
 	return num, nil
+}
+
+func (s *SystemStateImpl) GetConfirmedRollbackedI2E(chainID uint64, id *big.Int) (bool, error) {
+	funcName := "getConfirmedRollbackedI2E"
+
+	rawResult, err := s.bridgeStorageContract.Call(funcName, ethgo.Latest, new(big.Int).SetUint64(chainID), id)
+	if err != nil {
+		return false, err
+	}
+
+	committed, isOk := rawResult["0"].(bool)
+	if !isOk {
+		return false, fmt.Errorf("failed to decode batch commit counter")
+	}
+
+	return committed, nil
+}
+
+func (s *SystemStateImpl) GetConfirmedRollbackedE2I(chainID uint64, id *big.Int) (bool, error) {
+	funcName := "getConfirmedRollbackedE2I"
+
+	rawResult, err := s.bridgeStorageContract.Call(funcName, ethgo.Latest, new(big.Int).SetUint64(chainID), id)
+	if err != nil {
+		return false, err
+	}
+
+	committed, isOk := rawResult["0"].(bool)
+	if !isOk {
+		return false, fmt.Errorf("failed to decode batch commit counter")
+	}
+
+	return committed, nil
 }
 
 var _ contract.Provider = &stateProvider{}

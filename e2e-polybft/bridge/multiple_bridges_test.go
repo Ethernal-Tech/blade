@@ -25,6 +25,10 @@ import (
 	"github.com/0xPolygon/polygon-edge/helper/hex"
 )
 
+const (
+	chainConfigFile = "genesis.json"
+)
+
 // The purpose of this test is to verify the correctness of bridging different token types (ERC20, ERC721, ERC1155) between
 // an internal chain and potentially multiple external chains. The external chains represent the source chains of the tokens.
 // This means that token creation (minting) is performed on them. The test content and flow is relatively straightforward. The
