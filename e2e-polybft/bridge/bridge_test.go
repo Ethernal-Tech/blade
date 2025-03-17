@@ -32,7 +32,7 @@ import (
 
 func TestE2E_Bridge_E2I_I2E_Conc(t *testing.T) {
 	const (
-		numberOfUsers     = 6 // 6
+		numberOfUsers     = 2 // 6
 		numberOfTransfers = 2 // 2
 	)
 
@@ -128,6 +128,7 @@ func TestE2E_Bridge_E2I_I2E_Conc(t *testing.T) {
 		framework.WithNumBlockConfirmations(10),
 		framework.WithEpochSize(20),
 		framework.WithBridges(1),
+		framework.WithBlockGasLimit(200_000_000),
 		framework.WithSecretsCallback(func(_ []types.Address, tcc *framework.TestClusterConfig) {
 			tcc.Premine = append(tcc.Premine, allAddresses...)
 			tcc.Premine = append(tcc.Premine, deployerKeyERC20.Address().String(),

@@ -50,7 +50,7 @@ var (
 	newValidatorSetStoredEventSig = new(contractsapi.NewValidatorSetStoredEvent).Sig()
 )
 
-const maxNumberOfBatchEvents = 7
+const maxNumberOfBatchEvents = 10
 
 type Runtime interface {
 	IsActiveValidator() bool
