@@ -29,6 +29,21 @@ import (
 	"github.com/0xPolygon/polygon-edge/types"
 )
 
+// TestE2E_Bridge_ExternalChainTokensTransfers is an end-to-end test for the bridge functionality
+// involving external chain token transfers. It performs the following operations:
+//   - Sets up a test cluster with a bridge and initializes necessary configurations.
+//   - Generates multiple receiver accounts and premines them for testing purposes.
+//   - Deploys a RootERC20 token contract on the external chain.
+//   - Tests the deposit functionality by transferring ERC20 tokens from the external chain
+//     to the child chain via the bridge and verifies the balances on the child chain.
+//   - Tests the withdrawal functionality by transferring ERC20 tokens back from the child chain
+//     to the external chain and verifies the balances on the external chain.
+//   - Tests multiple deposit batches per epoch by sending deposits in subsets and verifying
+//     the processing of events and state syncs for each batch.
+//
+// The test ensures that all deposits and withdrawals are processed successfully, and the
+// balances on both chains are updated correctly. It also verifies the proper handling of
+// multiple deposit batches within the same epoch.
 func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 	const (
 		transfersCount        = 5
@@ -306,6 +321,21 @@ func TestE2E_Bridge_ExternalChainTokensTransfers(t *testing.T) {
 	})
 }
 
+// TestE2E_Bridge_ERC721Transfer is an end-to-end test for ERC721 token transfers
+// across a bridge between two blockchain networks. The test performs the following steps:
+//   - Initializes a test cluster with a specified number of nodes, epoch size, and bridge configuration.
+//   - Generates receiver accounts and token IDs for the transfer.
+//   - Deploys a root ERC721 token contract on the external chain.
+//   - Deposits ERC721 tokens from the external chain to the child chain via the bridge.
+//   - Waits for the transactions to be processed and verifies the success of the deposit events.
+//   - Retrieves and validates the child token address on both chains to ensure consistency.
+//   - Verifies that the deposited tokens are owned by the expected accounts on the child chain.
+//   - Performs withdrawals of the ERC721 tokens from the child chain back to the external chain.
+//   - Waits for the withdrawal events to be processed and verifies the success of the withdrawal events.
+//   - Asserts that the withdrawn tokens are owned by the expected accounts on the root chain.
+//
+// This test ensures the correctness of the ERC721 token transfer functionality across the bridge,
+// including deposit and withdrawal operations, event processing, and ownership validation.
 func TestE2E_Bridge_ERC721Transfer(t *testing.T) {
 	const (
 		transfersCount       = 4
@@ -486,6 +516,20 @@ func TestE2E_Bridge_ERC721Transfer(t *testing.T) {
 	}
 }
 
+// TestE2E_Bridge_ERC1155Transfer is an end-to-end test for ERC1155 token transfers
+// using a bridge between two blockchain networks. The test performs the following steps:
+//   - Initializes a test cluster with a specified number of nodes, epoch size, and bridge configuration.
+//   - Generates receiver accounts and prepares data for multiple ERC1155 token transfers.
+//   - Deploys a RootERC1155 token contract on the external chain.
+//   - Deposits ERC1155 tokens from the external chain to the child chain via the bridge.
+//   - Waits for the transactions to be processed and verifies the success events emitted by the bridge.
+//   - Retrieves the child token address on both L1 and L2 and ensures they match.
+//   - Verifies that the balances of the receivers on the child chain have increased by the deposited amounts.
+//   - Performs withdrawals of ERC1155 tokens from the child chain back to the external chain.
+//   - Waits for the withdrawal events to be processed and verifies the balances of the receivers on the RootERC1155 contract.
+//
+// The test ensures that the bridge correctly handles ERC1155 token deposits and withdrawals,
+// and that the balances on both chains are updated as expected.
 func TestE2E_Bridge_ERC1155Transfer(t *testing.T) {
 	const (
 		transfersCount       = 5
@@ -691,6 +735,14 @@ func TestE2E_Bridge_ERC1155Transfer(t *testing.T) {
 	}
 }
 
+// TestE2E_Bridge_InternalChainTokensTransfer is a test that ensures the correct behavior of token transfers
+// between an external chain and an internal bridge, covering both native tokens (ERC20) and NFTs (ERC721).
+// The test includes multiple key steps to validate the system's functionality, such as token deposits, withdrawals,
+// blocklist/allowlist manipulations, and verification of token ownership across chains. The test covers:
+//   - Deposit and withdrawal of native ERC20 tokens (mintable on the root chain) into the bridge and on the child chain.
+//   - ERC721 token minting, deposit, and withdrawal, ensuring the correct ownership of tokens after the operations.
+//   - Manipulation of the blocklist and allowlist, ensuring that only eligible accounts can perform deposit and withdrawal operations.
+//   - Verifying that the child chain's balances and owners are correctly updated after token transfers.
 func TestE2E_Bridge_InternalChainTokensTransfer(t *testing.T) {
 	const (
 		transfersCount = uint64(4)
@@ -1009,6 +1061,15 @@ func TestE2E_Bridge_InternalChainTokensTransfer(t *testing.T) {
 	})
 }
 
+// TestE2E_Bridge_Transfers_AccessLists is a test that ensures the functionality of ERC20 token transfers
+// on a bridge network, validating both deposit and withdrawal scenarios with access control via allowlists and blocklists.
+// The test involves multiple steps including:
+//   - Setting up a cluster with specific configurations, such as the number of blocks and the interval between them.
+//   - Deploying a Root ERC20 token on an external chain and configuring the test environment to interact with it.
+//   - Depositing ERC20 tokens into the bridge from multiple receivers, ensuring the transfers are successful and that balances are updated correctly.
+//   - Attempting a withdrawal before and after adding an account to the bridge allowlist, ensuring that access control works as expected.
+//   - Verifying that withdrawals are blocked when the account is added to the blocklist.
+//   - Validating the correct balances after all operations have been completed, ensuring that all transfers and withdrawals were processed accurately.
 func TestE2E_Bridge_Transfers_AccessLists(t *testing.T) {
 	var (
 		transfersCount = 5
@@ -1223,6 +1284,23 @@ func TestE2E_Bridge_Transfers_AccessLists(t *testing.T) {
 	})
 }
 
+// TestE2E_Bridge_NonMintableERC20Token_WithPremine tests the end-to-end bridging functionality between
+// a non-mintable ERC20 token and a blockchain bridge. The test involves a series of operations, such as
+// premining tokens to specific addresses, checking balances, performing withdrawals, deposits, and ensuring
+// the correct execution of bridge events. The test also handles the London fork (EIP-1559) and simulates various
+// user scenarios, such as transferring tokens and withdrawing them from the bridge. This test includes multiple
+// validations for both validator and non-validator addresses to verify correct token balances and bridge event
+// processing over several epochs.
+//
+// It performs the following actions:
+//   - Initializes a test cluster with several configurations, including a non-mintable ERC20 token and premined
+//     tokens for specific addresses.
+//   - Checks the initial token balances of premined addresses on both root and child chains.
+//   - Verifies that validators and non-validators can withdraw premined tokens from the bridge and checks their
+//     balances after withdrawal.
+//   - Simulates deposits to validator and non-validator addresses and waits for bridge events to process.
+//   - Verifies the success or failure of transfers, including edge cases such as transferring more native tokens
+//     than the source address holds.
 func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 	var (
 		stateSyncedLogsCount  = 2
@@ -1518,6 +1596,18 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 	})
 }
 
+// TestE2E_Bridge_L1OriginatedNativeToken_ERC20StakingToken tests the end-to-end functionality of the bridge
+// between an L1 originated native token and an ERC20 staking token. The test simulates a staking scenario
+// with two validators, where a specified stake amount is initially added, then another stake is added and
+// validated. Finally, the additional stake is unstaked, and the expected outcome is verified. This test
+// includes interaction with a test cluster, relayer, minting operations, and validation checks.
+//
+// It performs the following actions:
+// - Initializes a test cluster with multiple validators, setting up the configuration and staking parameters.
+// - Mints an ERC20 token and stakes it to the second validator's account.
+// - Adds a stake to the second validator, and waits for the epoch blocks to confirm.
+// - Verifies the correct amount of stake after the addition.
+// - Unstakes the previously added stake and checks if the validator's stake is restored to its initial value.
 func TestE2E_Bridge_L1OriginatedNativeToken_ERC20StakingToken(t *testing.T) {
 	const (
 		epochSize       = 5
@@ -1614,6 +1704,17 @@ func TestE2E_Bridge_L1OriginatedNativeToken_ERC20StakingToken(t *testing.T) {
 	require.True(t, secondValidatorInfo.Stake.Cmp(initialStake) == 0)
 }
 
+// TestE2E_Bridge_ValidatorSetChange tests the end-to-end functionality of the bridge
+// during a validator set change. It performs the following steps:
+//   - Sets up a test cluster with a specified epoch size, sprint size, and number of bridges.
+//   - Configures the cluster with a relayer private key and premines accounts for withdrawals.
+//   - Retrieves the initial validator set hash from the bridge storage, internal gateway,
+//     and external gateway, ensuring they are consistent.
+//   - Unstakes a validator and waits for the changes to propagate through the network.
+//   - Retrieves the updated validator set hash from the bridge storage, internal gateway,
+//     and external gateway, ensuring they are consistent and different from the initial hash.
+//   - Verifies that the validator set hash changes are correctly applied across the bridge
+//     components after the validator is unstaked.
 func TestE2E_Bridge_ValidatorSetChange(t *testing.T) {
 	const (
 		epochSize       = 10

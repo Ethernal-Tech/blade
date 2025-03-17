@@ -557,6 +557,33 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 	})
 }
 
+// TestE2E_Retry_I2E is an end-to-end test that verifies the retry mechanism for
+// ERC20 and ERC721 token deposits in a bridge setup. The test simulates scenarios
+// where the relayer is stopped during the deposit process and ensures that the
+// relayer can successfully retry and process the remaining events once restarted.
+//
+// The test is divided into two sub-tests:
+//  1. Retry_ERC20: Tests the retry mechanism for ERC20 token deposits. It verifies
+//     that the deposited tokens are correctly processed and balances are updated
+//     on the child chain after the relayer is restarted.
+//  2. Retry_ERC721: Tests the retry mechanism for ERC721 token deposits. It verifies
+//     that the deposited tokens are correctly processed and ownership is updated
+//     on the child chain after the relayer is restarted.
+//
+// The test setup includes:
+//   - Generating keys and addresses for depositors.
+//   - Deploying a test cluster with a bridge and relayer.
+//   - Configuring the bridge with appropriate parameters such as epoch size,
+//     batch threshold, and number of bridges.
+//   - Simulating relayer stoppage and restart to test the retry mechanism.
+//
+// Preconditions:
+// - The bridge and relayer must be properly configured and operational.
+// - The test cluster must be able to deploy contracts and process transactions.
+//
+// Postconditions:
+// - All deposit events are processed successfully after the relayer is restarted.
+// - ERC20 balances and ERC721 ownership are correctly updated on the child chain.
 func TestE2E_Retry_I2E(t *testing.T) {
 	const (
 		transfersCount   = uint64(5)
