@@ -82,7 +82,7 @@ func TestState_getBridgeMessages_Mix(t *testing.T) {
 	messages, numOfOrdinary, err := state.getBridgeMessages(1, maxNumberOfBatchEvents, 100, 1, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(7), numOfOrdinary)
-	assert.Equal(t, 7, len(messages))
+	assert.Equal(t, 10, len(messages))
 }
 
 func TestState_getBridgeEventsForBridgeBatch(t *testing.T) {
