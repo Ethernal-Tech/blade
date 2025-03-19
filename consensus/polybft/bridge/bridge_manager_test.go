@@ -13,6 +13,7 @@ import (
 	"github.com/Ethernal-Tech/ethgo/abi"
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/protobuf/proto"
@@ -22,6 +23,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/oracle"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/signer"
+	systemstate "github.com/0xPolygon/polygon-edge/consensus/polybft/system_state"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/validator"
 	"github.com/0xPolygon/polygon-edge/helper/common"
 	"github.com/0xPolygon/polygon-edge/types"
@@ -362,9 +364,17 @@ func TestBridgeEventManager_BuildBridgeBatch(t *testing.T) {
 func TestBridgeEventManager_RemoveProcessedEvents(t *testing.T) {
 	const bridgeMessageEventsCount = 5
 
+	sysState := new(systemstate.SystemStateMock)
+	sysState.On("GetNextCommittedIndex").Return(uint64(1000))
+
+	blockchain := new(blockchain.BlockchainMock)
+	blockchain.On("GetStateProviderForBlock", mock.Anything).Return(nil)
+	blockchain.On("GetSystemState", mock.Anything).Return(sysState)
+	blockchain.On("CurrentHeader", mock.Anything).Return(&types.Header{Number: 10})
+
 	vals := validator.NewTestValidators(t, 5)
 
-	s := newTestBridgeManager(t, vals.GetValidator("0"), &mockRuntime{isActiveValidator: true}, nil)
+	s := newTestBridgeManager(t, vals.GetValidator("0"), &mockRuntime{isActiveValidator: true}, blockchain)
 	bridgeMessageEvents := generateBridgeMessageEvents(t, bridgeMessageEventsCount, 1)
 
 	for _, event := range bridgeMessageEvents {
@@ -479,7 +489,15 @@ func TestBridgeEventManager_AddLog_BuildBridgeBatches(t *testing.T) {
 	t.Run("Node is not a validator", func(t *testing.T) {
 		t.Parallel()
 
-		s := newTestBridgeManager(t, vals.GetValidator("0"), &mockRuntime{isActiveValidator: false}, nil)
+		sysState := new(systemstate.SystemStateMock)
+		sysState.On("GetNextCommittedIndex").Return(uint64(1000))
+
+		blockchain := new(blockchain.BlockchainMock)
+		blockchain.On("GetStateProviderForBlock", mock.Anything).Return(nil)
+		blockchain.On("GetSystemState", mock.Anything).Return(sysState)
+		blockchain.On("CurrentHeader", mock.Anything).Return(&types.Header{Number: 10})
+
+		s := newTestBridgeManager(t, vals.GetValidator("0"), &mockRuntime{isActiveValidator: false}, blockchain)
 
 		// correct event log
 		data, err := abi.MustNewType("tuple(uint256 a, uint256 b, string c)").Encode([]string{"1", "100", "data"})
