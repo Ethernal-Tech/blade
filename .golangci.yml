@@ -78,6 +78,9 @@ issues:
     - path: types/state_tx.go
       linters:
         - dupl
+    - path: e2e-polybft/bridge/bridge_load_test.go
+      linters:
+        - dupl
   include:
     - EXC0012 # Exported (.+) should have comment( \(or a comment on this block\))? or be unexported
     - EXC0013 # Package comment should be of the form "(.+)...
