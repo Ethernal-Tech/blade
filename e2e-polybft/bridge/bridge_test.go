@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -2726,6 +2727,8 @@ func TestE2E_Bridge_ValidatorSyncTest(t *testing.T) {
 			tcc.Premine = append(tcc.Premine, relayerPrivateKey.String())
 		}))
 
+	defer cluster.Stop()
+
 	bridgeOne := 0
 
 	cluster.WaitForReady(t)
@@ -2769,6 +2772,7 @@ func TestE2E_Bridge_ValidatorSyncTest(t *testing.T) {
 	wg.Add(1)
 
 	go func() {
+		defer wg.Done()
 		// DEPOSIT ERC20 TOKENS
 		// send a few transactions to the bridge
 		require.NoError(t,
@@ -2784,8 +2788,6 @@ func TestE2E_Bridge_ValidatorSyncTest(t *testing.T) {
 				bridgeHelper.TestAccountPrivKey,
 				false,
 			))
-
-		wg.Done()
 	}()
 
 	// rootToken represents deposit token (basically native mintable token from the Supernets)
@@ -2795,6 +2797,7 @@ func TestE2E_Bridge_ValidatorSyncTest(t *testing.T) {
 		wg.Add(1)
 
 		go func() {
+			defer wg.Done()
 			// DEPOSIT ERC20 TOKENS
 			// send a few transactions to the bridge
 			// make sure deposit is successfully executed
@@ -2810,8 +2813,6 @@ func TestE2E_Bridge_ValidatorSyncTest(t *testing.T) {
 				"",
 				true)
 			require.NoError(t, err)
-
-			wg.Done()
 		}()
 	}
 
@@ -2828,16 +2829,13 @@ func TestE2E_Bridge_ValidatorSyncTest(t *testing.T) {
 
 	require.NoError(t, cluster.WaitForBlock(currentBlock+5, time.Minute))
 
-	validator1DataDir := validatorSrv1.DataDir()
+	validatorSrv1.Stop()
+	validatorSrv2.Stop()
 
-	validator2DataDir := validatorSrv2.DataDir()
-
-	cluster.Stop()
-
-	db1, err := bolt.Open(filepath.Join(validator1DataDir, "consensus", "polybft", "consensusState.db"), 0444, options)
+	db1, err := bolt.Open(filepath.Join(validatorSrv1.DataDir(), "consensus", "polybft", "consensusState.db"), 0444, options)
 	require.NoError(t, err)
 
-	db2, err := bolt.Open(filepath.Join(validator2DataDir, "consensus", "polybft", "consensusState.db"), 0444, options)
+	db2, err := bolt.Open(filepath.Join(validatorSrv2.DataDir(), "consensus", "polybft", "consensusState.db"), 0444, options)
 	require.NoError(t, err)
 
 	compareBucketsFromDBs(t, db1, db2, helperCommon.EncodeUint64ToBytes(100), helperCommon.EncodeUint64ToBytes(chainID.Uint64()), false)
@@ -2920,11 +2918,12 @@ func TestE2E_Bridge_ValidatorSyncRollbackE2ITest(t *testing.T) {
 			tcc.Premine = append(tcc.Premine, receivers...)
 		}))
 
+	defer cluster.Stop()
+
 	cluster.WaitForReady(t)
 
-	validator1 := cluster.Servers[0]
-	validator1DataDir := validator1.DataDir()
-	validator2DataDir := cluster.Servers[1].DataDir()
+	validatorSrv1 := cluster.Servers[0]
+	validatorSrv2 := cluster.Servers[1]
 
 	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
 	require.NoError(t, err)
@@ -2958,7 +2957,7 @@ func TestE2E_Bridge_ValidatorSyncRollbackE2ITest(t *testing.T) {
 
 	require.NoError(t, cluster.WaitForBlock(20, 2*time.Minute))
 
-	validator1.Stop()
+	validatorSrv1.Stop()
 
 	require.NoError(t,
 		bridge.Deposit(
@@ -2976,16 +2975,17 @@ func TestE2E_Bridge_ValidatorSyncRollbackE2ITest(t *testing.T) {
 
 	require.NoError(t, cluster.WaitForBlock(sprintSize+10, 1*time.Minute))
 
-	validator1.Start()
+	validatorSrv1.Start()
 
 	require.NoError(t, cluster.WaitForBlock(sprintSize+15, 2*time.Minute))
 
-	cluster.Stop()
+	validatorSrv1.Stop()
+	validatorSrv2.Stop()
 
-	db1, err := bolt.Open(filepath.Join(validator1DataDir, "consensus", "polybft", "consensusState.db"), 0444, options)
+	db1, err := bolt.Open(filepath.Join(validatorSrv1.DataDir(), "consensus", "polybft", "consensusState.db"), 0444, options)
 	require.NoError(t, err)
 
-	db2, err := bolt.Open(filepath.Join(validator2DataDir, "consensus", "polybft", "consensusState.db"), 0444, options)
+	db2, err := bolt.Open(filepath.Join(validatorSrv2.DataDir(), "consensus", "polybft", "consensusState.db"), 0444, options)
 	require.NoError(t, err)
 
 	compareBucketsFromDBs(t, db1, db2, helperCommon.EncodeUint64ToBytes(chainID.Uint64()), helperCommon.EncodeUint64ToBytes(100), true)
@@ -3058,6 +3058,10 @@ func TestE2E_Bridge_ValidatorSyncRollbackI2ETest(t *testing.T) {
 		framework.WithBlockGasLimit(100000000),
 		framework.WithPremine(append(depositors, adminAddr)...))
 
+	defer cluster.Stop()
+
+	cluster.WaitForReady(t)
+
 	bridgeOne := 0
 	bridge := cluster.Bridges[bridgeOne]
 
@@ -3066,9 +3070,6 @@ func TestE2E_Bridge_ValidatorSyncRollbackI2ETest(t *testing.T) {
 
 	validatorSrv1 := cluster.Servers[0]
 	validatorSrv2 := cluster.Servers[1]
-
-	validatorSrv1DataDir := validatorSrv1.DataDir()
-	validatorSrv2DataDir := validatorSrv2.DataDir()
 
 	require.NoError(t, validatorSrv1.ExternalChainFundFor(depositors, funds, uint64(bridgeOne)))
 
@@ -3092,7 +3093,9 @@ func TestE2E_Bridge_ValidatorSyncRollbackI2ETest(t *testing.T) {
 		wg.Add(1)
 
 		go func() {
-			err = bridge.Deposit(
+			defer wg.Done()
+
+			require.NoError(t, bridge.Deposit(
 				common.ERC20,
 				rootToken,
 				bridgeCfg.InternalMintableERC20PredicateAddr,
@@ -3102,10 +3105,7 @@ func TestE2E_Bridge_ValidatorSyncRollbackI2ETest(t *testing.T) {
 				"",
 				validatorSrv2.JSONRPCAddr(),
 				"",
-				true)
-			require.NoError(t, err)
-
-			defer wg.Done()
+				true))
 		}()
 	}
 
@@ -3117,13 +3117,29 @@ func TestE2E_Bridge_ValidatorSyncRollbackI2ETest(t *testing.T) {
 
 	require.NoError(t, cluster.WaitForBlock(sprintSize+15, 2*time.Minute))
 
-	cluster.Stop()
+	validatorSrv1.Stop()
+	validatorSrv2.Stop()
 
-	db1, err := bolt.Open(filepath.Join(validatorSrv1DataDir, "consensus", "polybft", "consensusState.db"), 0444, options)
+	db1, err := bolt.Open(filepath.Join(validatorSrv1.DataDir(), "consensus", "polybft", "consensusState.db"), 0444, options)
 	require.NoError(t, err)
 
-	db2, err := bolt.Open(filepath.Join(validatorSrv2DataDir, "consensus", "polybft", "consensusState.db"), 0444, options)
+	db2, err := bolt.Open(filepath.Join(validatorSrv2.DataDir(), "consensus", "polybft", "consensusState.db"), 0444, options)
 	require.NoError(t, err)
 
 	compareBucketsFromDBs(t, db1, db2, helperCommon.EncodeUint64ToBytes(100), helperCommon.EncodeUint64ToBytes(chainID.Uint64()), true)
+}
+
+func init() {
+	wd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	parent := filepath.Dir(wd)
+	parent = strings.Trim(parent, "e2e-polybft")
+	wd = filepath.Join(parent, "/artifacts/blade")
+	os.Setenv("EDGE_BINARY", wd)
+	os.Setenv("E2E_TESTS", "true")
+	os.Setenv("E2E_LOGS", "true")
+	os.Setenv("E2E_LOG_LEVEL", "debug")
 }
