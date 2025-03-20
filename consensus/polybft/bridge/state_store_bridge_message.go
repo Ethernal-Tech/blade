@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
+	systemstate "github.com/0xPolygon/polygon-edge/consensus/polybft/system_state"
 	"github.com/0xPolygon/polygon-edge/helper/common"
 	bolt "go.etcd.io/bbolt"
 )
@@ -54,8 +55,9 @@ type BridgeBatchVote struct {
 }
 
 type BridgeManagerStore struct {
-	db       *bolt.DB
-	chainIDs []uint64
+	db              *bolt.DB
+	chainIDs        []uint64
+	internalChainID uint64
 }
 
 func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, externalChainsIDs []uint64,
@@ -501,8 +503,13 @@ func (bms *BridgeManagerStore) list(internalChainID uint64) ([]*contractsapi.Bri
 	return messages, err
 }
 
-func (bms *BridgeManagerStore) getBridgeMessages(fromIndex, limit, sid, did uint64, dbTx *bolt.Tx) (
-	[]*contractsapi.BridgeMessage, uint64, error) {
+func (bms *BridgeManagerStore) getBridgeMessages(
+	fromIndex,
+	limit,
+	sid,
+	did uint64,
+	sysState systemstate.SystemState,
+	dbTx *bolt.Tx) ([]*contractsapi.BridgeMessage, uint64, error) {
 	if limit == 0 {
 		return nil, 0, nil
 	}
@@ -555,6 +562,8 @@ func (bms *BridgeManagerStore) getBridgeMessages(fromIndex, limit, sid, did uint
 			return nil
 		}
 
+		var toRemove []*big.Int
+
 		err := tx.Bucket(bridgeMessageEventsBucket).
 			Bucket(common.EncodeUint64ToBytes(sid)).
 			Bucket(common.EncodeUint64ToBytes(did)).
@@ -562,6 +571,27 @@ func (bms *BridgeManagerStore) getBridgeMessages(fromIndex, limit, sid, did uint
 			var event *contractsapi.BridgeMsgEvent
 			if err := json.Unmarshal(v, &event); err != nil {
 				return err
+			}
+
+			var (
+				committed bool
+				err       error
+			)
+
+			if bms.internalChainID == sid {
+				committed, err = sysState.GetConfirmedRollbackedI2E(did, event.ID)
+			} else {
+				committed, err = sysState.GetConfirmedRollbackedE2I(sid, event.ID)
+			}
+
+			if err != nil {
+				return err
+			}
+
+			if committed {
+				toRemove = append(toRemove, event.ID)
+
+				return nil
 			}
 
 			message := &contractsapi.BridgeMessage{
@@ -584,6 +614,17 @@ func (bms *BridgeManagerStore) getBridgeMessages(fromIndex, limit, sid, did uint
 
 			return nil
 		})
+
+		for _, id := range toRemove {
+			id := common.EncodeUint64ToBytes(id.Uint64())
+
+			if err := tx.Bucket(bridgeMessageEventsBucket).
+				Bucket(common.EncodeUint64ToBytes(sid)).
+				Bucket(common.EncodeUint64ToBytes(did)).
+				Bucket(rollbackMessages).Delete(id); err != nil {
+				return err
+			}
+		}
 
 		if err != nil {
 			if errors.Is(err, limitReachedErr) {

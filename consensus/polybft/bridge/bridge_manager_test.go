@@ -104,7 +104,7 @@ func TestBridgeEventManager_PostEpoch_BuildBridgeBatch(t *testing.T) {
 
 		s := newTestBridgeManager(t, vals.GetValidator("0"), &mockRuntime{isActiveValidator: true}, blockchain)
 
-		require.NoError(t, s.buildE2IBridgeBatch(nil))
+		require.NoError(t, s.buildE2IBridgeBatch(nil, nil))
 		require.Nil(t, s.pendingBridgeBatchesE2I)
 
 		bridgeMessages10 := generateBridgeMessageEvents(t, 10, 1)
@@ -113,7 +113,7 @@ func TestBridgeEventManager_PostEpoch_BuildBridgeBatch(t *testing.T) {
 			require.NoError(t, s.state.insertBridgeMessageEvent(bridgeMessages10[i], false, nil))
 		}
 
-		require.NoError(t, s.buildE2IBridgeBatch(nil))
+		require.NoError(t, s.buildE2IBridgeBatch(nil, nil))
 
 		length := len(s.pendingBridgeBatchesE2I[0].Messages)
 		require.Len(t, s.pendingBridgeBatchesE2I, 1)
@@ -125,7 +125,7 @@ func TestBridgeEventManager_PostEpoch_BuildBridgeBatch(t *testing.T) {
 			require.NoError(t, s.state.insertBridgeMessageEvent(bridgeMessages10[i], false, nil))
 		}
 
-		require.NoError(t, s.buildE2IBridgeBatch(nil))
+		require.NoError(t, s.buildE2IBridgeBatch(nil, nil))
 
 		length = len(s.pendingBridgeBatchesE2I[1].Messages)
 		require.Len(t, s.pendingBridgeBatchesE2I, 2)
@@ -147,7 +147,7 @@ func TestBridgeEventManager_PostEpoch_BuildBridgeBatch(t *testing.T) {
 			require.NoError(t, s.state.insertBridgeMessageEvent(bridgeMessages10[i], false, nil))
 		}
 
-		require.NoError(t, s.buildE2IBridgeBatch(nil))
+		require.NoError(t, s.buildE2IBridgeBatch(nil, nil))
 		require.Len(t, s.pendingBridgeBatchesE2I, 0)
 	})
 }
@@ -446,7 +446,7 @@ func TestBridgeEventManager_AddLog_BuildBridgeBatches(t *testing.T) {
 
 		length := len(s.pendingBridgeBatchesE2I[0].Messages)
 
-		bridgeMessages, _, err := s.state.getBridgeMessages(1, 1, 1, 100, nil)
+		bridgeMessages, _, err := s.state.getBridgeMessages(1, 1, 1, 100, nil, nil)
 		require.NoError(t, err)
 		require.Len(t, bridgeMessages, 1)
 		require.Len(t, s.pendingBridgeBatchesE2I, 1)
@@ -518,7 +518,7 @@ func TestBridgeEventManager_AddLog_BuildBridgeBatches(t *testing.T) {
 		require.NoError(t, s.AddLog(big.NewInt(1), goodLog))
 
 		// node should have inserted given bridgeMsg event, but it shouldn't build any batch
-		bridgeMessages, _, err := s.state.getBridgeMessages(1, 1, 1, 100, nil)
+		bridgeMessages, _, err := s.state.getBridgeMessages(1, 1, 1, 100, nil, nil)
 		require.NoError(t, err)
 		require.Len(t, bridgeMessages, 1)
 		require.Equal(t, uint64(1), bridgeMessages[0].ID.Uint64())

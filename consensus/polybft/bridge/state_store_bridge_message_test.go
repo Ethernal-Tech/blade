@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
+	systemstate "github.com/0xPolygon/polygon-edge/consensus/polybft/system_state"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -79,7 +80,10 @@ func TestState_getBridgeMessages_Mix(t *testing.T) {
 		}
 	}
 
-	messages, numOfOrdinary, err := state.getBridgeMessages(1, maxNumberOfBatchEvents, 100, 1, nil)
+	sysState := &systemstate.SystemStateMock{}
+	sysState.On("GetConfirmedRollbackedE2I").Return(false)
+
+	messages, numOfOrdinary, err := state.getBridgeMessages(1, maxNumberOfBatchEvents, 100, 1, sysState, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(7), numOfOrdinary)
 	assert.Equal(t, 10, len(messages))
@@ -102,7 +106,7 @@ func TestState_getBridgeEventsForBridgeBatch(t *testing.T) {
 	t.Run("Return all - forced. Enough messages", func(t *testing.T) {
 		t.Parallel()
 
-		messages, _, err := state.getBridgeMessages(1, maxNumberOfBatchEvents, 100, 1, nil)
+		messages, _, err := state.getBridgeMessages(1, maxNumberOfBatchEvents, 100, 1, nil, nil)
 		require.NoError(t, err)
 		require.Equal(t, maxNumberOfBatchEvents, len(messages))
 	})
@@ -110,7 +114,7 @@ func TestState_getBridgeEventsForBridgeBatch(t *testing.T) {
 	t.Run("Return all - forced. Not enough messages", func(t *testing.T) {
 		t.Parallel()
 
-		messages, _, err := state.getBridgeMessages(1, 30, 100, 1, nil)
+		messages, _, err := state.getBridgeMessages(1, 30, 100, 1, nil, nil)
 		require.NoError(t, err)
 		require.Equal(t, maxNumberOfBatchEvents, len(messages))
 	})

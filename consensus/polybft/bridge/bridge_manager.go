@@ -519,38 +519,44 @@ func (b *bridgeEventManager) PostBlock(req *oracle.PostBlockRequest) error {
 		if err != nil {
 			return err
 		}
-	}
 
-	if err := b.buildI2EBridgeBatch(req.DBTx); err != nil {
-		b.logger.Error("could not build an internal chain originated batch on PostBlock",
-			"err", err)
-	}
+		if err := b.buildI2EBridgeBatch(sysState, req.DBTx); err != nil {
+			b.logger.Error("could not build an internal chain originated batch on PostBlock",
+				"err", err)
+		}
 
-	if err := b.buildE2IBridgeBatch(req.DBTx); err != nil {
-		b.logger.Error("could not build an external chain originated batch on PostBlock",
-			"err", err)
-	}
+		if err := b.buildE2IBridgeBatch(sysState, req.DBTx); err != nil {
+			b.logger.Error("could not build an external chain originated batch on PostBlock",
+				"err", err)
+		}
 
-	b.handleRetry(req.DBTx, sysState)
+		b.handleRetry(sysState, req.DBTx)
+	}
 
 	return nil
 }
 
 // buildE2IBridgeBatch builds, signs, and multicasts the E2I batch.
-func (b *bridgeEventManager) buildE2IBridgeBatch(dbTx *bolt.Tx) error {
-	return b.buildBridgeBatch(dbTx, b.externalChainID, b.internalChainID, b.nextEventIDE2I)
+func (b *bridgeEventManager) buildE2IBridgeBatch(
+	sysState systemstate.SystemState,
+	dbTx *bolt.Tx) error {
+	return b.buildBridgeBatch(b.externalChainID, b.internalChainID, b.nextEventIDE2I, sysState, dbTx)
 }
 
 // buildI2EBridgeBatch builds, signs, and multicasts the I2E batch.
-func (b *bridgeEventManager) buildI2EBridgeBatch(dbTx *bolt.Tx) error {
-	return b.buildBridgeBatch(dbTx, b.internalChainID, b.externalChainID, b.nextEventIDI2E)
+func (b *bridgeEventManager) buildI2EBridgeBatch(
+	sysState systemstate.SystemState,
+	dbTx *bolt.Tx) error {
+	return b.buildBridgeBatch(b.internalChainID, b.externalChainID, b.nextEventIDI2E, sysState, dbTx)
 }
 
 // buildBridgeBatch builds, signs, and multicasts the batch.
 func (b *bridgeEventManager) buildBridgeBatch(
-	dbTx *bolt.Tx,
-	sourceChainID, destinationChainID uint64,
-	nextBridgeEventIDIndex uint64) error {
+	sourceChainID,
+	destinationChainID uint64,
+	nextBridgeEventIDIndex uint64,
+	sysState systemstate.SystemState,
+	dbTx *bolt.Tx) error {
 	if !b.runtime.IsActiveValidator() {
 		return nil
 	}
@@ -561,6 +567,7 @@ func (b *bridgeEventManager) buildBridgeBatch(
 		b.config.maxNumberOfEvents,
 		sourceChainID,
 		destinationChainID,
+		sysState,
 		dbTx)
 
 	if err != nil {
@@ -674,8 +681,8 @@ func (b *bridgeEventManager) buildBridgeBatch(
 // handleRetry handles the complete logic related to checking whether a batch is ready for retry,
 // as well as building and broadcasting retry candidates.
 func (b *bridgeEventManager) handleRetry(
-	dbTx *bolt.Tx,
-	sysState systemstate.SystemState) {
+	sysState systemstate.SystemState,
+	dbTx *bolt.Tx) {
 	block, err := b.externalClient.GetBlockByNumber(jsonrpc.BlockNumber(ethgo.Latest), false)
 	if err != nil {
 		// Log the error, but won't return because it might be just a temporary problem.
@@ -768,10 +775,10 @@ func (b *bridgeEventManager) buildRetryBridgeBatch(
 	baseHash types.Hash,
 	blockNumber uint64,
 	dbTx *bolt.Tx) error {
-
+	//
 	// Bulding a retry batch is actually based just on taking a retry template for the given
 	// batch and calculating a new threshold.
-
+	//
 	// Taking a retry template.
 	rb := b.retryBatches[baseHash]
 	pendingBatch := PendingBridgeBatch{
@@ -1141,7 +1148,7 @@ func (b *bridgeEventManager) ProcessLog(
 				continue
 			}
 
-			if err := b.finalizeOrdinaryBridgeMessage(header, m, result.Status, dbTx); err != nil {
+			if err := b.finalizeOrdinaryBridgeMessage(m, result.Status, dbTx); err != nil {
 				b.logger.Error("could not finalize bridge message", "err", err)
 			}
 		}
@@ -1170,7 +1177,6 @@ func (b *bridgeEventManager) ProcessLog(
 func (b *bridgeEventManager) AddLog(
 	chainID *big.Int,
 	eventLog *ethgo.Log) error {
-
 	// If the event comes from an external chain that is not managed by this bridge manager, it
 	// should be immediately discarded.
 	if b.externalChainID != chainID.Uint64() {
@@ -1279,13 +1285,13 @@ func (b *bridgeEventManager) handleBridgeMessageEvent(
 	header *types.Header,
 	event *contractsapi.BridgeMsgEvent,
 	dbTx *bolt.Tx) error {
-
+	//
 	// Handling the arrival of a new message is basically only focused on writing the message to
 	// the bucket related to ordinary messages. However, in certain situations (e.g. syncing) it
 	// may happen that the given message has already been previously committed or even executed.
 	// If the previous two conditions are met, we proceed to the message finalization phase (see
 	// finalizeOrdinaryBridgeMessage for more information).
-
+	//
 	id := event.ID
 	sid := event.SourceChainID
 	did := event.DestinationChainID
@@ -1329,7 +1335,7 @@ func (b *bridgeEventManager) handleBridgeMessageEvent(
 		return err
 	}
 
-	return b.finalizeOrdinaryBridgeMessage(header, msg, result.Status, dbTx)
+	return b.finalizeOrdinaryBridgeMessage(msg, result.Status, dbTx)
 }
 
 // handleBridgeMessageResultEvent handles the BridgeMessageResult event emitted by the Gateway SC
@@ -1338,7 +1344,7 @@ func (b *bridgeEventManager) handleBridgeMessageResultEvent(
 	header *types.Header,
 	event *contractsapi.BridgeMessageResultEvent,
 	dbTx *bolt.Tx) error {
-
+	//
 	// Handling the execution result of a message depends on whether it was an ordinary message
 	// or not (rollback message), as well as whether the message was successfully executed or
 	// not. If it's a rollback message, regardless of whether it was successfully executed or
@@ -1348,7 +1354,7 @@ func (b *bridgeEventManager) handleBridgeMessageResultEvent(
 	// whether it has been committed (through a batch on BridgeStorage). If either of these two
 	// conditions is not met, the process stops there. Otherwise, we proceed to the finalization
 	// phase (see finalizeOrdinaryBridgeMessage for more information).
-
+	//
 	id := event.ID
 	sid := event.SourceChainID
 	did := event.DestinationChainID
@@ -1389,7 +1395,7 @@ func (b *bridgeEventManager) handleBridgeMessageResultEvent(
 			return nil
 		}
 
-		return b.finalizeOrdinaryBridgeMessage(header, msg, event.Status, dbTx)
+		return b.finalizeOrdinaryBridgeMessage(msg, event.Status, dbTx)
 	case true:
 		if event.Status {
 			b.logger.Info(fmt.Sprintf("Rollback bridge message %s has been successfully processed",
@@ -1409,20 +1415,20 @@ func (b *bridgeEventManager) handleBridgeMessageResultEvent(
 
 // finalizeOrdinaryBridgeMessage represents the final phase of processing an ordinary message.
 func (b *bridgeEventManager) finalizeOrdinaryBridgeMessage(
-	header *types.Header,
 	msg *contractsapi.BridgeMessage,
 	successful bool,
 	dbTx *bolt.Tx) error {
-
+	//
 	// The way the message is processed depends on whether it was successfully executed or not.
 	// If it was successfully executed, it is simply deleted from the bucket related to ordinary
 	// messages. Otherwise, we check if its rollback version is already committed. If not, the
 	// message is deleted from the bucket related to ordinary messages and written to the bucket
 	// related to rollback messages. In other words, it is transferred from the ordinary to the
-	// rollback bucket. If the rollback version is already committed, we do nothing (since the
-	// rollback message is deleted from the rollback bucket upon being committed, writing it at
-	// this point would be incorrect).
-
+	// rollback bucket. Note: It's possible that the rollback version of the message has already
+	// been committed. However, this is not a concern, as we handle this scenario when creating
+	// a batch (rollback messages that are committed and still present in the DB are deleted at
+	// that time).
+	//
 	id := msg.ID
 	sid := msg.SourceChainID
 	did := msg.DestinationChainID
@@ -1435,22 +1441,6 @@ func (b *bridgeEventManager) finalizeOrdinaryBridgeMessage(
 		}
 
 		b.logger.Info(fmt.Sprintf("Bridge message %s has been successfully processed", id.String()))
-
-		return nil
-	}
-
-	msg.SourceChainID = did
-	msg.DestinationChainID = sid
-	msg.IsRollback = true
-
-	committed, err := b.isBridgeMessageCommitted(header, msg)
-	if err != nil {
-		return err
-	}
-
-	if committed {
-		b.logger.Info(fmt.Sprintf("Bridge message %s has already been moved to the rollback bucket",
-			id.String()))
 
 		return nil
 	}
@@ -1488,7 +1478,7 @@ func (b *bridgeEventManager) finalizeOrdinaryBridgeMessage(
 func (b *bridgeEventManager) isBridgeMessageCommitted(
 	blockHeader *types.Header,
 	msg *contractsapi.BridgeMessage) (bool, error) {
-
+	//
 	// The verification process for determining whether a message has been committed depends on
 	// whether it is an ordinary or a rollback message.
 	//
@@ -1497,7 +1487,7 @@ func (b *bridgeEventManager) isBridgeMessageCommitted(
 	//
 	// For a rollback message, the verification is done by checking whether the message ID is
 	// present in the corresponding list of committed rollback messages on the BridgeStorage.
-
+	//
 	provider, err := b.blockchain.GetStateProviderForBlock(blockHeader)
 	if err != nil {
 		return false, err
