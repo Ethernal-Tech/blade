@@ -3111,11 +3111,11 @@ func TestE2E_Bridge_ValidatorSyncRollbackI2ETest(t *testing.T) {
 
 	wg.Wait()
 
-	cluster.WaitForBlock(sprintSize+10, 3*time.Minute)
+	require.NoError(t, cluster.WaitForBlock(sprintSize+10, 3*time.Minute))
 
 	validatorSrv1.Start()
 
-	cluster.WaitForBlock(sprintSize+15, 2*time.Minute)
+	require.NoError(t, cluster.WaitForBlock(sprintSize+15, 2*time.Minute))
 
 	cluster.Stop()
 
