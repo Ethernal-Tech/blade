@@ -7,6 +7,7 @@ import (
 
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	"github.com/0xPolygon/polygon-edge/contracts"
+	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/Ethernal-Tech/ethgo"
 	"github.com/Ethernal-Tech/ethgo/abi"
@@ -82,6 +83,81 @@ func TestSystemState_GetNextCommittedIndex(t *testing.T) {
 	nextInternalCommittedIndex, err := systemState.GetNextCommittedIndex(0, I2E)
 	assert.NoError(t, err)
 	assert.Equal(t, currentInternalCommitIntex+1, nextInternalCommittedIndex)
+}
+
+func TestSystemState_GetBatchCommitCounter(t *testing.T) {
+	t.Parallel()
+
+	method, err := abi.NewMethod("function init() public payable")
+	require.NoError(t, err)
+
+	cc := &testutil.Contract{}
+	cc.AddCallback(func() string {
+		return `
+			mapping(bytes => uint256) public batchCommitCounter;
+
+			function init() public payable {
+				bytes memory key = hex"eeaf98277d42d00c558a5d33dcdd41dfc03f213a99a7fc12a722135a8de99e1c";
+				batchCommitCounter[key] = 8;
+			}
+		`
+	})
+
+	solcContract, err := cc.Compile()
+	require.NoError(t, err)
+
+	bin, err := hex.DecodeString(solcContract.Bin)
+	require.NoError(t, err)
+
+	transition := NewTestTransition(t, nil)
+
+	result := transition.Create2(types.Address{}, bin, big.NewInt(0), 1000000000)
+	assert.NoError(t, result.Err)
+
+	provider := &stateProvider{transition: transition}
+
+	systemState := NewSystemState(types.ZeroAddress, result.Address, provider)
+
+	input, err := method.Encode([1]interface{}{})
+	require.NoError(t, err)
+
+	_, err = provider.Call(ethgo.Address(result.Address), input, &contract.CallOpts{})
+	require.NoError(t, err)
+
+	msgs := make([]*contractsapi.BridgeMessage, 0, 4)
+
+	for i := range 4 {
+		msgs = append(msgs, &contractsapi.BridgeMessage{
+			ID:                 big.NewInt(int64(i)),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+			Sender:             [20]byte{},
+			Receiver:           [20]byte{},
+			IsRollback:         false,
+			Payload:            nil,
+		})
+	}
+
+	batch := &contractsapi.BridgeMessageBatch{
+		Messages:              msgs,
+		SourceChainID:         big.NewInt(int64(100)),
+		DestinationChainID:    big.NewInt(int64(1)),
+		Threshold:             big.NewInt(0),
+		NumberOfRegularEvents: big.NewInt(0),
+		CommitCounter:         big.NewInt(0),
+	}
+
+	data, err := batch.EncodeAbi()
+	require.NoError(t, err)
+	baseHash := crypto.Keccak256Hash(data)
+
+	counter, err := systemState.GetBatchCommitCounter(baseHash)
+	require.NoError(t, err)
+	require.EqualValues(t, big.NewInt(8), counter)
+
+	counter, err = systemState.GetBatchCommitCounter([32]byte{})
+	require.NoError(t, err)
+	require.EqualValues(t, 0, counter.Uint64())
 }
 
 func TestSystemState_GetConfirmedRollbacked(t *testing.T) {

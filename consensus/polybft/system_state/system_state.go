@@ -30,15 +30,18 @@ type SystemState interface {
 	GetEpoch() (uint64, error)
 	// GetNextCommittedIndex retrieves next committed bridge message index, based on the chain type
 	GetNextCommittedIndex(chainID uint64, chainType ChainType) (uint64, error)
-	// GetBridgeBatchByNumber return bridge batch by number
+	// GetBridgeBatchByNumber returns bridge batch by number
 	GetBridgeBatchByNumber(numberOfBatch *big.Int) (*contractsapi.SignedBridgeMessageBatch, error)
-	// GetValidatorSetByNumber return validator set by number
+	// GetValidatorSetByNumber returns validator set by number
 	GetValidatorSetByNumber(numberOfValidatorSet *big.Int) (*contractsapi.SignedValidatorSet, error)
-
+	// GetBatchCommitCounter returns the commit counter for the batch with the given batch hash.
+	// The base hash includes only messages, the source, and the destination chain, while other
+	// fields are set to 0. See the buildBridgeMessage method of [BridgeManager] for a concrete
+	// example.
 	GetBatchCommitCounter(batchHash types.Hash) (*big.Int, error)
-
+	// GetConfirmedRollbackedI2E returns whether the I2E rollback bridge message is committed.
 	GetConfirmedRollbackedI2E(chainID uint64, id *big.Int) (bool, error)
-
+	// GetConfirmedRollbackedE2I returns whether the E2I rollback bridge message is committed.
 	GetConfirmedRollbackedE2I(chainID uint64, id *big.Int) (bool, error)
 }
 
