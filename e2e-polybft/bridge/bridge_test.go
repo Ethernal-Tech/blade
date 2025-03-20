@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -2791,8 +2790,10 @@ func TestE2E_Bridge_ValidatorSyncTest(t *testing.T) {
 
 	// rootToken represents deposit token (basically native mintable token from the Supernets)
 	rootToken := contracts.NativeERC20TokenContract
+
 	for i, key := range receiverKeys {
 		wg.Add(1)
+
 		go func() {
 			// DEPOSIT ERC20 TOKENS
 			// send a few transactions to the bridge
@@ -2825,7 +2826,7 @@ func TestE2E_Bridge_ValidatorSyncTest(t *testing.T) {
 
 	validatorSrv1.Start()
 
-	cluster.WaitForBlock(currentBlock+5, time.Minute)
+	require.NoError(t, cluster.WaitForBlock(currentBlock+5, time.Minute))
 
 	validator1DataDir := validatorSrv1.DataDir()
 
@@ -2973,11 +2974,11 @@ func TestE2E_Bridge_ValidatorSyncRollbackE2ITest(t *testing.T) {
 			false,
 		))
 
-	cluster.WaitForBlock(sprintSize+10, 1*time.Minute)
+	require.NoError(t, cluster.WaitForBlock(sprintSize+10, 1*time.Minute))
 
 	validator1.Start()
 
-	cluster.WaitForBlock(sprintSize+15, 2*time.Minute)
+	require.NoError(t, cluster.WaitForBlock(sprintSize+15, 2*time.Minute))
 
 	cluster.Stop()
 
@@ -3088,8 +3089,8 @@ func TestE2E_Bridge_ValidatorSyncRollbackI2ETest(t *testing.T) {
 	wg := sync.WaitGroup{}
 
 	for i, key := range depositorKeys {
-
 		wg.Add(1)
+
 		go func() {
 			err = bridge.Deposit(
 				common.ERC20,
@@ -3106,7 +3107,6 @@ func TestE2E_Bridge_ValidatorSyncRollbackI2ETest(t *testing.T) {
 
 			defer wg.Done()
 		}()
-
 	}
 
 	wg.Wait()
@@ -3126,19 +3126,4 @@ func TestE2E_Bridge_ValidatorSyncRollbackI2ETest(t *testing.T) {
 	require.NoError(t, err)
 
 	compareBucketsFromDBs(t, db1, db2, helperCommon.EncodeUint64ToBytes(100), helperCommon.EncodeUint64ToBytes(chainID.Uint64()), true)
-}
-
-func init() {
-	wd, err := os.Getwd()
-	if err != nil {
-		return
-	}
-
-	parent := filepath.Dir(wd)
-	parent = strings.Trim(parent, "e2e-polybft")
-	wd = filepath.Join(parent, "/artifacts/blade")
-	os.Setenv("EDGE_BINARY", wd)
-	os.Setenv("E2E_TESTS", "true")
-	os.Setenv("E2E_LOGS", "true")
-	os.Setenv("E2E_LOG_LEVEL", "debug")
 }

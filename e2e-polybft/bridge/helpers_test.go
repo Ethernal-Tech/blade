@@ -268,6 +268,7 @@ func waitForBlocksOnExternal(t *testing.T, numberOfBlocks uint64,
 
 // compareBucketsFromDBs compares a bucket from db1 with a bucket from db2
 func compareBucketsFromDBs(t *testing.T, db1, db2 *bbolt.DB, sourceChainID, destinationChainID []byte, isRollback bool) {
+	t.Helper()
 	// Open read transactions for both databases
 	require.NoError(t, db1.View(func(tx1 *bbolt.Tx) error {
 		require.NoError(t, db2.View(func(tx2 *bbolt.Tx) error {
@@ -287,6 +288,7 @@ func compareBucketsFromDBs(t *testing.T, db1, db2 *bbolt.DB, sourceChainID, dest
 
 			bridgeMessageChainIDBucket1External := bridgeMessageChainIDBucket1.Bucket(destinationChainID)
 			bridgeMessageChainIDBucket2External := bridgeMessageChainIDBucket2.Bucket(destinationChainID)
+
 			if bridgeMessageChainIDBucket1External == nil || bridgeMessageChainIDBucket2External == nil {
 				return fmt.Errorf("one or both buckets do not exist 3")
 			}
@@ -299,12 +301,14 @@ func compareBucketsFromDBs(t *testing.T, db1, db2 *bbolt.DB, sourceChainID, dest
 			if isRollback {
 				finalBridgeMessageBucket1 = bridgeMessageChainIDBucket1External.Bucket([]byte("rollback"))
 				finalBridgeMessageBucket2 = bridgeMessageChainIDBucket2External.Bucket([]byte("rollback"))
+
 				if finalBridgeMessageBucket1 == nil || finalBridgeMessageBucket2 == nil {
 					return fmt.Errorf("one or both buckets do not exist 4")
 				}
 			} else {
 				finalBridgeMessageBucket1 = bridgeMessageChainIDBucket1External.Bucket([]byte("ordinary"))
 				finalBridgeMessageBucket2 = bridgeMessageChainIDBucket2External.Bucket([]byte("ordinary"))
+
 				if finalBridgeMessageBucket1 == nil || finalBridgeMessageBucket2 == nil {
 					return fmt.Errorf("one or both buckets do not exist 4")
 				}
@@ -318,8 +322,10 @@ func compareBucketsFromDBs(t *testing.T, db1, db2 *bbolt.DB, sourceChainID, dest
 				} else if string(v1) != string(v2) {
 					return fmt.Errorf("Key %s has different values: %s (DB1) vs %s (DB2)\n", k, v1, v2)
 				}
+
 				return nil
 			})
+
 			if err != nil {
 				return err
 			}
@@ -329,8 +335,10 @@ func compareBucketsFromDBs(t *testing.T, db1, db2 *bbolt.DB, sourceChainID, dest
 				if finalBridgeMessageBucket1.Get(k) == nil {
 					return fmt.Errorf("Key %s is missing in %s (DB1)\n", k, "ordinary bucket")
 				}
+
 				return nil
 			})
+
 			return err
 		}))
 
