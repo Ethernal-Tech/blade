@@ -2659,8 +2659,8 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 // This test ensures that validator nodes remain in sync after transactions are processed through the bridge.
 // The test follows these steps:
 //  1. Initializes a test cluster with multiple validators and a bridge.
-//  2. Stops one validator to create an out-of-sync scenario while transactions continue processing.
-//  3. Deploys an external ERC-20 token and performs multiple deposit transactions through the bridge.
+//  2. Stops one validator to create an out-of-sync scenario.
+//  3. Performs multiple deposit transactions through the bridge.
 //  4. Restarts the stopped validator and waits for it to synchronize with the rest of the network.
 //  5. Compares restarted validator with another active validator to ensure they are in sync and have identical state data.
 //
