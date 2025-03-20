@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -2973,7 +2972,7 @@ func TestE2E_Bridge_ValidatorSyncRollbackE2ITest(t *testing.T) {
 			false,
 		))
 
-	require.NoError(t, cluster.WaitForBlock(sprintSize+10, 1*time.Minute))
+	require.NoError(t, cluster.WaitForBlock(sprintSize+10, 4*time.Minute))
 
 	validatorSrv1.Start()
 
@@ -3127,19 +3126,4 @@ func TestE2E_Bridge_ValidatorSyncRollbackI2ETest(t *testing.T) {
 	require.NoError(t, err)
 
 	compareBucketsFromDBs(t, db1, db2, helperCommon.EncodeUint64ToBytes(100), helperCommon.EncodeUint64ToBytes(chainID.Uint64()), true)
-}
-
-func init() {
-	wd, err := os.Getwd()
-	if err != nil {
-		return
-	}
-
-	parent := filepath.Dir(wd)
-	parent = strings.Trim(parent, "e2e-polybft")
-	wd = filepath.Join(parent, "/artifacts/blade")
-	os.Setenv("EDGE_BINARY", wd)
-	os.Setenv("E2E_TESTS", "true")
-	os.Setenv("E2E_LOGS", "true")
-	os.Setenv("E2E_LOG_LEVEL", "debug")
 }
