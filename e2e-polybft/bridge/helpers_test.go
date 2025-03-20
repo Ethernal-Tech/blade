@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/Ethernal-Tech/ethgo"
 	"github.com/Ethernal-Tech/ethgo/abi"
 	"github.com/stretchr/testify/require"
+	"go.etcd.io/bbolt"
 
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	"github.com/0xPolygon/polygon-edge/crypto"
@@ -262,4 +264,76 @@ func waitForBlocksOnExternal(t *testing.T, numberOfBlocks uint64,
 			t.Fatalf("External chain didn't get to %d at time", waitFor)
 		}
 	}
+}
+
+// compareBucketsFromDBs compares a bucket from db1 with a bucket from db2
+func compareBucketsFromDBs(t *testing.T, db1, db2 *bbolt.DB, sourceChainID, destinationChainID []byte, isRollback bool) {
+	// Open read transactions for both databases
+	require.NoError(t, db1.View(func(tx1 *bbolt.Tx) error {
+		require.NoError(t, db2.View(func(tx2 *bbolt.Tx) error {
+			bridgeMessageBucket1 := tx1.Bucket([]byte("bridgeMessageEvents"))
+			bridgeMessageBucket2 := tx2.Bucket([]byte("bridgeMessageEvents"))
+
+			if bridgeMessageBucket1 == nil || bridgeMessageBucket2 == nil {
+				return fmt.Errorf("one or both buckets do not exist 1")
+			}
+
+			bridgeMessageChainIDBucket1 := bridgeMessageBucket1.Bucket(sourceChainID)
+			bridgeMessageChainIDBucket2 := bridgeMessageBucket2.Bucket(sourceChainID)
+
+			if bridgeMessageChainIDBucket1 == nil || bridgeMessageChainIDBucket2 == nil {
+				return fmt.Errorf("one or both buckets do not exist 2")
+			}
+
+			bridgeMessageChainIDBucket1External := bridgeMessageChainIDBucket1.Bucket(destinationChainID)
+			bridgeMessageChainIDBucket2External := bridgeMessageChainIDBucket2.Bucket(destinationChainID)
+			if bridgeMessageChainIDBucket1External == nil || bridgeMessageChainIDBucket2External == nil {
+				return fmt.Errorf("one or both buckets do not exist 3")
+			}
+
+			var (
+				finalBridgeMessageBucket1 *bbolt.Bucket
+				finalBridgeMessageBucket2 *bbolt.Bucket
+			)
+
+			if isRollback {
+				finalBridgeMessageBucket1 = bridgeMessageChainIDBucket1External.Bucket([]byte("rollback"))
+				finalBridgeMessageBucket2 = bridgeMessageChainIDBucket2External.Bucket([]byte("rollback"))
+				if finalBridgeMessageBucket1 == nil || finalBridgeMessageBucket2 == nil {
+					return fmt.Errorf("one or both buckets do not exist 4")
+				}
+			} else {
+				finalBridgeMessageBucket1 = bridgeMessageChainIDBucket1External.Bucket([]byte("ordinary"))
+				finalBridgeMessageBucket2 = bridgeMessageChainIDBucket2External.Bucket([]byte("ordinary"))
+				if finalBridgeMessageBucket1 == nil || finalBridgeMessageBucket2 == nil {
+					return fmt.Errorf("one or both buckets do not exist 4")
+				}
+			}
+
+			// Compare keys and values in db1 -> db2
+			err := finalBridgeMessageBucket1.ForEach(func(k, v1 []byte) error {
+				v2 := finalBridgeMessageBucket2.Get(k)
+				if v2 == nil {
+					return fmt.Errorf("Key %s is missing in %s (DB2)\n", k, "ordinary bucket")
+				} else if string(v1) != string(v2) {
+					return fmt.Errorf("Key %s has different values: %s (DB1) vs %s (DB2)\n", k, v1, v2)
+				}
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+
+			// Check for extra keys in db2 -> db1
+			err = finalBridgeMessageBucket2.ForEach(func(k, _ []byte) error {
+				if finalBridgeMessageBucket1.Get(k) == nil {
+					return fmt.Errorf("Key %s is missing in %s (DB1)\n", k, "ordinary bucket")
+				}
+				return nil
+			})
+			return err
+		}))
+
+		return nil
+	}))
 }

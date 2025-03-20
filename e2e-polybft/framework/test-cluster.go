@@ -117,6 +117,7 @@ type TestClusterConfig struct {
 	Binary               string
 	ValidatorSetSize     uint64
 	EpochSize            int
+	SprintSize           int
 	EpochReward          int
 	NativeTokenConfigRaw string
 	BaseFeeConfig        string
@@ -312,6 +313,12 @@ func WithBootnodeCount(cnt int) ClusterOption {
 func WithEpochSize(epochSize int) ClusterOption {
 	return func(h *TestClusterConfig) {
 		h.EpochSize = epochSize
+	}
+}
+
+func WithSprintSize(sprintSize int) ClusterOption {
+	return func(h *TestClusterConfig) {
+		h.SprintSize = sprintSize
 	}
 }
 
@@ -646,6 +653,10 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 
 		if cluster.Config.NativeTokenConfigRaw != "" {
 			args = append(args, "--native-token-config", cluster.Config.NativeTokenConfigRaw)
+		}
+
+		if cluster.Config.SprintSize > 0 {
+			args = append(args, "--sprint-size", strconv.Itoa(cluster.Config.SprintSize))
 		}
 
 		tokenConfig, err := polycfg.ParseRawTokenConfig(cluster.Config.NativeTokenConfigRaw)
