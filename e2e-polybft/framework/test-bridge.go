@@ -482,7 +482,7 @@ func (t *TestBridge) mintNativeRootToken(validatorAddresses []types.Address, tok
 	args := []string{
 		"mint-erc20",
 		"--jsonrpc", t.JSONRPCAddr(),
-		"--erc20-token", polybftConfig.Bridge[tokenConfig.ChainID].ExternalNativeERC20Addr.String(),
+		"--token", polybftConfig.Bridge[tokenConfig.ChainID].ExternalNativeERC20Addr.String(),
 	}
 
 	// mint something for every validator
