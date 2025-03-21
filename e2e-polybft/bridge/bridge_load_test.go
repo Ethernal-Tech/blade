@@ -3,10 +3,7 @@ package bridge
 import (
 	"fmt"
 	"math/big"
-	"os"
 	"path"
-	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -71,20 +68,6 @@ import (
 // checking, particularly when it comes to verifying proper token transfers, that is, checking the
 // balance of all accounts. The test helps determine how well the bridge scales under increasing load,
 // including potential optimizations for future improvements.
-func init() {
-	wd, err := os.Getwd()
-	if err != nil {
-		return
-	}
-
-	parent := filepath.Dir(wd)
-	parent = strings.Trim(parent, "e2e-polybft")
-	wd = filepath.Join(parent, "/artifacts/blade")
-	os.Setenv("EDGE_BINARY", wd)
-	os.Setenv("E2E_TESTS", "true")
-	os.Setenv("E2E_LOGS", "true")
-	os.Setenv("E2E_LOG_LEVEL", "debug")
-}
 func TestE2E_Bridge_LoadTest(t *testing.T) {
 	const (
 		numberOfUsers     = 2
