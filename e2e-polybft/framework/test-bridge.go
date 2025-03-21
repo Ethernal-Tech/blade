@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/command"
-	"github.com/0xPolygon/polygon-edge/command/bridge/common"
 	bridgeCommon "github.com/0xPolygon/polygon-edge/command/bridge/common"
 	bridgeHelper "github.com/0xPolygon/polygon-edge/command/bridge/helper"
 	"github.com/0xPolygon/polygon-edge/command/bridge/server"
@@ -194,7 +193,7 @@ func (t *TestBridge) Deposit(token bridgeCommon.TokenType, rootTokenAddr, rootPr
 	return t.cmdRun(args...)
 }
 
-func (t *TestBridge) Mint(tokenType common.TokenType, token types.Address,
+func (t *TestBridge) Mint(tokenType bridgeCommon.TokenType, token types.Address,
 	addresses, tokens, amounts, jsonRPCAddr, minterKey string) error {
 	args := []string{}
 
@@ -211,11 +210,11 @@ func (t *TestBridge) Mint(tokenType common.TokenType, token types.Address,
 	}
 
 	switch tokenType {
-	case common.ERC20:
+	case bridgeCommon.ERC20:
 		args = append(args, "mint-erc20")
-	case common.ERC721:
+	case bridgeCommon.ERC721:
 		args = append(args, "mint-erc721")
-	case common.ERC1155:
+	case bridgeCommon.ERC1155:
 		args = append(args, "mint-erc1155")
 	}
 
