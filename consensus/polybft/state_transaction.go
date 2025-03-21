@@ -9,7 +9,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/helpers"
 )
 
-func decodeStateTransaction(txData []byte) (contractsapi.ABIEncoder, error) {
+func decodeBridgeStateTransaction(txData []byte) (contractsapi.ABIEncoder, error) {
 	if len(txData) < helpers.AbiMethodIDLength {
 		return nil, fmt.Errorf("state transactions have input")
 	}
