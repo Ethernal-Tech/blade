@@ -73,7 +73,7 @@ func (m *SystemStateMock) GetBatchCommitCounter(hash types.Hash) (*big.Int, erro
 }
 
 func (m *SystemStateMock) GetConfirmedRollbackedI2E(chainID uint64, id *big.Int) (bool, error) {
-	args := m.Called()
+	args := m.Called(id)
 
 	committed, _ := args.Get(0).(bool)
 

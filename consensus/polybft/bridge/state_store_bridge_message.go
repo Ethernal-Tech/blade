@@ -64,7 +64,7 @@ func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, externalChainsIDs []uint6
 	internalChainID uint64) (*BridgeManagerStore, error) {
 	var err error
 
-	store := &BridgeManagerStore{db: db, chainIDs: externalChainsIDs}
+	store := &BridgeManagerStore{db: db, chainIDs: externalChainsIDs, internalChainID: internalChainID}
 
 	initFn := func(tx *bolt.Tx) error {
 		var bridgeMessageBucket, bridgeBatchesBucket, epochBucket *bolt.Bucket
@@ -517,7 +517,7 @@ func (bms *BridgeManagerStore) getBridgeMessages(
 	var (
 		messages          []*contractsapi.BridgeMessage
 		err               error
-		limitReachedErr   error
+		limitReachedErr   = errors.New("limit reached")
 		numOfOrdinaryMsgs uint64
 	)
 
@@ -638,7 +638,7 @@ func (bms *BridgeManagerStore) getBridgeMessages(
 	}
 
 	if dbTx == nil {
-		err = bms.db.View(getFn)
+		err = bms.db.Update(getFn)
 	} else {
 		err = getFn(dbTx)
 	}

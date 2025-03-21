@@ -149,6 +149,7 @@ func TestSystemState_GetBatchCommitCounter(t *testing.T) {
 
 	data, err := batch.EncodeAbi()
 	require.NoError(t, err)
+
 	baseHash := crypto.Keccak256Hash(data)
 
 	counter, err := systemState.GetBatchCommitCounter(baseHash)
