@@ -2858,8 +2858,8 @@ func TestE2E_Bridge_ValidatorSyncRollbackE2ITest(t *testing.T) {
 		transfersCount        = 5
 		numOfRollback         = int((transfersCount + 1) / 2)
 		numBlockConfirmations = 2
-		epochSize             = 60
-		sprintSize            = 30
+		epochSize             = 40
+		sprintSize            = 20
 		numberOfAttempts      = 7
 		stateSyncedLogsCount  = 2
 		numberOfBridges       = 1
@@ -2953,8 +2953,6 @@ func TestE2E_Bridge_ValidatorSyncRollbackE2ITest(t *testing.T) {
 	require.Equal(t, uint64(types.ReceiptSuccess), receipt.Status)
 
 	rootERC20Token := types.Address(receipt.ContractAddress)
-
-	require.NoError(t, cluster.WaitForBlock(20, 2*time.Minute))
 
 	validatorSrv1.Stop()
 
