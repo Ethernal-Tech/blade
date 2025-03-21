@@ -3,7 +3,10 @@ package bridge
 import (
 	"fmt"
 	"math/big"
+	"os"
 	"path"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -68,6 +71,20 @@ import (
 // checking, particularly when it comes to verifying proper token transfers, that is, checking the
 // balance of all accounts. The test helps determine how well the bridge scales under increasing load,
 // including potential optimizations for future improvements.
+func init() {
+	wd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	parent := filepath.Dir(wd)
+	parent = strings.Trim(parent, "e2e-polybft")
+	wd = filepath.Join(parent, "/artifacts/blade")
+	os.Setenv("EDGE_BINARY", wd)
+	os.Setenv("E2E_TESTS", "true")
+	os.Setenv("E2E_LOGS", "true")
+	os.Setenv("E2E_LOG_LEVEL", "debug")
+}
 func TestE2E_Bridge_LoadTest(t *testing.T) {
 	const (
 		numberOfUsers     = 2
@@ -265,9 +282,11 @@ func TestE2E_Bridge_LoadTest(t *testing.T) {
 				))
 
 			require.NoError(t,
-				cluster.Bridges[0].MintERC20(
+				cluster.Bridges[0].Mint(
+					common.ERC20,
 					rootERC20Token,
 					i2eERC20Accounts[i].Address().String(),
+					"",
 					"1000000",
 					cluster.Servers[0].JSONRPCAddr(),
 					deployer,
@@ -305,9 +324,12 @@ func TestE2E_Bridge_LoadTest(t *testing.T) {
 		for i := range numberOfUsers {
 			for range numberOfTransfers {
 				require.NoError(t,
-					cluster.Bridges[0].MintERC721(
+					cluster.Bridges[0].Mint(
+						common.ERC721,
 						rootERC721Token,
 						i2eERC721Accounts[i].Address().String(),
+						"",
+						"",
 						cluster.Servers[0].JSONRPCAddr(),
 						deployer,
 					))
@@ -375,13 +397,14 @@ func TestE2E_Bridge_LoadTest(t *testing.T) {
 				))
 
 			require.NoError(t,
-				cluster.Bridges[0].MintERC1155(
+				cluster.Bridges[0].Mint(
+					common.ERC1155,
 					rootERC1155Token,
-					deployer,
 					i2eERC1155Accounts[i].Address().String(),
 					"20",
 					"1000000",
 					cluster.Servers[0].JSONRPCAddr(),
+					deployer,
 				))
 		}
 	}()

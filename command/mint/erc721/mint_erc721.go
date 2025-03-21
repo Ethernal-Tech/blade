@@ -6,7 +6,6 @@ import (
 	"github.com/0xPolygon/polygon-edge/command"
 	bridgeHelper "github.com/0xPolygon/polygon-edge/command/bridge/helper"
 	"github.com/0xPolygon/polygon-edge/command/helper"
-	polybftsecrets "github.com/0xPolygon/polygon-edge/command/secrets/init"
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/spf13/cobra"
@@ -42,7 +41,7 @@ func preRunCommand(cmd *cobra.Command, _ []string) error {
 func setFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(
 		&params.minterPrivateKey,
-		polybftsecrets.PrivateKeyFlag,
+		bridgeHelper.PrivateKeyFlag,
 		"",
 		"the minter private key",
 	)
@@ -56,7 +55,7 @@ func setFlags(cmd *cobra.Command) {
 
 	cmd.Flags().StringVar(
 		&params.tokenAddr,
-		bridgeHelper.Erc721TokenFlag,
+		bridgeHelper.TokenFlag,
 		"",
 		"erc721 token address",
 	)
@@ -68,7 +67,7 @@ func setFlags(cmd *cobra.Command) {
 		helper.TxTimeoutDesc,
 	)
 
-	_ = cmd.MarkFlagRequired(bridgeHelper.Erc721TokenFlag)
+	_ = cmd.MarkFlagRequired(bridgeHelper.TokenFlag)
 }
 
 func runCommand(cmd *cobra.Command, _ []string) {

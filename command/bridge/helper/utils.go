@@ -37,9 +37,8 @@ const (
 	StakeTokenFlagDesc      = "address of ERC20 token used for staking"
 	AddressesFlag           = "addresses"
 	AmountsFlag             = "amounts"
-	Erc20TokenFlag          = "erc20-token"   //nolint:gosec
-	Erc721TokenFlag         = "erc721-token"  //nolint:gosec
-	Erc1155TokenFlag        = "erc1155-token" ////nolint:gosec
+	TokenFlag               = "token" //nolint:gosec
+	PrivateKeyFlag          = "private-key"
 	BladeManagerFlagDesc    = "address of blade manager contract on a external chain"
 
 	ExternalChainLabelID     = "external-chain"

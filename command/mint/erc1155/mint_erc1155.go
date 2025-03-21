@@ -5,6 +5,7 @@ import (
 
 	"github.com/0xPolygon/polygon-edge/command"
 	bridgeHelper "github.com/0xPolygon/polygon-edge/command/bridge/helper"
+
 	"github.com/0xPolygon/polygon-edge/command/helper"
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
@@ -40,16 +41,16 @@ func preRunCommand(cmd *cobra.Command, _ []string) error {
 func setFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(
 		&params.tokenAddr,
-		bridgeHelper.Erc1155TokenFlag,
+		bridgeHelper.TokenFlag,
 		"",
 		"erc1155 token address",
 	)
 
-	_ = cmd.MarkFlagRequired(bridgeHelper.Erc1155TokenFlag)
+	_ = cmd.MarkFlagRequired(bridgeHelper.TokenFlag)
 
 	cmd.Flags().StringVar(
 		&params.minterPrivateKey,
-		"minter",
+		bridgeHelper.PrivateKeyFlag,
 		"",
 		"minter's private key",
 	)
@@ -58,7 +59,7 @@ func setFlags(cmd *cobra.Command) {
 
 	cmd.Flags().StringVar(
 		&params.address,
-		"address",
+		bridgeHelper.AddressesFlag,
 		"",
 		"address for which tokens are minted",
 	)

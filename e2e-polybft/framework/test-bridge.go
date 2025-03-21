@@ -7,11 +7,11 @@ import (
 	"math/big"
 	"path"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/command"
+	"github.com/0xPolygon/polygon-edge/command/bridge/common"
 	bridgeCommon "github.com/0xPolygon/polygon-edge/command/bridge/common"
 	bridgeHelper "github.com/0xPolygon/polygon-edge/command/bridge/helper"
 	"github.com/0xPolygon/polygon-edge/command/bridge/server"
@@ -194,16 +194,12 @@ func (t *TestBridge) Deposit(token bridgeCommon.TokenType, rootTokenAddr, rootPr
 	return t.cmdRun(args...)
 }
 
-func (t *TestBridge) MintERC20(token types.Address,
-	address, amount, jsonRPCAddr, minterKey string) error {
+func (t *TestBridge) Mint(tokenType common.TokenType, token types.Address,
+	addresses, tokens, amounts, jsonRPCAddr, minterKey string) error {
 	args := []string{}
 
-	if address == "" {
+	if addresses == "" {
 		return errors.New("address is required")
-	}
-
-	if amount == "" {
-		return errors.New("amount is required")
 	}
 
 	if jsonRPCAddr == "" {
@@ -214,74 +210,28 @@ func (t *TestBridge) MintERC20(token types.Address,
 		return errors.New("minter key is required")
 	}
 
+	switch tokenType {
+	case common.ERC20:
+		args = append(args, "mint-erc20")
+	case common.ERC721:
+		args = append(args, "mint-erc721")
+	case common.ERC1155:
+		args = append(args, "mint-erc1155")
+	}
+
 	args = append(args,
-		"mint-erc20",
-		"--erc20-token", token.String(),
-		"--addresses", address,
-		"--amounts", amount,
+		"--token", token.String(),
+		"--addresses", addresses,
 		"--private-key", minterKey,
 		"--jsonrpc", jsonRPCAddr)
 
-	return t.cmdRun(args...)
-}
-
-func (t *TestBridge) MintERC721(token types.Address,
-	address, jsonRPCAddr, minterKey string) error {
-	args := []string{}
-
-	if address == "" {
-		return errors.New("address is required")
+	if amounts != "" {
+		args = append(args, "--amounts", amounts)
 	}
 
-	if jsonRPCAddr == "" {
-		return errors.New("provide a JSON RPC endpoint URL")
+	if tokens != "" {
+		args = append(args, "--tokens", tokens)
 	}
-
-	if minterKey == "" {
-		return errors.New("minter is required")
-	}
-
-	args = append(args,
-		"mint-erc721",
-		"--erc721-token", token.String(),
-		"--addresses", address,
-		"--private-key", minterKey,
-		"--jsonrpc", jsonRPCAddr)
-
-	return t.cmdRun(args...)
-}
-
-func (t *TestBridge) MintERC1155(ercToken types.Address, minter, address, tokens, amounts, jsonRPCAddr string) error {
-	args := []string{}
-
-	if minter == "" {
-		return errors.New("minter is required")
-	}
-
-	if address == "" {
-		return errors.New("address is required")
-	}
-
-	if tokens == "" {
-		return errors.New("tokens (their IDs) are required")
-	}
-
-	if amounts == "" {
-		return errors.New("amounts are required")
-	}
-
-	if jsonRPCAddr == "" {
-		return errors.New("provide a JSON RPC endpoint URL")
-	}
-
-	args = append(args,
-		"mint-erc1155",
-		"--erc1155-token", ercToken.String(),
-		"--minter", minter,
-		"--address", address,
-		"--tokens", strings.Join(strings.Fields(tokens), ","),
-		"--amounts", strings.Join(strings.Fields(amounts), ","),
-		"--jsonrpc", jsonRPCAddr)
 
 	return t.cmdRun(args...)
 }
