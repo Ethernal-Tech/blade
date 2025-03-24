@@ -3,6 +3,7 @@ package bridge
 import (
 	"fmt"
 	"math/big"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -25,7 +26,6 @@ import (
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/Ethernal-Tech/ethgo"
 	"github.com/stretchr/testify/require"
-	"go.etcd.io/bbolt"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -243,7 +243,7 @@ func TestE2E_Bridge_ValidatorSyncTestExecuted(t *testing.T) {
 	var (
 		bridgeAmount        = ethgo.Ether(2)
 		bridgeMessageResult contractsapi.BridgeMessageResultEvent
-		options             = &bbolt.Options{ReadOnly: true}
+		options             = &bolt.Options{ReadOnly: true}
 	)
 
 	receiversAddrs := make([]types.Address, transfersCount)
@@ -706,7 +706,7 @@ func TestE2E_ValidatorSyncRollbackExecuted_E2I(t *testing.T) {
 
 	var (
 		bridgeERC20Amount = ethgo.Ether(2)
-		options           = &bbolt.Options{ReadOnly: true}
+		options           = &bolt.Options{ReadOnly: true}
 	)
 
 	receiversAddrs := make([]types.Address, transfersCount)
@@ -780,41 +780,13 @@ func TestE2E_ValidatorSyncRollbackExecuted_E2I(t *testing.T) {
 
 	require.NoError(t, err)
 
-	// Default deployer key
-	deployerKey, err := bridgeHelper.DecodePrivateKey("")
-	require.NoError(t, err)
-
-	evNum := uint64(1) // to track with which event numbers starts & ends
+	evNum := uint64(1)
 	startEventNum := func() uint64 { return (evNum-1)*transfersCount + evNum }
 	endEventNum := func() uint64 { return (evNum)*transfersCount + evNum }
 
-	validateBridgeRollback := func(externalBlockStart uint64, internalBlockStart uint64) {
-		latest, err := validatorSrv1.JSONRPC().BlockNumber()
-		require.NoError(t, err)
-
-		var bridgeMessageResult contractsapi.BridgeMessageResultEvent
-		logs, err := getFilteredLogs(bridgeMessageResult.Sig(), internalBlockStart, latest, validatorSrv1.JSONRPC())
-		require.NoError(t, err)
-
-		assertBridgeEventResultNotSuccessful(t, logs, numOfRollback)
-
-		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
-			for i := startEventNum(); i <= endEventNum(); i++ {
-				if i%2 == 0 && !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, true) {
-					return false
-				}
-			}
-
-			return true
-		}))
-
-		latest = waitForBlocksOnExternal(t, 20, externalRPC, 2*time.Minute)
-
-		logs, err = getFilteredLogs(bridgeMessageResult.Sig(), externalBlockStart, latest, externalRPC)
-		require.NoError(t, err)
-
-		assertBridgeEventResultSuccessful(t, logs, numOfRollback)
-	}
+	// Default deployer key
+	deployerKey, err := bridgeHelper.DecodePrivateKey("")
+	require.NoError(t, err)
 
 	deployTx := types.NewTx(types.NewLegacyTx(
 		types.WithTo(nil),
@@ -861,7 +833,18 @@ func TestE2E_ValidatorSyncRollbackExecuted_E2I(t *testing.T) {
 		return true
 	}))
 
-	validateBridgeRollback(0, 0)
+	validateBridgeRollbackExternal(
+		t,
+		cluster,
+		transfersCount,
+		0,
+		0,
+		startEventNum(),
+		endEventNum(),
+		numOfRollback,
+		externalChainTxRelayer,
+		bridgeCfg.ExternalGatewayAddr,
+		externalRPC)
 
 	blockNumber, err := validatorSrv1.JSONRPC().BlockNumber()
 	require.NoError(t, err)
@@ -912,7 +895,7 @@ func TestE2E_ValidatorSyncRollbackExecuted_I2E(t *testing.T) {
 		amounts       = make([]string, transfersCount)
 		funds         = make([]*big.Int, transfersCount)
 		singleToken   = ethgo.Ether(1)
-		options       = &bbolt.Options{ReadOnly: true}
+		options       = &bolt.Options{ReadOnly: true}
 	)
 
 	admin, err := crypto.GenerateECDSAKey()
@@ -983,35 +966,6 @@ func TestE2E_ValidatorSyncRollbackExecuted_I2E(t *testing.T) {
 	startEventNum := func() uint64 { return (evNum-1)*transfersCount + evNum }
 	endEventNum := func() uint64 { return evNum*transfersCount + evNum }
 
-	// validate bridge rollback with events
-	validateBridgeRollback := func(externalBlockStart, internalBlockStart uint64) {
-		latest := waitForBlocksOnExternal(t, 20, externalRPC, 2*time.Minute)
-
-		var bridgeMessageResult contractsapi.BridgeMessageResultEvent
-		logs, err := getFilteredLogs(bridgeMessageResult.Sig(), externalBlockStart, latest, externalRPC)
-		require.NoError(t, err)
-
-		assertBridgeEventResultNotSuccessful(t, logs, numOfRollback)
-
-		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
-			for i := startEventNum(); i <= endEventNum(); i++ {
-				if i%2 == 0 && !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i, true) {
-					return false
-				}
-			}
-
-			return true
-		}))
-
-		latest, err = validatorSrv1.JSONRPC().BlockNumber()
-		require.NoError(t, err)
-
-		logs, err = getFilteredLogs(bridgeMessageResult.Sig(), internalBlockStart, latest, validatorSrv1.JSONRPC())
-		require.NoError(t, err)
-
-		assertBridgeEventResultSuccessful(t, logs, numOfRollback)
-	}
-
 	rootToken := contracts.NativeERC20TokenContract
 
 	validatorSrvStopped.Stop()
@@ -1043,7 +997,16 @@ func TestE2E_ValidatorSyncRollbackExecuted_I2E(t *testing.T) {
 		return true
 	}))
 
-	validateBridgeRollback(0, 0)
+	validateBridgeRollbackInternal(t,
+		cluster,
+		0, // external start block
+		0, // internal start block
+		startEventNum(),
+		endEventNum(),
+		numOfRollback,
+		bridgeCfg.InternalGatewayAddr,
+		internalChainTxRelayer,
+		externalRPC)
 
 	t.Log("after validate")
 
@@ -1066,5 +1029,19 @@ func TestE2E_ValidatorSyncRollbackExecuted_I2E(t *testing.T) {
 	compareBucketsFromDBs(t, db1, db2, helperCommon.EncodeUint64ToBytes(100), helperCommon.EncodeUint64ToBytes(chainID.Uint64()), false, true)
 
 	compareBucketsFromDBs(t, db1, db2, helperCommon.EncodeUint64ToBytes(chainID.Uint64()), helperCommon.EncodeUint64ToBytes(100), false, true)
+}
 
+func init() {
+	wd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	parent := filepath.Dir(wd)
+	parent = strings.Trim(parent, "e2e-polybft")
+	wd = filepath.Join(parent, "/artifacts/blade")
+	os.Setenv("EDGE_BINARY", wd)
+	os.Setenv("E2E_TESTS", "true")
+	os.Setenv("E2E_LOGS", "true")
+	os.Setenv("E2E_LOG_LEVEL", "debug")
 }
