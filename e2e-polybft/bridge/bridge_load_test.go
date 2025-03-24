@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"path"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -585,6 +586,80 @@ func TestE2E_Bridge_LoadTest(t *testing.T) {
 		require.Equal(t, validBalanceInt, balance)
 	}
 
+	// Function for ERC721 token ID calculation
+	erc721TokenIDFn := func(tokenId string, j int) string {
+		id, err := strconv.Atoi(tokenId)
+		require.NoError(t, err)
+
+		return fmt.Sprint(id + j)
+	}
+
+	// Function for ERC20, ERC721, ERC1155 and native token transfers
+	ercTokenTransferFn := func(
+		i2eAccount, e2iAccount *crypto.ECDSAKey,
+		rootERC20Token, childERC20Token, intMintableAddr, extMintableAddr types.Address,
+		tokenType common.TokenType,
+		i2eTokenID, e2iTokenID string) {
+		// starting 2 go routines
+		wg.Add(2)
+
+		// internal -> external
+		go func() {
+			defer wg.Done()
+
+			sender, err := i2eAccount.MarshallPrivateKey()
+			require.NoError(t, err)
+
+			for j := range numberOfTransfers {
+				tokenID := i2eTokenID
+				if tokenType == common.ERC721 {
+					tokenID = erc721TokenIDFn(tokenID, j)
+				}
+
+				require.NoError(t,
+					cluster.Bridges[0].Deposit(
+						tokenType,
+						rootERC20Token,
+						intMintableAddr,
+						hex.EncodeToString(sender),
+						i2eAccount.Address().String(),
+						"10",
+						tokenID,
+						cluster.Servers[0].JSONRPCAddr(),
+						"",
+						false,
+					))
+			}
+		}()
+
+		// external -> internal
+		go func() {
+			defer wg.Done()
+
+			sender, err := e2iAccount.MarshallPrivateKey()
+			require.NoError(t, err)
+
+			for j := range numberOfTransfers {
+				tokenID := e2iTokenID
+				if tokenType == common.ERC721 {
+					tokenID = erc721TokenIDFn(tokenID, j)
+				}
+
+				require.NoError(t,
+					cluster.Bridges[0].Withdraw(
+						tokenType,
+						hex.EncodeToString(sender),
+						e2iAccount.Address().String(),
+						"10",
+						tokenID,
+						cluster.Bridges[0].JSONRPCAddr(),
+						extMintableAddr,
+						childERC20Token,
+						false))
+			}
+		}()
+	}
+
 	// Native token balance check, external -> internal
 	for _, account := range e2iNatTokAccounts {
 		natTokCheckFn(account, postInitE2IInternalBalance, postInitE2IExternalBalance)
@@ -601,209 +676,33 @@ func TestE2E_Bridge_LoadTest(t *testing.T) {
 
 	// ERC20 execution
 	for i := range numberOfUsers {
-		wg.Add(2)
-
-		// internal -> external
-		go func() {
-			defer wg.Done()
-
-			sender, err := i2eERC20Accounts[i].MarshallPrivateKey()
-			require.NoError(t, err)
-
-			for range numberOfTransfers {
-				require.NoError(t,
-					cluster.Bridges[0].Deposit(
-						common.ERC20,
-						rootERC20Token,
-						bridgeConfig.InternalMintableERC20PredicateAddr,
-						hex.EncodeToString(sender),
-						i2eERC20Accounts[i].Address().String(),
-						"10",
-						"",
-						cluster.Servers[0].JSONRPCAddr(),
-						"",
-						false,
-					))
-			}
-		}()
-
-		// external -> internal
-		go func() {
-			defer wg.Done()
-
-			sender, err := e2iERC20Accounts[i].MarshallPrivateKey()
-			require.NoError(t, err)
-
-			for range numberOfTransfers {
-				require.NoError(t,
-					cluster.Bridges[0].Withdraw(
-						common.ERC20,
-						hex.EncodeToString(sender),
-						e2iERC20Accounts[i].Address().String(),
-						"10",
-						"",
-						cluster.Bridges[0].JSONRPCAddr(),
-						bridgeConfig.ExternalMintableERC20PredicateAddr,
-						childERC20Token,
-						false))
-			}
-		}()
+		ercTokenTransferFn(i2eERC20Accounts[i], e2iERC20Accounts[i], rootERC20Token, childERC20Token,
+			bridgeConfig.InternalMintableERC20PredicateAddr, bridgeConfig.ExternalMintableERC20PredicateAddr,
+			common.ERC20, "", "")
 	}
 
 	// ERC721 execution
 	for i := range numberOfUsers {
-		wg.Add(2)
-
 		startI2E := i * numberOfTransfers
 		startE2I := i*numberOfTransfers + numberOfUsers*numberOfTransfers
 
-		// internal -> external
-		go func() {
-			defer wg.Done()
-
-			sender, err := i2eERC721Accounts[i].MarshallPrivateKey()
-			require.NoError(t, err)
-
-			for j := range numberOfTransfers {
-				require.NoError(t,
-					cluster.Bridges[0].Deposit(
-						common.ERC721,
-						rootERC721Token,
-						bridgeConfig.InternalMintableERC721PredicateAddr,
-						hex.EncodeToString(sender),
-						i2eERC721Accounts[i].Address().String(),
-						"",
-						fmt.Sprintf("%d", startI2E+j),
-						cluster.Servers[0].JSONRPCAddr(),
-						"",
-						false,
-					))
-			}
-		}()
-
-		// external -> internal
-		go func() {
-			defer wg.Done()
-
-			sender, err := e2iERC721Accounts[i].MarshallPrivateKey()
-			require.NoError(t, err)
-
-			for j := range numberOfTransfers {
-				require.NoError(t,
-					cluster.Bridges[0].Withdraw(
-						common.ERC721,
-						hex.EncodeToString(sender),
-						e2iERC721Accounts[i].Address().String(),
-						"",
-						fmt.Sprintf("%d", startE2I+j),
-						cluster.Bridges[0].JSONRPCAddr(),
-						bridgeConfig.ExternalMintableERC721PredicateAddr,
-						childERC721Token,
-						false))
-			}
-		}()
+		ercTokenTransferFn(i2eERC721Accounts[i], e2iERC721Accounts[i], rootERC721Token, childERC721Token,
+			bridgeConfig.InternalMintableERC721PredicateAddr, bridgeConfig.ExternalMintableERC721PredicateAddr,
+			common.ERC721, fmt.Sprintf("%d", startI2E), fmt.Sprintf("%d", startE2I))
 	}
 
 	// ERC1155 execution
 	for i := range numberOfUsers {
-		wg.Add(2)
-
-		// internal -> external
-		go func() {
-			defer wg.Done()
-
-			sender, err := i2eERC1155Accounts[i].MarshallPrivateKey()
-			require.NoError(t, err)
-
-			for range numberOfTransfers {
-				require.NoError(t,
-					cluster.Bridges[0].Deposit(
-						common.ERC1155,
-						rootERC1155Token,
-						bridgeConfig.InternalMintableERC1155PredicateAddr,
-						hex.EncodeToString(sender),
-						i2eERC1155Accounts[i].Address().String(),
-						"10",
-						"20",
-						cluster.Servers[0].JSONRPCAddr(),
-						"",
-						false,
-					))
-			}
-		}()
-
-		// external -> internal
-		go func() {
-			defer wg.Done()
-
-			sender, err := e2iERC1155Accounts[i].MarshallPrivateKey()
-			require.NoError(t, err)
-
-			for range numberOfTransfers {
-				require.NoError(t,
-					cluster.Bridges[0].Withdraw(
-						common.ERC1155,
-						hex.EncodeToString(sender),
-						e2iERC1155Accounts[i].Address().String(),
-						"10",
-						"20",
-						cluster.Bridges[0].JSONRPCAddr(),
-						bridgeConfig.ExternalMintableERC1155PredicateAddr,
-						childERC1155Token,
-						false))
-			}
-		}()
+		ercTokenTransferFn(i2eERC1155Accounts[i], e2iERC1155Accounts[i], rootERC1155Token, childERC1155Token,
+			bridgeConfig.InternalMintableERC1155PredicateAddr, bridgeConfig.ExternalMintableERC1155PredicateAddr,
+			common.ERC1155, "20", "20")
 	}
 
 	// Native token execution
 	for i := range numberOfUsers {
-		wg.Add(2)
-
-		// internal -> external
-		go func() {
-			defer wg.Done()
-
-			sender, err := i2eNatTokAccounts[i].MarshallPrivateKey()
-			require.NoError(t, err)
-
-			for range numberOfTransfers {
-				require.NoError(t,
-					cluster.Bridges[0].Deposit(
-						common.ERC20,
-						rootNativeToken,
-						bridgeConfig.InternalMintableERC20PredicateAddr,
-						hex.EncodeToString(sender),
-						i2eNatTokAccounts[i].Address().String(),
-						"10",
-						"",
-						cluster.Servers[0].JSONRPCAddr(),
-						"",
-						false,
-					))
-			}
-		}()
-
-		// external -> internal
-		go func() {
-			defer wg.Done()
-
-			sender, err := e2iNatTokAccounts[i].MarshallPrivateKey()
-			require.NoError(t, err)
-
-			for range numberOfTransfers {
-				require.NoError(t,
-					cluster.Bridges[0].Withdraw(
-						common.ERC20,
-						hex.EncodeToString(sender),
-						e2iNatTokAccounts[i].Address().String(),
-						"10",
-						"",
-						cluster.Bridges[0].JSONRPCAddr(),
-						bridgeConfig.ExternalMintableERC20PredicateAddr,
-						childNativeToken,
-						false))
-			}
-		}()
+		ercTokenTransferFn(i2eNatTokAccounts[i], e2iNatTokAccounts[i], rootNativeToken, childNativeToken,
+			bridgeConfig.InternalMintableERC20PredicateAddr, bridgeConfig.ExternalMintableERC20PredicateAddr,
+			common.ERC20, "", "")
 	}
 
 	wg.Wait()
