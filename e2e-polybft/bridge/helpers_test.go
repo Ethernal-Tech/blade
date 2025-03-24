@@ -267,7 +267,7 @@ func waitForBlocksOnExternal(t *testing.T, numberOfBlocks uint64,
 }
 
 // compareBucketsFromDBs compares a bucket from db1 with a bucket from db2
-func compareBucketsFromDBs(t *testing.T, db1, db2 *bbolt.DB, sourceChainID, destinationChainID []byte, isRollback bool) {
+func compareBucketsFromDBs(t *testing.T, db1, db2 *bbolt.DB, sourceChainID, destinationChainID []byte, isRollback, isExecuted bool) {
 	t.Helper()
 	// Open read transactions for both databases
 	require.NoError(t, db1.View(func(tx1 *bbolt.Tx) error {
@@ -286,11 +286,19 @@ func compareBucketsFromDBs(t *testing.T, db1, db2 *bbolt.DB, sourceChainID, dest
 				return fmt.Errorf("one or both buckets do not exist 2")
 			}
 
-			bridgeMessageChainIDBucket1External := bridgeMessageChainIDBucket1.Bucket(destinationChainID)
-			bridgeMessageChainIDBucket2External := bridgeMessageChainIDBucket2.Bucket(destinationChainID)
+			var bridgeMessageChainIDBucket1External *bbolt.Bucket
+			var bridgeMessageChainIDBucket2External *bbolt.Bucket
+
+			bridgeMessageChainIDBucket1External = bridgeMessageChainIDBucket1.Bucket(destinationChainID)
+			bridgeMessageChainIDBucket2External = bridgeMessageChainIDBucket2.Bucket(destinationChainID)
 
 			if bridgeMessageChainIDBucket1External == nil || bridgeMessageChainIDBucket2External == nil {
 				return fmt.Errorf("one or both buckets do not exist 3")
+			}
+
+			if isExecuted {
+				bridgeMessageChainIDBucket1External = bridgeMessageChainIDBucket1External.Bucket([]byte("executed"))
+				bridgeMessageChainIDBucket2External = bridgeMessageChainIDBucket2External.Bucket([]byte("executed"))
 			}
 
 			var (
