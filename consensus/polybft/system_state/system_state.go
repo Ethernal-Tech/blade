@@ -105,12 +105,12 @@ func (s *SystemStateImpl) GetNextCommittedIndex(chainID uint64, chainType ChainT
 		return 0, err
 	}
 
-	nextCommittedIndex, isOk := rawResult["0"].(*big.Int)
+	lastCommittedIndex, isOk := rawResult["0"].(*big.Int)
 	if !isOk {
-		return 0, fmt.Errorf("failed to decode next committed index")
+		return 0, fmt.Errorf("failed to decode last committed index")
 	}
 
-	return nextCommittedIndex.Uint64() + 1, nil
+	return lastCommittedIndex.Uint64() + 1, nil
 }
 
 func (s *SystemStateImpl) GetBridgeBatchByNumber(batchID *big.Int) (*contractsapi.SignedBridgeMessageBatch, error) {

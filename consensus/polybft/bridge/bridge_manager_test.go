@@ -396,6 +396,310 @@ func TestBridgeEventManager_RemoveProcessedEvents(t *testing.T) {
 	require.Equal(t, 0, len(stateSyncEventsAfter))
 }
 
+func Test_isBridgeMessageCommitted(t *testing.T) {
+	vals := validator.NewTestValidators(t, 5)
+
+	// This test illustrates a scenario where the commitment of an I2E ordinary message with ID
+	// 4 is checked, while the last committed I2E ordinary message has ID 6, that is, the next
+	// one to be committed should have ID 7.
+	//
+	// Expected: the message should be reported as committed (true).
+	t.Run("1", func(t *testing.T) {
+		bc := &blockchain.BlockchainMock{}
+		ss := &systemstate.SystemStateMock{}
+
+		bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
+		bc.On("GetSystemState", mock.Anything).Return(ss)
+		ss.On("GetNextCommittedIndex", mock.Anything).Return(uint64(7))
+
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msg := &contractsapi.BridgeMessage{
+			ID:            big.NewInt(4),
+			SourceChainID: big.NewInt(100),
+			IsRollback:    false,
+		}
+
+		committed, err := bm.isBridgeMessageCommitted(nil, msg)
+		require.NoError(t, err)
+		require.EqualValues(t, true, committed)
+	})
+
+	// This test illustrates a scenario where the commitment of an E2I ordinary message with ID
+	// 4 is checked, while the last committed E2I ordinary message has ID 6, that is, the next
+	// one to be committed should have ID 7.
+	//
+	// Expected: the message should be reported as committed (true).
+	t.Run("2", func(t *testing.T) {
+		bc := &blockchain.BlockchainMock{}
+		ss := &systemstate.SystemStateMock{}
+
+		bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
+		bc.On("GetSystemState", mock.Anything).Return(ss)
+		ss.On("GetNextCommittedIndex", mock.Anything).Return(uint64(7))
+
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msg := &contractsapi.BridgeMessage{
+			ID:            big.NewInt(4),
+			SourceChainID: big.NewInt(1),
+			IsRollback:    false,
+		}
+
+		committed, err := bm.isBridgeMessageCommitted(nil, msg)
+		require.NoError(t, err)
+		require.EqualValues(t, true, committed)
+	})
+
+	// This test illustrates a scenario where the commitment of an I2E ordinary message with ID
+	// 10 is checked, while the last committed I2E ordinary message has ID 6, that is, the next
+	// one to be committed should have ID 7.
+	//
+	// Expected: the message should be reported as uncommitted (false).
+	t.Run("3", func(t *testing.T) {
+		bc := &blockchain.BlockchainMock{}
+		ss := &systemstate.SystemStateMock{}
+
+		bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
+		bc.On("GetSystemState", mock.Anything).Return(ss)
+		ss.On("GetNextCommittedIndex", mock.Anything).Return(uint64(7))
+
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msg := &contractsapi.BridgeMessage{
+			ID:            big.NewInt(10),
+			SourceChainID: big.NewInt(100),
+			IsRollback:    false,
+		}
+
+		committed, err := bm.isBridgeMessageCommitted(nil, msg)
+		require.NoError(t, err)
+		require.EqualValues(t, false, committed)
+	})
+
+	// This test illustrates a scenario where the commitment of an E2I ordinary message with ID
+	// 10 is checked, while the last committed E2I ordinary message has ID 6, that is, the next
+	// one to be committed should have ID 7.
+	//
+	// Expected: the message should be reported as uncommitted (false).
+	t.Run("4", func(t *testing.T) {
+		bc := &blockchain.BlockchainMock{}
+		ss := &systemstate.SystemStateMock{}
+
+		bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
+		bc.On("GetSystemState", mock.Anything).Return(ss)
+		ss.On("GetNextCommittedIndex", mock.Anything).Return(uint64(7))
+
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msg := &contractsapi.BridgeMessage{
+			ID:            big.NewInt(10),
+			SourceChainID: big.NewInt(1),
+			IsRollback:    false,
+		}
+
+		committed, err := bm.isBridgeMessageCommitted(nil, msg)
+		require.NoError(t, err)
+		require.EqualValues(t, false, committed)
+	})
+
+	// This test illustrates a scenario where the commitment of an I2E ordinary message with ID
+	// 7 is checked, while the last committed I2E ordinary message has ID 6, that is, the next
+	// one to be committed should have ID 7. This is a "borderline" case.
+	//
+	// Expected: the message should be reported as uncommitted (false).
+	t.Run("5", func(t *testing.T) {
+		bc := &blockchain.BlockchainMock{}
+		ss := &systemstate.SystemStateMock{}
+
+		bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
+		bc.On("GetSystemState", mock.Anything).Return(ss)
+		ss.On("GetNextCommittedIndex", mock.Anything).Return(uint64(7))
+
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msg := &contractsapi.BridgeMessage{
+			ID:            big.NewInt(7),
+			SourceChainID: big.NewInt(100),
+			IsRollback:    false,
+		}
+
+		committed, err := bm.isBridgeMessageCommitted(nil, msg)
+		require.NoError(t, err)
+		require.EqualValues(t, false, committed)
+	})
+
+	// This test illustrates a scenario where the commitment of an E2I ordinary message with ID
+	// 7 is checked, while the last committed E2I ordinary message has ID 6, that is, the next
+	// one to be committed should have ID 7. This is a "borderline" case.
+	//
+	// Expected: the message should be reported as uncommitted (false).
+	t.Run("6", func(t *testing.T) {
+		bc := &blockchain.BlockchainMock{}
+		ss := &systemstate.SystemStateMock{}
+
+		bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
+		bc.On("GetSystemState", mock.Anything).Return(ss)
+		ss.On("GetNextCommittedIndex", mock.Anything).Return(uint64(7))
+
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msg := &contractsapi.BridgeMessage{
+			ID:            big.NewInt(7),
+			SourceChainID: big.NewInt(1),
+			IsRollback:    false,
+		}
+
+		committed, err := bm.isBridgeMessageCommitted(nil, msg)
+		require.NoError(t, err)
+		require.EqualValues(t, false, committed)
+	})
+
+	// This test illustrates a scenario where the commitment of an I2E rollback message with ID
+	// 4 is checked, while the given ID is already present in the list of committed I2E rollback
+	// messages on the BridgeStorage smart contract.
+	//
+	// Expected: the message should be reported as committed (true).
+	t.Run("7", func(t *testing.T) {
+		bc := &blockchain.BlockchainMock{}
+		ss := &systemstate.SystemStateMock{}
+
+		bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
+		bc.On("GetSystemState", mock.Anything).Return(ss)
+		ss.On("GetConfirmedRollbackedI2E", mock.Anything).Return(true)
+
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msg := &contractsapi.BridgeMessage{
+			ID:            big.NewInt(4),
+			SourceChainID: big.NewInt(100),
+			IsRollback:    true,
+		}
+
+		committed, err := bm.isBridgeMessageCommitted(nil, msg)
+		require.NoError(t, err)
+		require.EqualValues(t, true, committed)
+	})
+
+	// This test illustrates a scenario where the commitment of an E2I rollback message with ID
+	// 4 is checked, while the given ID is already present in the list of committed E2I rollback
+	// messages on the BridgeStorage smart contract.
+	//
+	// Expected: the message should be reported as committed (true).
+	t.Run("8", func(t *testing.T) {
+		bc := &blockchain.BlockchainMock{}
+		ss := &systemstate.SystemStateMock{}
+
+		bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
+		bc.On("GetSystemState", mock.Anything).Return(ss)
+		ss.On("GetConfirmedRollbackedE2I", mock.Anything).Return(true)
+
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msg := &contractsapi.BridgeMessage{
+			ID:            big.NewInt(4),
+			SourceChainID: big.NewInt(1),
+			IsRollback:    true,
+		}
+
+		committed, err := bm.isBridgeMessageCommitted(nil, msg)
+		require.NoError(t, err)
+		require.EqualValues(t, true, committed)
+	})
+
+	// This test illustrates a scenario where the commitment of an I2E rollback message with ID
+	// 4 is checked, while the given ID is not in the list of committed I2E rollback message on
+	// the BridgeStorage smart contract.
+	//
+	// Expected: the message should be reported as uncommitted (false).
+	t.Run("9", func(t *testing.T) {
+		bc := &blockchain.BlockchainMock{}
+		ss := &systemstate.SystemStateMock{}
+
+		bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
+		bc.On("GetSystemState", mock.Anything).Return(ss)
+		ss.On("GetConfirmedRollbackedI2E", mock.Anything).Return(false)
+
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msg := &contractsapi.BridgeMessage{
+			ID:            big.NewInt(4),
+			SourceChainID: big.NewInt(100),
+			IsRollback:    true,
+		}
+
+		committed, err := bm.isBridgeMessageCommitted(nil, msg)
+		require.NoError(t, err)
+		require.EqualValues(t, false, committed)
+	})
+
+	// This test illustrates a scenario where the commitment of an E2I rollback message with ID
+	// 4 is checked, while the given ID is not in the list of committed E2I rollback message on
+	// the BridgeStorage smart contract.
+	//
+	// Expected: the message should be reported as uncommitted (false).
+	t.Run("10", func(t *testing.T) {
+		bc := &blockchain.BlockchainMock{}
+		ss := &systemstate.SystemStateMock{}
+
+		bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
+		bc.On("GetSystemState", mock.Anything).Return(ss)
+		ss.On("GetConfirmedRollbackedE2I", mock.Anything).Return(false)
+
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msg := &contractsapi.BridgeMessage{
+			ID:            big.NewInt(4),
+			SourceChainID: big.NewInt(1),
+			IsRollback:    true,
+		}
+
+		committed, err := bm.isBridgeMessageCommitted(nil, msg)
+		require.NoError(t, err)
+		require.EqualValues(t, false, committed)
+	})
+}
+
 func TestBridgeEventManager_AddLog_BuildBridgeBatches(t *testing.T) {
 	t.Parallel()
 
