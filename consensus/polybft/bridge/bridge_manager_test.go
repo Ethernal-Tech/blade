@@ -700,6 +700,111 @@ func Test_isBridgeMessageCommitted(t *testing.T) {
 	})
 }
 
+func Test_finalizeOrdinaryBridgeMessage(t *testing.T) {
+	vals := validator.NewTestValidators(t, 5)
+
+	// This test illustrates a scenario of finalizing a successfully executed ordinary message.
+	//
+	// Expected: the message should be deleted from the database.
+	t.Run("1", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			nil,
+		)
+
+		msgEvent := &contractsapi.BridgeMsgEvent{
+			ID:                 big.NewInt(4),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}
+
+		err := bm.state.insertBridgeMessageEvent(msgEvent, false, nil)
+		require.NoError(t, err)
+
+		msg := &contractsapi.BridgeMessage{
+			ID:                 big.NewInt(4),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}
+
+		err = bm.finalizeOrdinaryBridgeMessage(msg, true, nil)
+		require.NoError(t, err)
+
+		msgEvent, err = bm.state.getBridgeMessageEvent(
+			msg.ID,
+			msg.SourceChainID,
+			msg.DestinationChainID,
+			false,
+			nil)
+
+		require.NoError(t, err)
+		require.Nil(t, msgEvent)
+
+		msgEvent, err = bm.state.getBridgeMessageEvent(
+			msg.ID,
+			msg.DestinationChainID,
+			msg.SourceChainID,
+			true,
+			nil)
+
+		require.NoError(t, err)
+		require.Nil(t, msgEvent)
+	})
+
+	// This test illustrates a scenario of finalizing an unsuccessfully executed ordinary message.
+	//
+	// Expected: the ordinary message should become a rollback one (this is done by removing the
+	// message from the bucket reserved for ordinary messages and adding it to the bucket reserved
+	// for rollback messages). Note, rollback message has the opposite direction.
+	t.Run("2", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			nil,
+		)
+
+		msgEvent := &contractsapi.BridgeMsgEvent{
+			ID:                 big.NewInt(4),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}
+
+		err := bm.state.insertBridgeMessageEvent(msgEvent, false, nil)
+		require.NoError(t, err)
+
+		msg := &contractsapi.BridgeMessage{
+			ID:                 big.NewInt(4),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+			IsRollback:         true,
+		}
+
+		err = bm.finalizeOrdinaryBridgeMessage(msg, false, nil)
+		require.NoError(t, err)
+
+		msgEvent, err = bm.state.getBridgeMessageEvent(
+			msg.ID,
+			msg.SourceChainID,
+			msg.DestinationChainID,
+			false,
+			nil)
+
+		require.NoError(t, err)
+		require.Nil(t, msgEvent)
+
+		msgEvent, err = bm.state.getBridgeMessageEvent(
+			msg.ID,
+			msg.DestinationChainID,
+			msg.SourceChainID,
+			true,
+			nil)
+
+		require.NoError(t, err)
+		require.NotNil(t, msgEvent)
+	})
+}
+
 func TestBridgeEventManager_AddLog_BuildBridgeBatches(t *testing.T) {
 	t.Parallel()
 
