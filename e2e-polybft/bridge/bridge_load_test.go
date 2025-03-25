@@ -69,7 +69,7 @@ import (
 // checking, particularly when it comes to verifying proper token transfers, that is, checking the
 // balance of all accounts. The test helps determine how well the bridge scales under increasing load,
 // including potential optimizations for future improvements.
-func TestE2E_Bridge_LoadTest(t *testing.T) {
+func TestE2E_Bridge_Load(t *testing.T) {
 	const (
 		numberOfUsers     = 2
 		numberOfTransfers = 2

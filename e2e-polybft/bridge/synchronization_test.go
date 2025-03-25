@@ -29,7 +29,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-// TestE2E_Bridge_ValidatorSyncTest is an end-to-end test that verifies validator synchronization
+// TestE2E_Bridge_ValidatorSync is an end-to-end test that verifies validator synchronization
 // in a multi-validator blockchain network with a bridge.
 //
 // This test ensures that validator nodes remain in sync after transactions are processed through the bridge.
@@ -41,7 +41,7 @@ import (
 //  5. Compares restarted validator with another active validator to ensure they are in sync and have identical state data.
 //
 // This test validates that validators can correctly resynchronize after being offline
-func TestE2E_Bridge_ValidatorSyncTest(t *testing.T) {
+func TestE2E_Bridge_ValidatorSync(t *testing.T) {
 	const (
 		transfersCount        = 10
 		numBlockConfirmations = 2
@@ -218,7 +218,7 @@ func TestE2E_Bridge_ValidatorSyncTest(t *testing.T) {
 	compareBucketsFromDBs(t, db1, db2, helperCommon.EncodeUint64ToBytes(chainID.Uint64()), helperCommon.EncodeUint64ToBytes(100), false, false)
 }
 
-// TestE2E_Bridge_ValidatorSyncTest is an end-to-end test that verifies validator synchronization
+// TestE2E_Bridge_ValidatorSyncTestExecuted is an end-to-end test that verifies validator synchronization
 // in a multi-validator blockchain network with a bridge.
 //
 // This test ensures that validator nodes remain in sync after transactions are processed through the bridge.
@@ -231,7 +231,7 @@ func TestE2E_Bridge_ValidatorSyncTest(t *testing.T) {
 //
 // This test validates that validators can correctly resynchronize after being offline
 
-func TestE2E_Bridge_ValidatorSyncTestExecuted(t *testing.T) {
+func TestE2E_Bridge_ValidatorSyncExecuted(t *testing.T) {
 	const (
 		transfersCount        = 5
 		numBlockConfirmations = 2
@@ -395,7 +395,7 @@ func TestE2E_Bridge_ValidatorSyncTestExecuted(t *testing.T) {
 	compareBucketsFromDBs(t, db1, db2, helperCommon.EncodeUint64ToBytes(chainID.Uint64()), helperCommon.EncodeUint64ToBytes(100), false, true)
 }
 
-// TestE2E_Bridge_ValidatorSyncRollbackI2ETest is a test that verifies validator synchronization
+// TestE2E_Bridge_ValidatorSyncRollback_E2I is a test that verifies validator synchronization
 // in an E2I (External-to-Internal) rollback scenario.
 //
 // This test simulates a multi-validator blockchain network with a bridge and performs the following steps:
@@ -406,7 +406,7 @@ func TestE2E_Bridge_ValidatorSyncTestExecuted(t *testing.T) {
 // 5. Waits for the validator to synchronize.
 // 6. Ensures the validator syncs back correctly after restarting.
 
-func TestE2E_Bridge_ValidatorSyncRollbackE2ITest(t *testing.T) {
+func TestE2E_Bridge_ValidatorSyncRollback_E2I(t *testing.T) {
 	const (
 		transfersCount        = 5
 		numOfRollback         = int((transfersCount + 1) / 2)
@@ -541,7 +541,7 @@ func TestE2E_Bridge_ValidatorSyncRollbackE2ITest(t *testing.T) {
 	compareBucketsFromDBs(t, db1, db2, helperCommon.EncodeUint64ToBytes(chainID.Uint64()), helperCommon.EncodeUint64ToBytes(100), true, false)
 }
 
-// TestE2E_Bridge_ValidatorSyncRollbackI2ETest is a test that verifies validator synchronization
+// TestE2E_Bridge_ValidatorSyncRollbackI2E is a test that verifies validator synchronization
 // in an I2E (Internal-to-External) rollback scenario.
 //
 // This test simulates a multi-validator blockchain network with a bridge and performs the following steps:
@@ -552,7 +552,7 @@ func TestE2E_Bridge_ValidatorSyncRollbackE2ITest(t *testing.T) {
 // 5. Waits for the validator to synchronize.
 // 6. Ensures the validator syncs back correctly after restarting.
 
-func TestE2E_Bridge_ValidatorSyncRollbackI2ETest(t *testing.T) {
+func TestE2E_Bridge_ValidatorSyncRollback_I2E(t *testing.T) {
 	const (
 		transfersCount   = uint64(5)
 		numOfRollback    = int((transfersCount + 1) / 2)
@@ -679,7 +679,7 @@ func TestE2E_Bridge_ValidatorSyncRollbackI2ETest(t *testing.T) {
 	compareBucketsFromDBs(t, db1, db2, helperCommon.EncodeUint64ToBytes(100), helperCommon.EncodeUint64ToBytes(chainID.Uint64()), true, false)
 }
 
-// TestE2E_Bridge_ValidatorSyncRollbackI2ETest is a test that verifies validator synchronization
+// TestE2E_Bridge_ValidatorSyncRollbackE2I is a test that verifies validator synchronization
 // in an E2I (External-to-Internal) rollback scenario.
 //
 // This test simulates a multi-validator blockchain network with a bridge and performs the following steps:
@@ -690,7 +690,7 @@ func TestE2E_Bridge_ValidatorSyncRollbackI2ETest(t *testing.T) {
 // 5. Waits for the validator to synchronize.
 // 6. Ensures the validator syncs back correctly after restarting.
 
-func TestE2E_ValidatorSyncRollbackExecuted_E2I(t *testing.T) {
+func TestE2E_Bridge_ValidatorSyncRollbackExecuted_E2I(t *testing.T) {
 	const (
 		transfersCount        = 5
 		numOfRollback         = int((transfersCount + 1) / 2)
@@ -836,7 +836,6 @@ func TestE2E_ValidatorSyncRollbackExecuted_E2I(t *testing.T) {
 	validateBridgeRollbackExternal(
 		t,
 		cluster,
-		transfersCount,
 		0,
 		0,
 		startEventNum(),
@@ -867,7 +866,7 @@ func TestE2E_ValidatorSyncRollbackExecuted_E2I(t *testing.T) {
 	compareBucketsFromDBs(t, db1, db2, helperCommon.EncodeUint64ToBytes(chainID.Uint64()), helperCommon.EncodeUint64ToBytes(100), false, true)
 }
 
-// TestE2E_Bridge_ValidatorSyncRollbackI2ETest is a test that verifies validator synchronization
+// TestE2E_Bridge_ValidatorSyncRollbackExecuted_I2E is a test that verifies validator synchronization
 // in an I2E (Internal-to-External) rollback scenario.
 //
 // This test simulates a multi-validator blockchain network with a bridge and performs the following steps:
@@ -878,7 +877,7 @@ func TestE2E_ValidatorSyncRollbackExecuted_E2I(t *testing.T) {
 // 5. Waits for the validator to synchronize.
 // 6. Ensures the validator syncs back correctly after restarting
 
-func TestE2E_ValidatorSyncRollbackExecuted_I2E(t *testing.T) {
+func TestE2E_Bridge_ValidatorSyncRollbackExecuted_I2E(t *testing.T) {
 	const (
 		transfersCount   = uint64(5)
 		numOfRollback    = int((transfersCount + 1) / 2)

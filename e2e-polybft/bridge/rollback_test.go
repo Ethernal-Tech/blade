@@ -209,7 +209,6 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 
 		validateBridgeRollbackExternal(t,
 			cluster,
-			transfersCount,
 			0, 0,
 			startEventNum(), endEventNum(),
 			numOfRollback,
@@ -277,7 +276,6 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 
 		validateBridgeRollbackExternal(t,
 			cluster,
-			transfersCount,
 			startBlockExternal, startBlockInternal,
 			startEventNum(), endEventNum(),
 			numOfRollback,
@@ -343,7 +341,6 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 
 		validateBridgeRollbackExternal(t,
 			cluster,
-			transfersCount,
 			startBlockExternal, startBlockInternal,
 			startEventNum(), endEventNum(),
 			numOfRollback,

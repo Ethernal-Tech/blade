@@ -356,7 +356,6 @@ func compareBucketsFromDBs(t *testing.T, db1, db2 *bbolt.DB, sourceChainID, dest
 func validateBridgeRollbackExternal(
 	t *testing.T,
 	cluster *framework.TestCluster,
-	transfersCount,
 	externalBlockStart,
 	internalBlockStart,
 	startEventNum,
@@ -364,9 +363,10 @@ func validateBridgeRollbackExternal(
 	numOfRollback int,
 	txRelayer txrelayer.TxRelayer,
 	gatewayAddr types.Address,
-	externalJsonRPC *jsonrpc.EthClient) {
+	externalJSONRPC *jsonrpc.EthClient) {
 	t.Helper()
-	validatorSrv := cluster.Servers[1]
+
+	validatorSrv := cluster.Servers[0]
 
 	latest, err := validatorSrv.JSONRPC().BlockNumber()
 	require.NoError(t, err)
@@ -387,9 +387,9 @@ func validateBridgeRollbackExternal(
 		return true
 	}))
 
-	latest = waitForBlocksOnExternal(t, 20, externalJsonRPC, 2*time.Minute)
+	latest = waitForBlocksOnExternal(t, 20, externalJSONRPC, 2*time.Minute)
 
-	logs, err = getFilteredLogs(bridgeMessageResult.Sig(), externalBlockStart, latest, externalJsonRPC)
+	logs, err = getFilteredLogs(bridgeMessageResult.Sig(), externalBlockStart, latest, externalJSONRPC)
 	require.NoError(t, err)
 
 	assertBridgeEventResultSuccessful(t, logs, numOfRollback)
@@ -404,15 +404,15 @@ func validateBridgeRollbackInternal(
 	numOfRollback int,
 	gatewayAddr types.Address,
 	txRelayer txrelayer.TxRelayer,
-	externalRPC *jsonrpc.EthClient) {
+	externalJSONRPC *jsonrpc.EthClient) {
 	t.Helper()
 
 	validatorSrv := cluster.Servers[0]
 
-	latest := waitForBlocksOnExternal(t, 20, externalRPC, 2*time.Minute)
+	latest := waitForBlocksOnExternal(t, 20, externalJSONRPC, 2*time.Minute)
 
 	var bridgeMessageResult contractsapi.BridgeMessageResultEvent
-	logs, err := getFilteredLogs(bridgeMessageResult.Sig(), externalBlockStart, latest, externalRPC)
+	logs, err := getFilteredLogs(bridgeMessageResult.Sig(), externalBlockStart, latest, externalJSONRPC)
 	require.NoError(t, err)
 
 	assertBridgeEventResultNotSuccessful(t, logs, numOfRollback)
