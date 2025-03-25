@@ -4,7 +4,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -2650,10 +2652,25 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 	})
 }
 
+func init() {
+	wd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	parent := filepath.Dir(wd)
+	parent = strings.Trim(parent, "e2e-polybft")
+	wd = filepath.Join(parent, "/artifacts/blade")
+	os.Setenv("EDGE_BINARY", wd)
+	os.Setenv("E2E_TESTS", "true")
+	os.Setenv("E2E_LOGS", "true")
+	os.Setenv("E2E_LOG_LEVEL", "debug")
+}
+
 func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 	const (
 		// X = 60
-		transfersCount  = 1                               // decreased from 15 for CI
+		transfersCount  = 5                               // decreased from 15 for CI
 		erc20ID1        = uint64(1)                       // start from one
 		erc20ID2        = erc20ID1 + transfersCount + 1   // last id + num of transfers + first event for contract
 		erc20ID3        = erc20ID2 + transfersCount       // last id + num of transfers
