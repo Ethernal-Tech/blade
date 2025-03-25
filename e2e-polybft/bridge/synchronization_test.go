@@ -334,21 +334,68 @@ func TestE2E_Bridge_ValidatorSyncExecuted(t *testing.T) {
 
 	validatorSrvStopped.Stop()
 
-	// DEPOSIT ERC20 TOKENS
+	wg := sync.WaitGroup{}
+
+	// DEPOSIT FROM EXTERNAL ERC20 TOKENS
 	// send a few transactions to the bridge
-	require.NoError(t,
-		cluster.Bridges[bridgeOne].Deposit(
-			common.ERC20,
-			rootERC20Token,
-			bridgeCfg.ExternalERC20PredicateAddr,
-			bridgeHelper.TestAccountPrivKey,
-			strings.Join(receivers, ","),
-			strings.Join(amounts, ","),
-			"",
-			cluster.Bridges[bridgeOne].JSONRPCAddr(),
-			bridgeHelper.TestAccountPrivKey,
-			false,
-		))
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		require.NoError(t,
+			cluster.Bridges[bridgeOne].Deposit(
+				common.ERC20,
+				rootERC20Token,
+				bridgeCfg.ExternalERC20PredicateAddr,
+				bridgeHelper.TestAccountPrivKey,
+				strings.Join(receivers, ","),
+				strings.Join(amounts, ","),
+				"",
+				cluster.Bridges[bridgeOne].JSONRPCAddr(),
+				bridgeHelper.TestAccountPrivKey,
+				false,
+			))
+	}()
+
+	// rootToken represents deposit token (basically native mintable token from the Supernets)
+	rootToken := contracts.NativeERC20TokenContract
+
+	// DEPOSIT FROM EXTERNAL ERC20 TOKENS
+	// send a few transactions to the bridge
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		for i, key := range receiverKeys {
+			// make sure deposit is successfully executed
+			err = cluster.Bridges[bridgeOne].Deposit(
+				common.ERC20,
+				rootToken,
+				bridgeCfg.InternalMintableERC20PredicateAddr,
+				key,
+				receivers[i],
+				amounts[i],
+				"",
+				validatorSrv1.JSONRPCAddr(),
+				"",
+				true)
+			require.NoError(t, err)
+		}
+	}()
+
+	wg.Wait()
+
+	// first exit event is mapping child token on a rootchain
+	require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
+		for i := uint64(1); i <= transfersCount+1; i++ {
+			if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
+				return false
+			}
+		}
+
+		return true
+	}))
 
 	finalBlockNum = 5 * sprintSize
 	// wait for a couple of sprints
