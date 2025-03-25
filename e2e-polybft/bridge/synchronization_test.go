@@ -367,6 +367,7 @@ func TestE2E_Bridge_ValidatorSyncExecuted(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
+
 		for i, key := range receiverKeys {
 			// make sure deposit is successfully executed
 			err = cluster.Bridges[bridgeOne].Deposit(
