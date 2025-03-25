@@ -4,7 +4,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -2645,6 +2647,685 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 				t.Fatalf("timeout")
 
 				return
+			}
+		}
+	})
+}
+
+func init() {
+	wd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	parent := filepath.Dir(wd)
+	parent = strings.Trim(parent, "e2e-polybft")
+	wd = filepath.Join(parent, "/artifacts/blade")
+	os.Setenv("EDGE_BINARY", wd)
+	os.Setenv("E2E_TESTS", "true")
+	os.Setenv("E2E_LOGS", "true")
+	os.Setenv("E2E_LOG_LEVEL", "debug")
+}
+
+func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
+	const (
+		// X = 60
+		transfersCount  = 1                               // decreased from 15 for CI
+		erc20ID1        = uint64(1)                       // start from one
+		erc20ID2        = erc20ID1 + transfersCount + 1   // last id + num of transfers + first event for contract
+		erc20ID3        = erc20ID2 + transfersCount       // last id + num of transfers
+		erc20ID4        = erc20ID3 + transfersCount       // last id + num of transfers
+		erc721ID1       = erc20ID4 + transfersCount       // last id + num of transfers
+		erc721ID2       = erc721ID1 + transfersCount + 1  // last id + num of transfers + first event for contract
+		erc721ID3       = erc721ID2 + transfersCount      // last id + num of transfers
+		erc721ID4       = erc721ID3 + transfersCount      // last id + num of transfers
+		erc1155ID1      = erc721ID4 + transfersCount      // last id + num of transfers
+		erc1155ID2      = erc1155ID1 + transfersCount + 1 // last id + num of transfers + first event for contract
+		erc1155ID3      = erc1155ID2 + transfersCount     // last id + num of transfers
+		erc1155ID4      = erc1155ID3 + transfersCount     // last id + num of transfers
+		epochSize       = 10
+		sprintSize      = uint64(5)
+		numberOfBridges = 1
+
+		amount    = int64(1000)
+		amountStr = "1000"
+	)
+
+	var (
+		accountAddrs = make([]types.Address, transfersCount)
+		accounts     = make([]string, transfersCount)
+		accountKeys  = make([]string, transfersCount)
+		amounts      = make([]string, transfersCount)
+	)
+
+	for i := 0; i < transfersCount; i++ {
+		key, err := crypto.GenerateECDSAKey()
+		require.NoError(t, err)
+
+		rawKey, err := key.MarshallPrivateKey()
+		require.NoError(t, err)
+
+		accountKeys[i] = hex.EncodeToString(rawKey)
+		accountAddrs[i] = key.Address()
+		accounts[i] = key.Address().String()
+		amounts[i] = fmt.Sprintf("%d", amount)
+
+		t.Logf("Receiver#%d=%s\n", i+1, accounts[i])
+	}
+
+	relayerPrivateKey, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
+	cluster := framework.NewTestCluster(t, 5,
+		framework.WithEpochSize(epochSize),
+		framework.WithBridges(numberOfBridges),
+		framework.WithRelayerPrivateKey(relayerPrivateKey),
+		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
+			for i := 0; i < len(addrs); i++ {
+				tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
+			}
+
+			tcc.StakeAmounts = append(tcc.StakeAmounts, ethgo.Ether(10))
+
+			tcc.Premine = append(tcc.Premine, accounts...)
+			tcc.Premine = append(tcc.Premine, relayerPrivateKey.String())
+		}))
+
+	defer cluster.Stop()
+
+	cluster.WaitForReady(t)
+
+	polybftCfg, err := polycfg.LoadPolyBFTConfig(path.Join(cluster.Config.TmpDir, command.DefaultGenesisFileName))
+	require.NoError(t, err)
+
+	internalJSONRPCAddr := cluster.Servers[0].JSONRPCAddr()
+	internalEndpoint := cluster.Servers[0].JSONRPC()
+
+	externalJSONRPCAddr := cluster.Bridges[0].JSONRPCAddr()
+	externalEndpoint, err := jsonrpc.NewEthClient(externalJSONRPCAddr)
+	require.NoError(t, err)
+
+	externalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(externalEndpoint))
+	require.NoError(t, err)
+
+	internalChainTxRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(internalEndpoint))
+	require.NoError(t, err)
+
+	externalChainID, err := externalChainTxRelayer.Client().ChainID()
+	require.NoError(t, err)
+
+	bridgeCfg := polybftCfg.Bridge[externalChainID.Uint64()]
+
+	bridge := cluster.Bridges[0]
+
+	deployerKey, err := bridgeHelper.DecodePrivateKey("")
+	require.NoError(t, err)
+
+	errChan := make(chan error, 1)
+
+	t.Run("ERC20", func(t *testing.T) {
+		runTest := func(sourcePred, destinationPred, sourceGW, destinationGW types.Address,
+			sourceRPC, destinationRPC, dtype string, sourceRelayer, destinationRelayer txrelayer.TxRelayer) {
+			// deploy ERC20 token
+			deployTx := types.NewTx(types.NewLegacyTx(
+				types.WithTo(nil),
+				types.WithInput(contractsapi.RootERC20.Bytecode),
+			))
+
+			receipt, err := sourceRelayer.SendTransaction(deployTx, deployerKey)
+			require.NoError(t, err)
+			require.NotNil(t, receipt)
+			require.Equal(t, uint64(types.ReceiptSuccess), receipt.Status)
+
+			tokenAddr := types.Address(receipt.ContractAddress)
+
+			depositFunc := func(startID, contract uint64) error {
+				// mint & deposit
+				for i := range transfersCount {
+					if err := bridge.Deposit(
+						common.ERC20,
+						tokenAddr,
+						sourcePred,
+						bridgeHelper.TestAccountPrivKey,
+						accounts[i],
+						amountStr,
+						"",
+						sourceRPC,
+						bridgeHelper.TestAccountPrivKey,
+						false,
+					); err != nil {
+						return err
+					}
+				}
+
+				t.Logf("ERC20 tokens deposited %s", dtype)
+
+				// should be processed because there are enough ERC20 funds
+				if err := cluster.WaitUntil(2*time.Minute, 2*time.Second, func() bool {
+					for i := startID; i < startID+transfersCount+contract; i++ {
+						if !isEventProcessed(t, destinationGW, destinationRelayer, i, false) {
+							return false
+						}
+					}
+
+					return true
+				}); err != nil {
+					return err
+				}
+
+				t.Logf("All deposit events processed %s", dtype)
+
+				return nil
+			}
+
+			if err := depositFunc(erc20ID1, 1); err != nil {
+				errChan <- err
+
+				return
+			}
+
+			childToken := getChildToken(t, contractsapi.RootERC20Predicate.Abi, sourcePred, tokenAddr, sourceRelayer)
+
+			withdrawFunc := func(shouldThrowError bool, startID uint64) error {
+				// withdraw - should be processed because there are enough ERC20 funds
+				for i, accountKey := range accountKeys {
+					err = bridge.Withdraw(
+						common.ERC20,
+						accountKey,
+						accounts[i],
+						amountStr,
+						"",
+						destinationRPC,
+						destinationPred,
+						childToken,
+						false)
+
+					if shouldThrowError && err == nil {
+						return fmt.Errorf("expected error but got nil %s", dtype)
+					}
+
+					if !shouldThrowError && err != nil {
+						return err
+					}
+				}
+
+				if !shouldThrowError {
+					// should be processed because there are enough ERC20 funds
+					if err := cluster.WaitUntil(2*time.Minute, 2*time.Second, func() bool {
+						for i := startID; i < startID+transfersCount; i++ {
+							if !isEventProcessed(t, sourceGW, sourceRelayer, i, false) {
+								return false
+							}
+						}
+
+						return true
+					}); err != nil {
+						return err
+					}
+
+					t.Logf("All withdraws processed %s", dtype)
+					return nil
+				}
+
+				t.Logf("Withdraw failed as expected %s", dtype)
+				return nil
+			}
+
+			// successful withdraw
+			if err := withdrawFunc(false, erc20ID2); err != nil {
+				errChan <- err
+
+				return
+			}
+
+			// no funds withdraw
+			if err := withdrawFunc(true, 0); err != nil {
+				errChan <- err
+
+				return
+			}
+
+			// deposit again
+			if err := depositFunc(erc20ID3, 0); err != nil {
+				errChan <- err
+
+				return
+			}
+
+			// successful withdraw
+			if err := withdrawFunc(false, erc20ID4); err != nil {
+				errChan <- err
+
+				return
+			}
+
+			for _, acc := range accountAddrs {
+				balance := erc20BalanceOf(t, acc, childToken, destinationRelayer)
+				if balance.Cmp(big.NewInt(0)) != 0 {
+					errChan <- fmt.Errorf("balance check failed %s for account %s", dtype, acc)
+
+					return
+				}
+			}
+
+			errChan <- nil
+		}
+
+		go runTest(bridgeCfg.InternalMintableERC20PredicateAddr, bridgeCfg.ExternalMintableERC20PredicateAddr,
+			bridgeCfg.InternalGatewayAddr, bridgeCfg.ExternalGatewayAddr, internalJSONRPCAddr, externalJSONRPCAddr, "I2E", internalChainTxRelayer, externalChainTxRelayer)
+
+		go runTest(bridgeCfg.ExternalERC20PredicateAddr, bridgeCfg.InternalERC20PredicateAddr,
+			bridgeCfg.ExternalGatewayAddr, bridgeCfg.InternalGatewayAddr, externalJSONRPCAddr, internalJSONRPCAddr, "E2I", externalChainTxRelayer, internalChainTxRelayer)
+
+		counter := 0
+
+		for {
+			select {
+			case err := <-errChan:
+				if err != nil {
+					t.Fatal(err)
+
+					return
+				}
+
+				if counter++; counter == 2 {
+					return
+				}
+			case <-time.After(10 * time.Minute):
+				t.Fatalf("timeout")
+			}
+		}
+	})
+
+	t.Run("ERC721", func(t *testing.T) {
+		runTest := func(sourcePred, destinationPred, sourceGW, destinationGW types.Address,
+			sourceRPC, destinationRPC, dtype string, sourceRelayer, destinationRelayer txrelayer.TxRelayer) {
+			// deploy ERC721 token
+			deployTx := types.NewTx(types.NewLegacyTx(
+				types.WithTo(nil),
+				types.WithInput(contractsapi.RootERC721.Bytecode),
+			))
+
+			receipt, err := sourceRelayer.SendTransaction(deployTx, deployerKey)
+			require.NoError(t, err)
+			require.NotNil(t, receipt)
+			require.Equal(t, uint64(types.ReceiptSuccess), receipt.Status)
+
+			tokenAddr := types.Address(receipt.ContractAddress)
+
+			depositFunc := func(startID, contract, tokenStart uint64) error {
+				// mint & deposit
+				for i := range transfersCount {
+					if err := bridge.Deposit(
+						common.ERC721,
+						tokenAddr,
+						sourcePred,
+						bridgeHelper.TestAccountPrivKey,
+						accounts[i],
+						"",
+						fmt.Sprintf("%d", int(tokenStart)+i),
+						sourceRPC,
+						bridgeHelper.TestAccountPrivKey,
+						false,
+					); err != nil {
+						return err
+					}
+				}
+
+				t.Logf("ERC721 tokens deposited %s", dtype)
+
+				// should be processed because there are enough ERC721 funds
+				if err := cluster.WaitUntil(2*time.Minute, 2*time.Second, func() bool {
+					for i := startID; i < startID+transfersCount+contract; i++ {
+						if !isEventProcessed(t, destinationGW, destinationRelayer, i, false) {
+							return false
+						}
+					}
+
+					return true
+				}); err != nil {
+					return err
+				}
+
+				t.Logf("All deposit events processed %s", dtype)
+
+				return nil
+			}
+
+			if err := depositFunc(erc721ID1, 1, 0); err != nil {
+				errChan <- err
+
+				return
+			}
+
+			childToken := getChildToken(t, contractsapi.RootERC721Predicate.Abi, sourcePred, tokenAddr, sourceRelayer)
+
+			for i := range transfersCount {
+				owner := erc721OwnerOf(t, big.NewInt(int64(i)), childToken, destinationRelayer)
+				if owner != accountAddrs[i] {
+					errChan <- fmt.Errorf("owner of %d is not same on source & destination", i)
+
+					return
+				}
+			}
+
+			withdrawFunc := func(shouldThrowError bool, startID, tokenStart uint64) error {
+				// withdraw - should be processed because there are enough ERC721 funds
+				for i, accountKey := range accountKeys {
+					err = bridge.Withdraw(
+						common.ERC721,
+						accountKey,
+						accounts[i],
+						"",
+						fmt.Sprintf("%d", int(tokenStart)+i),
+						destinationRPC,
+						destinationPred,
+						childToken,
+						false)
+
+					if shouldThrowError && err == nil {
+						return fmt.Errorf("expected error but got nil %s", dtype)
+					}
+
+					if !shouldThrowError && err != nil {
+						return err
+					}
+				}
+
+				if !shouldThrowError {
+					// should be processed because there are enough ERC721 funds
+					if err := cluster.WaitUntil(2*time.Minute, 2*time.Second, func() bool {
+						for i := startID; i < startID+transfersCount; i++ {
+							if !isEventProcessed(t, sourceGW, sourceRelayer, i, false) {
+								return false
+							}
+						}
+
+						return true
+					}); err != nil {
+						return err
+					}
+
+					t.Logf("All withdraws processed %s", dtype)
+					return nil
+				}
+
+				t.Logf("Withdraw failed as expected %s", dtype)
+				return nil
+			}
+
+			// successful withdraw
+			if err := withdrawFunc(false, erc721ID2, 0); err != nil {
+				errChan <- err
+
+				return
+			}
+
+			// no funds withdraw
+			if err := withdrawFunc(true, 0, 0); err != nil {
+				errChan <- err
+
+				return
+			}
+
+			// deposit again
+			if err := depositFunc(erc721ID3, 0, transfersCount); err != nil {
+				errChan <- err
+
+				return
+			}
+
+			for i := range transfersCount {
+				owner := erc721OwnerOf(t, big.NewInt(int64(i+transfersCount)), childToken, destinationRelayer)
+				if owner != accountAddrs[i] {
+					errChan <- fmt.Errorf("owner of %d is not same on source & destination", i)
+
+					return
+				}
+			}
+
+			// successful withdraw
+			if err := withdrawFunc(false, erc721ID4, transfersCount); err != nil {
+				errChan <- err
+
+				return
+			}
+
+			for i := range transfersCount {
+				owner1 := erc721OwnerOf(t, big.NewInt(int64(i)), tokenAddr, sourceRelayer)
+				owner2 := erc721OwnerOf(t, big.NewInt(int64(i+transfersCount)), tokenAddr, sourceRelayer)
+
+				if owner1 != owner2 {
+					errChan <- fmt.Errorf("owner of %d is not same on source & destination", i)
+
+					return
+				}
+			}
+
+			errChan <- nil
+		}
+
+		go runTest(bridgeCfg.InternalMintableERC721PredicateAddr, bridgeCfg.ExternalMintableERC721PredicateAddr,
+			bridgeCfg.InternalGatewayAddr, bridgeCfg.ExternalGatewayAddr, internalJSONRPCAddr, externalJSONRPCAddr, "I2E", internalChainTxRelayer, externalChainTxRelayer)
+
+		go runTest(bridgeCfg.ExternalERC721PredicateAddr, bridgeCfg.InternalERC721PredicateAddr,
+			bridgeCfg.ExternalGatewayAddr, bridgeCfg.InternalGatewayAddr, externalJSONRPCAddr, internalJSONRPCAddr, "E2I", externalChainTxRelayer, internalChainTxRelayer)
+
+		counter := 0
+
+		for {
+			select {
+			case err := <-errChan:
+				if err != nil {
+					t.Fatal(err)
+
+					return
+				}
+
+				if counter++; counter == 2 {
+					return
+				}
+			case <-time.After(10 * time.Minute):
+				t.Fatalf("timeout")
+			}
+		}
+	})
+
+	t.Run("ERC1155", func(t *testing.T) {
+		runTest := func(sourcePred, destinationPred, sourceGW, destinationGW types.Address,
+			sourceRPC, destinationRPC, dtype string, sourceRelayer, destinationRelayer txrelayer.TxRelayer) {
+			// deploy ERC1155 token
+			deployTx := types.NewTx(types.NewLegacyTx(
+				types.WithTo(nil),
+				types.WithInput(contractsapi.RootERC1155.Bytecode),
+			))
+
+			receipt, err := sourceRelayer.SendTransaction(deployTx, deployerKey)
+			require.NoError(t, err)
+			require.NotNil(t, receipt)
+			require.Equal(t, uint64(types.ReceiptSuccess), receipt.Status)
+
+			tokenAddr := types.Address(receipt.ContractAddress)
+
+			depositFunc := func(startID, contract, tokenStart uint64) error {
+				// mint & deposit
+				for i := range transfersCount {
+					if err := bridge.Deposit(
+						common.ERC1155,
+						tokenAddr,
+						sourcePred,
+						bridgeHelper.TestAccountPrivKey,
+						accounts[i],
+						amountStr,
+						fmt.Sprintf("%d", int(tokenStart)+i),
+						sourceRPC,
+						bridgeHelper.TestAccountPrivKey,
+						false,
+					); err != nil {
+						return err
+					}
+				}
+
+				t.Logf("ERC1155 tokens deposited %s", dtype)
+
+				// should be processed because there are enough ERC1155 funds
+				if err := cluster.WaitUntil(2*time.Minute, 2*time.Second, func() bool {
+					for i := startID; i < startID+transfersCount+contract; i++ {
+						if !isEventProcessed(t, destinationGW, destinationRelayer, i, false) {
+							return false
+						}
+					}
+
+					return true
+				}); err != nil {
+					return err
+				}
+
+				t.Logf("All deposit events processed %s", dtype)
+
+				return nil
+			}
+
+			if err := depositFunc(erc1155ID1, 1, 0); err != nil {
+				errChan <- err
+
+				return
+			}
+
+			childToken := getChildToken(t, contractsapi.RootERC1155Predicate.Abi, sourcePred, tokenAddr, sourceRelayer)
+
+			for i := range transfersCount {
+				balance := erc1155BalanceOf(t, accountAddrs[i], childToken, i, destinationRelayer)
+				if balance.Cmp(big.NewInt(amount)) != 0 {
+					errChan <- fmt.Errorf("balance check failed %s for account %s", dtype, accounts[i])
+
+					return
+				}
+			}
+
+			withdrawFunc := func(shouldThrowError bool, startID, tokenStart uint64) error {
+				// withdraw - should be processed because there are enough ERC1155 funds
+				for i, accountKey := range accountKeys {
+					err = bridge.Withdraw(
+						common.ERC1155,
+						accountKey,
+						accounts[i],
+						amountStr,
+						fmt.Sprintf("%d", int(tokenStart)+i),
+						destinationRPC,
+						destinationPred,
+						childToken,
+						false)
+
+					if shouldThrowError && err == nil {
+						return fmt.Errorf("expected error but got nil %s", dtype)
+					}
+
+					if !shouldThrowError && err != nil {
+						return err
+					}
+				}
+
+				if !shouldThrowError {
+					// should be processed because there are enough ERC1155 funds
+					if err := cluster.WaitUntil(2*time.Minute, 2*time.Second, func() bool {
+						for i := startID; i < startID+transfersCount; i++ {
+							if !isEventProcessed(t, sourceGW, sourceRelayer, i, false) {
+								return false
+							}
+						}
+
+						return true
+					}); err != nil {
+						return err
+					}
+
+					t.Logf("All withdraws processed %s", dtype)
+					return nil
+				}
+
+				t.Logf("Withdraw failed as expected %s", dtype)
+				return nil
+			}
+
+			// successful withdraw
+			if err := withdrawFunc(false, erc1155ID2, 0); err != nil {
+				errChan <- err
+
+				return
+			}
+
+			// no funds withdraw
+			if err := withdrawFunc(true, 0, 0); err != nil {
+				errChan <- err
+
+				return
+			}
+
+			// deposit again
+			if err := depositFunc(erc1155ID3, 0, transfersCount); err != nil {
+				errChan <- err
+
+				return
+			}
+
+			for i := range transfersCount {
+				balance := erc1155BalanceOf(t, accountAddrs[i], childToken, i+transfersCount, destinationRelayer)
+				if balance.Cmp(big.NewInt(amount)) != 0 {
+					errChan <- fmt.Errorf("balance check failed %s for account %s", dtype, accounts[i])
+
+					return
+				}
+			}
+
+			// successful withdraw
+			if err := withdrawFunc(false, erc1155ID4, transfersCount); err != nil {
+				errChan <- err
+
+				return
+			}
+
+			for i := range transfersCount {
+				balance1 := erc1155BalanceOf(t, accountAddrs[i], childToken, i, destinationRelayer)
+				if balance1.Cmp(big.NewInt(0)) != 0 {
+					errChan <- fmt.Errorf("balance check failed %s for account %s", dtype, accounts[i])
+
+					return
+				}
+
+				balance2 := erc1155BalanceOf(t, accountAddrs[i], childToken, i+transfersCount, destinationRelayer)
+				if balance2.Cmp(big.NewInt(0)) != 0 {
+					errChan <- fmt.Errorf("balance check failed %s for account %s", dtype, accounts[i])
+
+					return
+				}
+			}
+
+			errChan <- nil
+		}
+
+		go runTest(bridgeCfg.InternalMintableERC1155PredicateAddr, bridgeCfg.ExternalMintableERC1155PredicateAddr,
+			bridgeCfg.InternalGatewayAddr, bridgeCfg.ExternalGatewayAddr, internalJSONRPCAddr, externalJSONRPCAddr, "I2E", internalChainTxRelayer, externalChainTxRelayer)
+
+		go runTest(bridgeCfg.ExternalERC1155PredicateAddr, bridgeCfg.InternalERC1155PredicateAddr,
+			bridgeCfg.ExternalGatewayAddr, bridgeCfg.InternalGatewayAddr, externalJSONRPCAddr, internalJSONRPCAddr, "E2I", externalChainTxRelayer, internalChainTxRelayer)
+
+		counter := 0
+
+		for {
+			select {
+			case err := <-errChan:
+				if err != nil {
+					t.Fatal(err)
+
+					return
+				}
+
+				if counter++; counter == 2 {
+					return
+				}
+			case <-time.After(10 * time.Minute):
+				t.Fatalf("timeout")
 			}
 		}
 	})
