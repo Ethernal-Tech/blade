@@ -396,6 +396,236 @@ func TestBridgeEventManager_RemoveProcessedEvents(t *testing.T) {
 	require.Equal(t, 0, len(stateSyncEventsAfter))
 }
 
+func Test_handleBridgeMessageEvent(t *testing.T) {
+	vals := validator.NewTestValidators(t, 5)
+
+	// The following sequence of tests effectively covers all cases related to the ProcessLog
+	// and AddLog methods when a `BridgeMsg` event occurs. The only additional functionality
+	// these methods have, besides calling "handleBridgeMessageEvent", is checking whether the
+	// event belongs to the current bridge manager and parsing the event itself (which should
+	// be tested separately outside the bridge context). All tests handle the I2E message, but
+	// the approach is exactly the same for the E2I messages.
+
+	bc := &blockchain.BlockchainMock{}
+	ss := &systemstate.SystemStateMock{}
+
+	bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
+	bc.On("GetSystemState", mock.Anything).Return(ss)
+	ss.On("GetNextCommittedIndex", mock.Anything).Return(uint64(10))
+
+	// Function to check whether a message has been processed correctly. The types of possible
+	// checks are as follows (typeOfCheck argument):
+	//	1 - the message should not even go into the finalization (fin.) phase at all
+	//	2 - the message should go into the fin. phase and it has been successfully executed
+	//	3 - the message should go into the fin. phase and it has been unsuccessfully executed
+	checkFn := func(
+		msgEvent *contractsapi.BridgeMsgEvent,
+		bm *bridgeEventManager,
+		typeOfCheck int) {
+		// Function to check whether the message is part of the ordinary bucket.
+		getMsg := func() (*contractsapi.BridgeMsgEvent, error) {
+			return bm.state.getBridgeMessageEvent(
+				msgEvent.ID,
+				msgEvent.SourceChainID,
+				msgEvent.DestinationChainID,
+				false,
+				nil)
+		}
+
+		// Function to check whether the message is part of the ordinary bucket.
+		getRollbackMsg := func() (*contractsapi.BridgeMsgEvent, error) {
+			return bm.state.getBridgeMessageEvent(
+				msgEvent.ID,
+				msgEvent.DestinationChainID,
+				msgEvent.SourceChainID,
+				true,
+				nil)
+		}
+
+		switch typeOfCheck {
+		case 1:
+			msgEvent, err := getMsg()
+
+			require.NoError(t, err)
+			require.NotNil(t, msgEvent)
+
+			msgEvent, err = getRollbackMsg()
+
+			require.NoError(t, err)
+			require.Nil(t, msgEvent)
+		case 2:
+			msgEvent, err := getMsg()
+
+			require.NoError(t, err)
+			require.Nil(t, msgEvent)
+
+			msgEvent, err = getRollbackMsg()
+
+			require.NoError(t, err)
+			require.Nil(t, msgEvent)
+		case 3:
+			msgEvent, err := getMsg()
+
+			require.NoError(t, err)
+			require.Nil(t, msgEvent)
+
+			msgEvent, err = getRollbackMsg()
+
+			require.NoError(t, err)
+			require.NotNil(t, msgEvent)
+		}
+	}
+
+	// This test illustrates a scenario where the new bridge message arrives in the system, and
+	// it has neither been committed nor executed before.
+	//
+	// Expected: the message should only be written to the database, specifically to the bucket
+	// reserver for ordinary messages.
+	t.Run("1", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msgEvent := &contractsapi.BridgeMsgEvent{
+			ID:                 big.NewInt(10),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}
+
+		err := bm.handleBridgeMessageEvent(nil, msgEvent, nil)
+		require.NoError(t, err)
+
+		checkFn(msgEvent, bm, 1)
+	})
+
+	// This test illustrates a scenario where the new bridge message arrives in the system, and
+	// it has been previously committed but not executed.
+	//
+	// Expected: the message should only be written to the database, specifically to the bucket
+	// reserved for ordinary messages.
+	t.Run("2", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msgEvent := &contractsapi.BridgeMsgEvent{
+			ID:                 big.NewInt(5),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}
+
+		err := bm.handleBridgeMessageEvent(nil, msgEvent, nil)
+		require.NoError(t, err)
+
+		checkFn(msgEvent, bm, 1)
+	})
+
+	// This test illustrates a scenario where the new bridge message arrives in the system, and
+	// it has been previously executed but not committed.
+	//
+	// Expected: the message should only be written to the database, specifically to the bucket
+	// reserved for ordinary messages.
+	t.Run("3", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msgEvent := &contractsapi.BridgeMsgEvent{
+			ID:                 big.NewInt(10),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}
+
+		msgResultEvent := &contractsapi.BridgeMessageResultEvent{
+			ID:                 big.NewInt(10),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}
+
+		err := bm.state.insertBridgeMessageResultEvent(msgResultEvent, nil)
+		require.NoError(t, err)
+
+		err = bm.handleBridgeMessageEvent(nil, msgEvent, nil)
+		require.NoError(t, err)
+
+		checkFn(msgEvent, bm, 1)
+	})
+
+	// This test illustrates a scenario where the new bridge message arrives in the system, and
+	// it has been previously committed and executed. The execution result is successful.
+	//
+	// Expected: nothing should be done, i.e., the message should be first written to the bucket
+	// reserved for ordinary messages and then, since it has already been successfully executed,
+	// removed from it.
+	t.Run("4", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msgEvent := &contractsapi.BridgeMsgEvent{
+			ID:                 big.NewInt(5),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}
+
+		msgResultEvent := &contractsapi.BridgeMessageResultEvent{
+			ID:                 big.NewInt(5),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+			Status:             true,
+		}
+
+		err := bm.state.insertBridgeMessageResultEvent(msgResultEvent, nil)
+		require.NoError(t, err)
+
+		err = bm.handleBridgeMessageEvent(nil, msgEvent, nil)
+		require.NoError(t, err)
+
+		checkFn(msgEvent, bm, 2)
+	})
+
+	// This test illustrates a scenario where the new bridge message arrives in the system, and
+	// it has been previously committed and executed. The execution result is unsuccessful.
+	//
+	// Expected: the message should only be written to the bucket reserved for rollback messages.
+	t.Run("5", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msgEvent := &contractsapi.BridgeMsgEvent{
+			ID:                 big.NewInt(5),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}
+
+		msgResultEvent := &contractsapi.BridgeMessageResultEvent{
+			ID:                 big.NewInt(5),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+			Status:             false,
+		}
+
+		err := bm.state.insertBridgeMessageResultEvent(msgResultEvent, nil)
+		require.NoError(t, err)
+
+		err = bm.handleBridgeMessageEvent(nil, msgEvent, nil)
+		require.NoError(t, err)
+
+		checkFn(msgEvent, bm, 3)
+	})
+}
+
 func Test_isBridgeMessageCommitted(t *testing.T) {
 	vals := validator.NewTestValidators(t, 5)
 
