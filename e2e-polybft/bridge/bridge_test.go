@@ -2864,10 +2864,12 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 					}
 
 					t.Logf("All withdraws processed %s", dtype)
+
 					return nil
 				}
 
 				t.Logf("Withdraw failed as expected %s", dtype)
+
 				return nil
 			}
 
@@ -3047,10 +3049,12 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 					}
 
 					t.Logf("All withdraws processed %s", dtype)
+
 					return nil
 				}
 
 				t.Logf("Withdraw failed as expected %s", dtype)
+
 				return nil
 			}
 
@@ -3241,10 +3245,12 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 					}
 
 					t.Logf("All withdraws processed %s", dtype)
+
 					return nil
 				}
 
 				t.Logf("Withdraw failed as expected %s", dtype)
+
 				return nil
 			}
 
