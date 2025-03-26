@@ -292,6 +292,7 @@ loop3:
 		bridgeCfg.ExternalERC20PredicateAddr, externalERC20Addr, externalChainTxRelayer)
 
 	expectedBalance := big.NewInt(bridgeAmount * 2)
+
 	for _, acc := range accountAddrs {
 		balance1 := erc20BalanceOf(t, acc, internalChildToken, externalChainTxRelayer)
 		if balance1.Cmp(expectedBalance) != 0 {
