@@ -36,9 +36,9 @@ func (m *SystemStateMock) GetBridgeBatchByNumber(numberOfBatch *big.Int) (
 	*contractsapi.SignedBridgeMessageBatch, error) {
 	args := m.Called()
 	if len(args) == 1 {
-		batch, _ := args.Get(0).(contractsapi.SignedBridgeMessageBatch)
+		batch, _ := args.Get(0).(*contractsapi.SignedBridgeMessageBatch)
 
-		return &batch, nil
+		return batch, nil
 	} else if len(args) == 2 {
 		batch, _ := args.Get(0).(contractsapi.SignedBridgeMessageBatch)
 

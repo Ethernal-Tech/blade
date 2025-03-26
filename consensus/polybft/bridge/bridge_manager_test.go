@@ -923,12 +923,7 @@ func Test_AddLog_Unexecuted_list(t *testing.T) {
 	vals := validator.NewTestValidators(t, 5)
 
 	bc := &blockchain.BlockchainMock{}
-	ss := &systemstate.SystemStateMock{}
-
 	bc.On("CurrentHeader", mock.Anything).Return(&types.Header{})
-	bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
-	bc.On("GetSystemState", mock.Anything).Return(ss)
-	ss.On("GetNextCommittedIndex", mock.Anything).Return(uint64(10))
 
 	// Function to create dummy `BridgeMessageResult` log for an I2E message.
 	createLogFn := func(id uint64, isRollback bool) *ethgo.Log {
@@ -1190,6 +1185,558 @@ func Test_AddLog_Unexecuted_list(t *testing.T) {
 		require.NoError(t, err)
 
 		require.EqualValues(t, 1, len(bm.unexecutedBatches))
+	})
+}
+
+func Test_updateStateOnBatchCommit(t *testing.T) {
+	vals := validator.NewTestValidators(t, 5)
+
+	// All tests share a common initialization (initFn), that is, initial state, which consists
+	// of the following:
+	//	1. one batch exists in pendingBridgeBatchesI2E,
+	// 	2. one batch exists in pendingBridgeBatchesE2I,
+	//	3. one batch exists in unexecutedBatches,
+	//	4. one batch exists in retryBatches,
+	//	5. one batch has a corresponding list in pendingRetryBatches.
+	//
+	// The descriptions of all tests assume the aforementioned setup. Additionally, for tests
+	// verifying the arrival of a non-retry batch, it is understood that this batch is part of
+	// the corresponding pendingBridgeBatches list. Similarly, for tests examining the arrival
+	// of a retry batch, it is assumed that the batch is already included in retryBatches and
+	// pendingRetryBatches.
+
+	// Function to create initial state used in all the following tests.
+	initFn := func(bm *bridgeEventManager) (*PendingBridgeBatch, types.Hash) {
+		msg1 := &contractsapi.BridgeMessage{
+			ID:                 big.NewInt(1),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}
+
+		msg2 := &contractsapi.BridgeMessage{
+			ID:                 big.NewInt(2),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}
+
+		i2eBatch := &PendingBridgeBatch{
+			BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
+				Messages:              []*contractsapi.BridgeMessage{msg1, msg2},
+				SourceChainID:         big.NewInt(100),
+				DestinationChainID:    big.NewInt(1),
+				Threshold:             big.NewInt(0),
+				NumberOfRegularEvents: big.NewInt(0),
+				CommitCounter:         big.NewInt(0),
+			},
+		}
+
+		baseHash, _ := i2eBatch.Hash()
+
+		i2eBatch.CommitCounter = big.NewInt(1)
+
+		bm.retryBatches[[32]byte{}] = PendingBridgeBatch{}
+		bm.pendingRetryBatches[[32]byte{}] = []*PendingBridgeBatch{}
+		bm.unexecutedBatches = append(bm.unexecutedBatches, &PendingBridgeBatch{})
+		bm.pendingBridgeBatchesI2E = append(bm.pendingBridgeBatchesI2E, &PendingBridgeBatch{})
+		bm.pendingBridgeBatchesE2I = append(bm.pendingBridgeBatchesE2I, &PendingBridgeBatch{})
+
+		return i2eBatch, baseHash
+	}
+
+	// Function to check whether the state structures reflect the correct state.
+	checkFn := func(bm *bridgeEventManager, unexe, penI2E, penE2I, ret, penRet int) {
+		require.EqualValues(t, unexe, len(bm.unexecutedBatches))
+		require.EqualValues(t, penI2E, len(bm.pendingBridgeBatchesI2E))
+		require.EqualValues(t, penE2I, len(bm.pendingBridgeBatchesE2I))
+		require.EqualValues(t, ret, len(bm.retryBatches))
+		require.EqualValues(t, penRet, len(bm.pendingRetryBatches))
+	}
+
+	// This test illustrates a scenario where an E2I batch comes, that is, being committed.
+	//
+	// Expected: the E2I pending bridge batch list (pendingBridgeBatchesE2I) should be cleared.
+	t.Run("1", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			nil,
+		)
+
+		initFn(bm)
+
+		checkFn(bm, 1, 1, 1, 1, 1)
+
+		bm.updateStateOnBatchCommit(
+			big.NewInt(1),
+			[32]byte{},
+			[32]byte{},
+			&PendingBridgeBatch{
+				BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
+					DestinationChainID: big.NewInt(100),
+					SourceChainID:      big.NewInt(1),
+				},
+			},
+			nil)
+
+		checkFn(bm, 1, 1, 0, 1, 1)
+	})
+
+	// This test illustrates a scenario where an I2E non-retry batch arrives, with some of its
+	// messages not yet executed.
+	//
+	// Expected: the I2E pending bridge batch list (pendingBridgeBatchesI2E) should be cleared,
+	// while the number of batches within the unexecuted list (unexecutedBatches) should increase
+	// by one.
+	t.Run("2", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			nil,
+		)
+
+		batch, hash := initFn(bm)
+		bm.pendingBridgeBatchesI2E = append(bm.pendingBridgeBatchesI2E, batch)
+
+		err := bm.state.insertBridgeMessageResultEvent(&contractsapi.BridgeMessageResultEvent{
+			ID:                 big.NewInt(1),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}, nil)
+
+		require.NoError(t, err)
+
+		checkFn(bm, 1, 2, 1, 1, 1)
+
+		bm.updateStateOnBatchCommit(big.NewInt(1), hash, [32]byte{}, batch, nil)
+
+		checkFn(bm, 2, 0, 1, 1, 1)
+	})
+
+	// This test illustrates a scenario where an I2E non-retry batch arrives, and all of its
+	// messages have already been previously executed.
+	//
+	// Expected: the I2E pending bridge batch list (pendingBridgeBatchesI2E) should be cleared.
+	t.Run("3", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			nil,
+		)
+
+		batch, hash := initFn(bm)
+		bm.pendingBridgeBatchesI2E = append(bm.pendingBridgeBatchesI2E, batch)
+
+		err := bm.state.insertBridgeMessageResultEvent(&contractsapi.BridgeMessageResultEvent{
+			ID:                 big.NewInt(1),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}, nil)
+
+		require.NoError(t, err)
+
+		err = bm.state.insertBridgeMessageResultEvent(&contractsapi.BridgeMessageResultEvent{
+			ID:                 big.NewInt(2),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}, nil)
+
+		require.NoError(t, err)
+
+		checkFn(bm, 1, 2, 1, 1, 1)
+
+		bm.updateStateOnBatchCommit(big.NewInt(1), hash, [32]byte{}, batch, nil)
+
+		checkFn(bm, 1, 0, 1, 1, 1)
+	})
+
+	// This test illustrates a scenario where an I2E retry batch arrives, with some of its messages
+	// not yet executed.
+	//
+	// Expected: the batch should be removed from the retryBatches and its list of pending retry
+	// batches should be removed from pendingRetryBatches. Also, the number of batches within the
+	// unexecuted list (unexecutedBatches) should increase by 1.
+	t.Run("4", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			nil,
+		)
+
+		batch, hash := initFn(bm)
+		bm.retryBatches[hash] = PendingBridgeBatch{}
+		bm.pendingRetryBatches[hash] = []*PendingBridgeBatch{}
+		batch.CommitCounter = big.NewInt(2)
+
+		err := bm.state.insertBridgeMessageResultEvent(&contractsapi.BridgeMessageResultEvent{
+			ID:                 big.NewInt(1),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}, nil)
+
+		require.NoError(t, err)
+
+		checkFn(bm, 1, 1, 1, 2, 2)
+
+		bm.updateStateOnBatchCommit(big.NewInt(1), hash, [32]byte{}, batch, nil)
+
+		checkFn(bm, 2, 1, 1, 1, 1)
+	})
+
+	// This test illustrates a scenario where an I2E retry batch arrives, and all of its messages
+	// have already been previously executed.
+	//
+	// Expected: the batch should be removed from the retryBatches and its list of pending retry
+	// batches should be removed from pendingRetryBatches.
+	t.Run("5", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			nil,
+		)
+
+		batch, hash := initFn(bm)
+		bm.retryBatches[hash] = PendingBridgeBatch{}
+		bm.pendingRetryBatches[hash] = []*PendingBridgeBatch{}
+		batch.CommitCounter = big.NewInt(2)
+
+		err := bm.state.insertBridgeMessageResultEvent(&contractsapi.BridgeMessageResultEvent{
+			ID:                 big.NewInt(1),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}, nil)
+
+		require.NoError(t, err)
+
+		err = bm.state.insertBridgeMessageResultEvent(&contractsapi.BridgeMessageResultEvent{
+			ID:                 big.NewInt(2),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}, nil)
+
+		require.NoError(t, err)
+
+		checkFn(bm, 1, 1, 1, 2, 2)
+
+		bm.updateStateOnBatchCommit(big.NewInt(1), hash, [32]byte{}, batch, nil)
+
+		checkFn(bm, 1, 1, 1, 1, 1)
+	})
+}
+
+func Test_ProcessLog_Remove_Rollback_messages(t *testing.T) {
+	vals := validator.NewTestValidators(t, 5)
+
+	bc := &blockchain.BlockchainMock{}
+	ss := &systemstate.SystemStateMock{}
+
+	msg1 := &contractsapi.BridgeMessage{
+		ID:                 big.NewInt(1),
+		SourceChainID:      big.NewInt(100),
+		DestinationChainID: big.NewInt(1),
+		IsRollback:         true,
+	}
+
+	msg2 := &contractsapi.BridgeMessage{
+		ID:                 big.NewInt(2),
+		SourceChainID:      big.NewInt(100),
+		DestinationChainID: big.NewInt(1),
+		IsRollback:         true,
+	}
+
+	sigBatch := &contractsapi.SignedBridgeMessageBatch{
+		Batch: &contractsapi.BridgeMessageBatch{
+			Messages:              []*contractsapi.BridgeMessage{msg1, msg2},
+			SourceChainID:         big.NewInt(100),
+			DestinationChainID:    big.NewInt(1),
+			Threshold:             big.NewInt(0),
+			NumberOfRegularEvents: big.NewInt(0),
+			CommitCounter:         big.NewInt(1),
+		},
+	}
+
+	bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
+	bc.On("GetSystemState", mock.Anything).Return(ss)
+
+	// Function to insert a rollback messages with the given IDs.
+	insertFn := func(bm *bridgeEventManager, ids ...int64) {
+		for _, id := range ids {
+			err := bm.state.insertBridgeMessageEvent(
+				&contractsapi.BridgeMsgEvent{
+					ID:                 big.NewInt(id),
+					SourceChainID:      big.NewInt(100),
+					DestinationChainID: big.NewInt(1),
+				}, true, nil)
+
+			require.NoError(t, err)
+		}
+	}
+
+	// Function to check whether the rollback message is removed or not.
+	checkFn := func(bm *bridgeEventManager, id int64, shouldBeRemoved bool) {
+		msg, err := bm.state.getBridgeMessageEvent(
+			big.NewInt(id),
+			big.NewInt(100),
+			big.NewInt(1),
+			true,
+			nil)
+		require.NoError(t, err)
+
+		if shouldBeRemoved {
+			require.Nil(t, msg)
+
+			return
+		}
+
+		require.NotNil(t, msg)
+	}
+
+	// This test illustrates a scenario where the retry batch with two rollback messages is
+	// committed (IDs 1 and 2), while the database contains 4 rollback messages with IDs 1,
+	// 2, 3, and 4.
+	//
+	// Expected: messages with IDs 1 and 2 should be removed from the database.
+	t.Run("1", func(t *testing.T) {
+		ss.On("GetBridgeBatchByNumber", mock.Anything).Return(sigBatch)
+
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		log := &ethgo.Log{
+			Topics: []ethgo.Hash{
+				newBatchEventSig,
+				ethgo.BytesToHash(common.EncodeUint64ToBytes(1)),
+			},
+		}
+
+		insertFn(bm, 1, 2, 3, 4)
+
+		err := bm.ProcessLog(nil, log, nil)
+
+		require.NoError(t, err)
+
+		checkFn(bm, 1, true)
+		checkFn(bm, 2, true)
+		checkFn(bm, 3, false)
+		checkFn(bm, 4, false)
+	})
+
+	// This test illustrates a scenario where the non-retry batch with two rollback messages is
+	// committed (IDs 1 and 2), while the database contains 4 rollback messages with IDs 1, 2,
+	// 3, and 4.
+	//
+	// Expected: no message should be removed.
+	t.Run("2", func(t *testing.T) {
+		sigBatch.Batch.CommitCounter = big.NewInt(2)
+		ss.On("GetBridgeBatchByNumber", mock.Anything).Return(sigBatch)
+
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		log := &ethgo.Log{
+			Topics: []ethgo.Hash{
+				newBatchEventSig,
+				ethgo.BytesToHash(common.EncodeUint64ToBytes(1)),
+			},
+		}
+
+		insertFn(bm, 1, 2, 3, 4)
+
+		err := bm.ProcessLog(nil, log, nil)
+
+		require.NoError(t, err)
+
+		for i := range 4 {
+			checkFn(bm, int64(i+1), false)
+		}
+	})
+}
+
+func Test_handleBridgeMessageCommitment(t *testing.T) {
+	vals := validator.NewTestValidators(t, 5)
+
+	// All tests handle the I2E message, but the approach is exactly the same for the E2I messages.
+
+	msg := &contractsapi.BridgeMessage{
+		ID:                 big.NewInt(10),
+		SourceChainID:      big.NewInt(100),
+		DestinationChainID: big.NewInt(1),
+	}
+
+	// Function to insert message and its execution result. The types of possible inserts are as
+	// follows (typeOfInsert argument):
+	//	1 - only the message should be inserted
+	//	2 - only the execution result of the message should be inserted
+	//	3 - both should be inserted
+	//
+	// Status argument denotes whether the message was executed successfully or not.
+	insertFn := func(bm *bridgeEventManager, typeOfInsert int, status bool) {
+		if typeOfInsert == 1 || typeOfInsert == 3 {
+			err := bm.state.insertBridgeMessageEvent(
+				&contractsapi.BridgeMsgEvent{
+					ID:                 big.NewInt(10),
+					SourceChainID:      big.NewInt(100),
+					DestinationChainID: big.NewInt(1),
+				},
+				false,
+				nil,
+			)
+
+			require.NoError(t, err)
+		}
+
+		if typeOfInsert == 2 || typeOfInsert == 3 {
+			err := bm.state.insertBridgeMessageResultEvent(
+				&contractsapi.BridgeMessageResultEvent{
+					ID:                 big.NewInt(10),
+					SourceChainID:      big.NewInt(100),
+					DestinationChainID: big.NewInt(1),
+					Status:             status,
+				},
+				nil,
+			)
+
+			require.NoError(t, err)
+		}
+	}
+
+	// Function to check whether a message has been processed correctly. The types of possible
+	// checks are as follows (typeOfCheck argument):
+	//	1 - the message is not known and it should not go into the finalization (fin.) phase
+	//	2 - the message in known, but it should not go into the finalization (fin.) phase
+	//	3 - the message should go into the fin. phase and it has been successfully executed
+	//	4 - the message should go into the fin. phase and it has been unsuccessfully executed
+	checkFn := func(bm *bridgeEventManager, typeOfCheck int) {
+		// Function to check whether the message is part of the ordinary bucket.
+		getOrdinaryMsg := func() (*contractsapi.BridgeMsgEvent, error) {
+			return bm.state.getBridgeMessageEvent(
+				msg.ID,
+				msg.SourceChainID,
+				msg.DestinationChainID,
+				false,
+				nil)
+		}
+
+		// Function to check whether the message is part of the rollback bucket.
+		getRollbackMsg := func() (*contractsapi.BridgeMsgEvent, error) {
+			return bm.state.getBridgeMessageEvent(
+				msg.ID,
+				msg.DestinationChainID,
+				msg.SourceChainID,
+				true,
+				nil)
+		}
+
+		switch typeOfCheck {
+		case 1, 3:
+			msgEvent, err := getOrdinaryMsg()
+
+			require.NoError(t, err)
+			require.Nil(t, msgEvent)
+
+			msgEvent, err = getRollbackMsg()
+
+			require.NoError(t, err)
+			require.Nil(t, msgEvent)
+		case 2:
+			msgEvent, err := getOrdinaryMsg()
+
+			require.NoError(t, err)
+			require.NotNil(t, msgEvent)
+
+			msgEvent, err = getRollbackMsg()
+
+			require.NoError(t, err)
+			require.Nil(t, msgEvent)
+		case 4:
+			msgEvent, err := getOrdinaryMsg()
+
+			require.NoError(t, err)
+			require.Nil(t, msgEvent)
+
+			msgEvent, err = getRollbackMsg()
+
+			require.NoError(t, err)
+			require.NotNil(t, msgEvent)
+		}
+	}
+
+	t.Run("1", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			nil,
+		)
+
+		err := bm.handleBridgeMessageCommitment(msg, nil)
+		require.NoError(t, err)
+
+		checkFn(bm, 1)
+	})
+
+	t.Run("2", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			nil,
+		)
+
+		insertFn(bm, 1, true)
+
+		err := bm.handleBridgeMessageCommitment(msg, nil)
+		require.NoError(t, err)
+
+		checkFn(bm, 2)
+	})
+
+	t.Run("3", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			nil,
+		)
+
+		insertFn(bm, 2, true)
+
+		err := bm.handleBridgeMessageCommitment(msg, nil)
+		require.NoError(t, err)
+
+		checkFn(bm, 1)
+	})
+
+	t.Run("4", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			nil,
+		)
+
+		insertFn(bm, 3, true)
+
+		err := bm.handleBridgeMessageCommitment(msg, nil)
+		require.NoError(t, err)
+
+		checkFn(bm, 3)
+	})
+
+	t.Run("5", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			nil,
+		)
+
+		insertFn(bm, 3, false)
+
+		err := bm.handleBridgeMessageCommitment(msg, nil)
+		require.NoError(t, err)
+
+		checkFn(bm, 4)
 	})
 }
 

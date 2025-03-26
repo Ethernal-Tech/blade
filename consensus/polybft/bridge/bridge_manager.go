@@ -1023,6 +1023,7 @@ func (b *bridgeEventManager) ProcessLog(
 
 		fullUnexecutedBatch := &PendingBridgeBatch{
 			BridgeMessageBatch: bridgeBatch.Batch,
+			Epoch:              b.epoch,
 		}
 
 		fullHash, err := fullUnexecutedBatch.Hash()
@@ -1032,78 +1033,14 @@ func (b *bridgeEventManager) ProcessLog(
 			return err
 		}
 
-		// Handling this event is a bit tricky, but the behavior is as follows. First, we check
-		// whether it's I2E batch or not. If it's not, we simply restart pendingBridgeBatchesE2I
-		// because a new E2I batch has been found and committed. If it is an I2E batch, we check
-		// whether it's a retry batch or not. For E2I, this check doesn't exist because batches
-		// are executed immediately, therefore they are not written to the unexecuted list, thus
-		// cannot be retries. Checking whether it's a retry batch is done by looking at whether
-		// the batch's commit counter is greater than 1. If it's a retry batch, we delete it from
-		// the map of batches that are ready for retry (retryBatches), because a new version of
-		// the batch has just been committed. Additionally, we also delete the retry candidates
-		// for the given batch (pendingRetryBatches). The previous two deletions are implemented
-		// only if the node had previously initiated a retry for the given batch (during syncing,
-		// it can happen that the retry mechanism for a batch hasn't been initiated at all, even
-		// though it was initiated on synchronized nodes). If it's not an I2E retry batch, we
-		// simply restart (set to nil) pendingBridgebatchesI2E because a new (regular) I2E batch
-		// has been found and committed. Since the above has been done, the I2E batch should be
-		// inserted into the unexecuted list. However, it is inserted into this list only if at
-		// least one of its messages hasn't been executed. If all messages have been executed,
-		// then the batch is also executed, so adding it to the given list would be incorrect.
+		// First, we need to update the state of the bridge manager, represented through the
+		// structures such as the unexecuted list, the retry batch map, etc., to reflect the
+		// new state resulting from the commit of the latest batch.
 
-		if bridgeBatch.Batch.SourceChainID.Uint64() == b.internalChainID &&
-			bridgeBatch.Batch.DestinationChainID.Uint64() == b.externalChainID {
-			if bridgeBatch.Batch.CommitCounter.Cmp(big.NewInt(1)) > 0 {
-				if _, ok := b.retryBatches[baseHash]; ok {
-					delete(b.retryBatches, baseHash)
-					delete(b.pendingRetryBatches, baseHash)
+		b.updateStateOnBatchCommit(event.ID, baseHash, fullHash, fullUnexecutedBatch, dbTx)
 
-					b.logger.Info(
-						fmt.Sprintf(
-							"Batch (%s, %s, %s, %s, %d -> %d)"+
-								"has been successfully removed from the retry map",
-							event.ID.String(),
-							baseHash.String(),
-							bridgeBatch.Batch.CommitCounter.String(),
-							fullHash.String(),
-							sid.Uint64(),
-							did.Uint64()))
-				}
-			} else {
-				b.pendingBridgeBatchesI2E = nil
-			}
-
-			fullUnexecutedBatch.Epoch = b.epoch
-
-			alreadyExecuted := true
-
-			for _, msg := range bridgeBatch.Batch.Messages {
-				if !b.state.isBridgeMessageExecuted(msg, dbTx) {
-					alreadyExecuted = false
-
-					break
-				}
-			}
-
-			if !alreadyExecuted {
-				b.unexecutedBatches = append(b.unexecutedBatches, fullUnexecutedBatch)
-
-				b.logger.Info(
-					fmt.Sprintf("Batch (%s, %s, %s, %s, %d -> %d)"+
-						"has been successfully added to the unexecuted list",
-						event.ID.String(),
-						baseHash.String(),
-						bridgeBatch.Batch.CommitCounter.String(),
-						fullHash.String(),
-						sid.Uint64(),
-						did.Uint64()))
-			}
-		} else {
-			b.pendingBridgeBatchesE2I = nil
-		}
-
-		// The next step is to delete committed rollback messages from the bolt bucket related
-		// to rollback messages.
+		// Next step is to delete committed rollback messages from the bolt bucket related
+		// to rollback messages. (this should be part of the handleBridgeMessageCommitment)
 
 		if bridgeBatch.Batch.CommitCounter.Cmp(big.NewInt(1)) == 0 {
 			for _, m := range bridgeBatch.Batch.Messages {
@@ -1129,27 +1066,8 @@ func (b *bridgeEventManager) ProcessLog(
 		// information).
 
 		for _, m := range bridgeBatch.Batch.Messages {
-			if m.IsRollback {
-				continue
-			}
-
-			if !b.state.isBridgeMessageKnown(m, dbTx) {
-				continue
-			}
-
-			if !b.state.isBridgeMessageExecuted(m, dbTx) {
-				continue
-			}
-
-			result, err := b.state.getBridgeMessageResult(m, dbTx)
-			if err != nil {
-				b.logger.Error("could not get bridge message result", "err", err)
-
-				continue
-			}
-
-			if err := b.finalizeOrdinaryBridgeMessage(m, result.Status, dbTx); err != nil {
-				b.logger.Error("could not finalize bridge message", "err", err)
+			if err := b.handleBridgeMessageCommitment(m, dbTx); err != nil {
+				b.logger.Error("could not handle bridge message commitment", "err", err)
 			}
 		}
 
@@ -1167,6 +1085,112 @@ func (b *bridgeEventManager) ProcessLog(
 		b.logger.Error("unknown bridge event")
 
 		return errUnknownBridgeEvent
+	}
+
+	return nil
+}
+
+// updateStateOnBatchCommit updates the bridge manager's state structures to reflect the latest
+// state resulting from the commit of the new batch.
+func (b *bridgeEventManager) updateStateOnBatchCommit(
+	eventID *big.Int,
+	baseHash types.Hash,
+	fullHash types.Hash,
+	batch *PendingBridgeBatch,
+	dbTx *bolt.Tx) {
+	//
+	// Updating the state is a bit tricky, but the behavior is as follows. First, we check
+	// whether it's I2E batch or not. If it's not, we simply restart pendingBridgeBatchesE2I
+	// because a new E2I batch has been found and committed. If it is an I2E batch, we check
+	// whether it's a retry batch or not. For E2I, this check doesn't exist because batches
+	// are executed immediately, therefore they are not written to the unexecuted list, thus
+	// cannot be retries. Checking whether it's a retry batch is done by looking at whether
+	// the batch's commit counter is greater than 1. If it's a retry batch, we delete it from
+	// the map of batches that are ready for retry (retryBatches), because a new version of
+	// the batch has just been committed. Additionally, we also delete the retry candidates
+	// for the given batch (pendingRetryBatches). The previous two deletions are implemented
+	// only if the node had previously initiated a retry for the given batch (during syncing,
+	// it can happen that the retry mechanism for a batch hasn't been initiated at all, even
+	// though it was initiated on synchronized nodes). If it's not an I2E retry batch, we
+	// simply restart (set to nil) pendingBridgebatchesI2E because a new (regular) I2E batch
+	// has been found and committed. Since the above has been done, the I2E batch should be
+	// inserted into the unexecuted list. However, it is inserted into this list only if at
+	// least one of its messages hasn't been executed. If all messages have been executed,
+	// then the batch is also executed, so adding it to the given list would be incorrect.
+	//
+	if batch.SourceChainID.Uint64() == b.internalChainID &&
+		batch.DestinationChainID.Uint64() == b.externalChainID {
+		if batch.CommitCounter.Cmp(big.NewInt(1)) > 0 {
+			if _, ok := b.retryBatches[baseHash]; ok {
+				delete(b.retryBatches, baseHash)
+				delete(b.pendingRetryBatches, baseHash)
+
+				b.logger.Info(
+					fmt.Sprintf(
+						"Batch (%s, %s, %s, %s, %d -> %d)"+
+							"has been successfully removed from the retry map",
+						eventID.String(),
+						baseHash.String(),
+						batch.CommitCounter.String(),
+						fullHash.String(),
+						batch.SourceChainID.Uint64(),
+						batch.DestinationChainID.Uint64()))
+			}
+		} else {
+			b.pendingBridgeBatchesI2E = nil
+		}
+
+		alreadyExecuted := true
+
+		for _, msg := range batch.Messages {
+			if !b.state.isBridgeMessageExecuted(msg, dbTx) {
+				alreadyExecuted = false
+
+				break
+			}
+		}
+
+		if !alreadyExecuted {
+			b.unexecutedBatches = append(b.unexecutedBatches, batch)
+
+			b.logger.Info(
+				fmt.Sprintf("Batch (%s, %s, %s, %s, %d -> %d)"+
+					"has been successfully added to the unexecuted list",
+					eventID.String(),
+					baseHash.String(),
+					batch.CommitCounter.String(),
+					fullHash.String(),
+					batch.SourceChainID.Uint64(),
+					batch.DestinationChainID.Uint64()))
+		}
+	} else {
+		b.pendingBridgeBatchesE2I = nil
+	}
+}
+
+// handleBridgeMessageCommitment handles the commitment of the new message on the BridgeStorage.
+func (b *bridgeEventManager) handleBridgeMessageCommitment(
+	message *contractsapi.BridgeMessage,
+	dbTx *bolt.Tx) error {
+	if message.IsRollback {
+		return nil
+	}
+
+	if !b.state.isBridgeMessageKnown(message, dbTx) {
+		return nil
+	}
+
+	if !b.state.isBridgeMessageExecuted(message, dbTx) {
+		return nil
+	}
+
+	result, err := b.state.getBridgeMessageResult(message, dbTx)
+	if err != nil {
+		return fmt.Errorf("could not get bridge message result, err: %w", err)
+	}
+
+	if err := b.finalizeOrdinaryBridgeMessage(message, result.Status, dbTx); err != nil {
+		return fmt.Errorf("could not finalize bridge message, err: %w", err)
 	}
 
 	return nil

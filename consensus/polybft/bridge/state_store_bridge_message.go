@@ -284,11 +284,9 @@ func (bms *BridgeManagerStore) isBridgeMessageKnown(message *contractsapi.Bridge
 			data = bucket.Bucket(ordinaryMessages).Get(id)
 		}
 
-		if data == nil {
-			return nil
+		if data != nil {
+			known = true
 		}
-
-		known = true
 
 		return nil
 	}
@@ -321,11 +319,9 @@ func (bms *BridgeManagerStore) isBridgeMessageExecuted(message *contractsapi.Bri
 			data = bucket.Bucket(ordinaryMessages).Get(id)
 		}
 
-		if data == nil {
-			return nil
+		if data != nil {
+			executed = true
 		}
-
-		executed = true
 
 		return nil
 	}
