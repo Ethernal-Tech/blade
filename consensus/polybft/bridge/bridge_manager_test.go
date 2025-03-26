@@ -423,7 +423,7 @@ func Test_handleBridgeMessageEvent(t *testing.T) {
 		bm *bridgeEventManager,
 		typeOfCheck int) {
 		// Function to check whether the message is part of the ordinary bucket.
-		getMsg := func() (*contractsapi.BridgeMsgEvent, error) {
+		getOrdinaryMsg := func() (*contractsapi.BridgeMsgEvent, error) {
 			return bm.state.getBridgeMessageEvent(
 				msgEvent.ID,
 				msgEvent.SourceChainID,
@@ -432,7 +432,7 @@ func Test_handleBridgeMessageEvent(t *testing.T) {
 				nil)
 		}
 
-		// Function to check whether the message is part of the ordinary bucket.
+		// Function to check whether the message is part of the rollback bucket.
 		getRollbackMsg := func() (*contractsapi.BridgeMsgEvent, error) {
 			return bm.state.getBridgeMessageEvent(
 				msgEvent.ID,
@@ -444,7 +444,7 @@ func Test_handleBridgeMessageEvent(t *testing.T) {
 
 		switch typeOfCheck {
 		case 1:
-			msgEvent, err := getMsg()
+			msgEvent, err := getOrdinaryMsg()
 
 			require.NoError(t, err)
 			require.NotNil(t, msgEvent)
@@ -454,7 +454,7 @@ func Test_handleBridgeMessageEvent(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, msgEvent)
 		case 2:
-			msgEvent, err := getMsg()
+			msgEvent, err := getOrdinaryMsg()
 
 			require.NoError(t, err)
 			require.Nil(t, msgEvent)
@@ -464,7 +464,7 @@ func Test_handleBridgeMessageEvent(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, msgEvent)
 		case 3:
-			msgEvent, err := getMsg()
+			msgEvent, err := getOrdinaryMsg()
 
 			require.NoError(t, err)
 			require.Nil(t, msgEvent)
@@ -623,6 +623,573 @@ func Test_handleBridgeMessageEvent(t *testing.T) {
 		require.NoError(t, err)
 
 		checkFn(msgEvent, bm, 3)
+	})
+}
+
+func Test_handleBridgeMessageResultEvent(t *testing.T) {
+	vals := validator.NewTestValidators(t, 5)
+
+	// The following sequence of tests effectively covers all cases related to the ProcessLog
+	// and (~) AddLog methods when a `BridgeMessageResult` event occurs. Note, there are some
+	// extra, separated tests for verifying whether the unexecuted list is correctly handled
+	// when the given event occurs in the context of AddLog. The only additional functionality
+	// these methods have, besides calling "handleBridgeMessageResultEvent", is checking whether
+	// the event belongs to the current bridge manager and parsing the event itself (which should
+	// be tested separately outside the bridge context). All tests handle the I2E message, but
+	// the approach is exactly the same for the E2I messages.
+
+	bc := &blockchain.BlockchainMock{}
+	ss := &systemstate.SystemStateMock{}
+
+	bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
+	bc.On("GetSystemState", mock.Anything).Return(ss)
+	ss.On("GetNextCommittedIndex", mock.Anything).Return(uint64(10))
+
+	// Function to check whether the execution result of an ordinary message has been processed
+	// correctly. The types of possible checks are as follows (typeOfCheck argument):
+	//	1 - the message is not known and it should not go into the finalization (fin.) phase
+	//	2 - the message in known, but it should not go into the finalization (fin.) phase
+	//	3 - the message should go into the fin. phase and it has been successfully executed
+	//	4 - the message should go into the fin. phase and it has been unsuccessfully executed
+	checkFn := func(
+		msgResultEvent *contractsapi.BridgeMessageResultEvent,
+		bm *bridgeEventManager,
+		typeOfCheck int) {
+		// Function to check whether the execution result of a message is part of the ordinary
+		// bucket.
+		getMsgResult := func() (*contractsapi.BridgeMessageResultEvent, error) {
+			return bm.state.getBridgeMessageResult(
+				&contractsapi.BridgeMessage{
+					ID:                 msgResultEvent.ID,
+					SourceChainID:      msgResultEvent.SourceChainID,
+					DestinationChainID: msgResultEvent.DestinationChainID,
+					IsRollback:         false,
+				},
+				nil)
+		}
+
+		// Function to check whether the message is part of the ordinary bucket.
+		getOrdinaryMsg := func() (*contractsapi.BridgeMsgEvent, error) {
+			return bm.state.getBridgeMessageEvent(
+				msgResultEvent.ID,
+				msgResultEvent.SourceChainID,
+				msgResultEvent.DestinationChainID,
+				false,
+				nil)
+		}
+
+		// Function to check whether the message is part of the rollback bucket.
+		getRollbackMsg := func() (*contractsapi.BridgeMsgEvent, error) {
+			return bm.state.getBridgeMessageEvent(
+				msgResultEvent.ID,
+				msgResultEvent.DestinationChainID,
+				msgResultEvent.SourceChainID,
+				true,
+				nil)
+		}
+
+		msgEventResult, err := getMsgResult()
+
+		require.NoError(t, err)
+		require.NotNil(t, msgEventResult)
+
+		switch typeOfCheck {
+		case 1, 3:
+			msgEvent, err := getOrdinaryMsg()
+
+			require.NoError(t, err)
+			require.Nil(t, msgEvent)
+
+			msgEvent, err = getRollbackMsg()
+
+			require.NoError(t, err)
+			require.Nil(t, msgEvent)
+		case 2:
+			msgEvent, err := getOrdinaryMsg()
+
+			require.NoError(t, err)
+			require.NotNil(t, msgEvent)
+
+			msgEvent, err = getRollbackMsg()
+
+			require.NoError(t, err)
+			require.Nil(t, msgEvent)
+		case 4:
+			msgEvent, err := getOrdinaryMsg()
+
+			require.NoError(t, err)
+			require.Nil(t, msgEvent)
+
+			msgEvent, err = getRollbackMsg()
+
+			require.NoError(t, err)
+			require.NotNil(t, msgEvent)
+		}
+	}
+
+	// This test illustrates a scenario where the new execution result for an ordinary message
+	// arrives in the system, and the ordinary message itself is neither known nor committed.
+	//
+	// Expected: the execution result should only be written to the database, specifically to
+	// the bucket reserved for executed ordinary messages.
+	t.Run("1", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msgResultEvent := &contractsapi.BridgeMessageResultEvent{
+			ID:                 big.NewInt(10),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+			Status:             true,
+		}
+
+		err := bm.handleBridgeMessageResultEvent(nil, msgResultEvent, nil)
+		require.NoError(t, err)
+
+		checkFn(msgResultEvent, bm, 1)
+	})
+
+	// This test illustrates a scenario where the new execution result for an ordinary message
+	// arrives in the system, and the ordinary message is committed, but not known.
+	//
+	// Expected: the execution result should only be written to the database, specifically to
+	// the bucket reserved for executed ordinary messages.
+	t.Run("2", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msgResultEvent := &contractsapi.BridgeMessageResultEvent{
+			ID:                 big.NewInt(5),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+			Status:             true,
+		}
+
+		err := bm.handleBridgeMessageResultEvent(nil, msgResultEvent, nil)
+		require.NoError(t, err)
+
+		checkFn(msgResultEvent, bm, 1)
+	})
+
+	// This test illustrates a scenario where the new execution result for an ordinary message
+	// arrives in the system, and the ordinary message is known, but not committed.
+	//
+	// Expected: the execution result should only be written to the database, specifically to
+	// the bucket reserved for executed ordinary messages.
+	t.Run("3", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msgEvent := &contractsapi.BridgeMsgEvent{
+			ID:                 big.NewInt(10),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}
+
+		err := bm.state.insertBridgeMessageEvent(msgEvent, false, nil)
+		require.NoError(t, err)
+
+		msgResultEvent := &contractsapi.BridgeMessageResultEvent{
+			ID:                 big.NewInt(10),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+			Status:             true,
+		}
+
+		err = bm.handleBridgeMessageResultEvent(nil, msgResultEvent, nil)
+		require.NoError(t, err)
+
+		checkFn(msgResultEvent, bm, 2)
+	})
+
+	// This test illustrates a scenario where the new execution result for an ordinary message
+	// arrives in the system, and the ordinary message is known and committed. The execution
+	// result is successful.
+	//
+	// Expected: the execution result should be written to the database, more precisely, to the
+	// bucket reserved for executed ordinary messages, while the message should be removed from
+	// the ordinary bucket.
+	t.Run("4", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msgEvent := &contractsapi.BridgeMsgEvent{
+			ID:                 big.NewInt(5),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}
+
+		err := bm.state.insertBridgeMessageEvent(msgEvent, false, nil)
+		require.NoError(t, err)
+
+		msgResultEvent := &contractsapi.BridgeMessageResultEvent{
+			ID:                 big.NewInt(5),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+			Status:             true,
+		}
+
+		err = bm.handleBridgeMessageResultEvent(nil, msgResultEvent, nil)
+		require.NoError(t, err)
+
+		checkFn(msgResultEvent, bm, 3)
+	})
+
+	// This test illustrates a scenario where the new execution result for an ordinary message
+	// arrives in the system, and the ordinary message is known and committed. The execution
+	// result is unsuccessful.
+	//
+	// Expected: the execution result should be written to the database, more precisely, to the
+	// bucket reserved for executed rollback messages, while the message should be removed from
+	// the ordinary bucket and added to the rollback bucket.
+	t.Run("5", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msgEvent := &contractsapi.BridgeMsgEvent{
+			ID:                 big.NewInt(5),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}
+
+		err := bm.state.insertBridgeMessageEvent(msgEvent, false, nil)
+		require.NoError(t, err)
+
+		msgResultEvent := &contractsapi.BridgeMessageResultEvent{
+			ID:                 big.NewInt(5),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+			Status:             false,
+		}
+
+		err = bm.handleBridgeMessageResultEvent(nil, msgResultEvent, nil)
+		require.NoError(t, err)
+
+		checkFn(msgResultEvent, bm, 4)
+	})
+
+	// This test illustrates a scenario where the new execution result for a rollback message
+	// arrives in the system. Whether the message is committed or known, as well as whether it
+	// was successfully or unsuccessfully executed, has no impact, since the execution result
+	// of a rollback message is always handled in the same way.
+	//
+	// Expected: the execution result should only be written to the database, specifically to
+	// the bucket reserved for executed rollback messages.
+	t.Run("6", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		msg := &contractsapi.BridgeMessage{
+			ID:                 big.NewInt(5),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+		}
+
+		msgResultEvent := &contractsapi.BridgeMessageResultEvent{
+			ID:                 big.NewInt(5),
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+			Status:             false,
+		}
+
+		err := bm.handleBridgeMessageResultEvent(nil, msgResultEvent, nil)
+		require.NoError(t, err)
+
+		msgResultEvent, err = bm.state.getBridgeMessageResult(msg, nil)
+		require.NoError(t, err)
+		require.NotNil(t, msgResultEvent)
+	})
+}
+
+func Test_AddLog_Unexecuted_list(t *testing.T) {
+	vals := validator.NewTestValidators(t, 5)
+
+	bc := &blockchain.BlockchainMock{}
+	ss := &systemstate.SystemStateMock{}
+
+	bc.On("CurrentHeader", mock.Anything).Return(&types.Header{})
+	bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
+	bc.On("GetSystemState", mock.Anything).Return(ss)
+	ss.On("GetNextCommittedIndex", mock.Anything).Return(uint64(10))
+
+	// Function to create dummy `BridgeMessageResult` log for an I2E message.
+	createLogFn := func(id uint64, isRollback bool) *ethgo.Log {
+		data, err := abi.MustNewType("tuple(uint256 a, uint256 b, bool c, bytes d)").
+			Encode([]interface{}{big.NewInt(100), big.NewInt(1), isRollback, []byte("")})
+		require.NoError(t, err)
+
+		return &ethgo.Log{
+			Topics: []ethgo.Hash{
+				bridgeMessageResultEventSig,
+				ethgo.BytesToHash(common.EncodeUint64ToBytes(id)),
+				ethgo.BytesToHash(common.EncodeUint64ToBytes(1)),
+			},
+			Data: data,
+		}
+	}
+
+	// Function to create a batch with the given ordinary and rollback messages.
+	createBatchFn := func(numOfOrdMsgs int64, rollbackMsgIds ...int64) *PendingBridgeBatch {
+		totalNum := numOfOrdMsgs + int64(len(rollbackMsgIds))
+
+		msgs := make([]*contractsapi.BridgeMessage, totalNum)
+
+		for i := int64(0); i < numOfOrdMsgs; i++ {
+			msgs[i] = &contractsapi.BridgeMessage{
+				ID:                 big.NewInt(i + 1),
+				SourceChainID:      big.NewInt(100),
+				DestinationChainID: big.NewInt(1),
+			}
+		}
+
+		for i, id := range rollbackMsgIds {
+			msgs[numOfOrdMsgs+int64(i)] = &contractsapi.BridgeMessage{
+				ID:                 big.NewInt(id),
+				SourceChainID:      big.NewInt(100),
+				DestinationChainID: big.NewInt(1),
+				IsRollback:         true,
+			}
+		}
+
+		return &PendingBridgeBatch{
+			BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
+				Messages:              msgs,
+				SourceChainID:         big.NewInt(100),
+				DestinationChainID:    big.NewInt(1),
+				Threshold:             big.NewInt(0),
+				NumberOfRegularEvents: big.NewInt(0),
+				CommitCounter:         big.NewInt(0),
+			},
+		}
+	}
+
+	// Function to insert an execution results of the messages.
+	insertFn := func(bm *bridgeEventManager, isRollback bool, ids ...int64) {
+		for _, id := range ids {
+			err := bm.state.insertBridgeMessageResultEvent(
+				&contractsapi.BridgeMessageResultEvent{
+					ID:                 big.NewInt(id),
+					SourceChainID:      big.NewInt(100),
+					DestinationChainID: big.NewInt(1),
+					IsRollback:         isRollback,
+				}, nil)
+
+			require.NoError(t, err)
+		}
+	}
+
+	// This test illustrates a scenario where a batch containing two ordinary and two rollback
+	// messages (IDs for both types are 1 and 2) exists in the unexecuted list, with only the
+	// ordinary message with ID 2 remaining unexecuted, where execution result for an ordinary
+	// message that is not part of the batch (ID 3) arrives.
+	//
+	// Expected: the unexecuted list should remain unchanged.
+	t.Run("1", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		batch := createBatchFn(2, 1, 2)
+		bm.unexecutedBatches = append(bm.unexecutedBatches, batch)
+
+		insertFn(bm, false, 1)
+		insertFn(bm, true, 1, 2)
+
+		log := createLogFn(3, false)
+
+		err := bm.AddLog(big.NewInt(1), log)
+
+		require.NoError(t, err)
+
+		require.EqualValues(t, 1, len(bm.unexecutedBatches))
+	})
+
+	// This test illustrates a scenario where a batch containing two ordinary and two rollback
+	// messages (IDs for both types are 1 and 2) exists in the unexecuted list, with only the
+	// rollback message with ID 1 remaining unexecuted, where execution result for a rollback
+	// message that is not part of the batch (ID 3) arrives.
+	//
+	// Expected: the unexecuted list should remain unchanged.
+	t.Run("2", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		batch := createBatchFn(2, 1, 2)
+		bm.unexecutedBatches = append(bm.unexecutedBatches, batch)
+
+		insertFn(bm, false, 1, 2)
+		insertFn(bm, true, 2)
+
+		log := createLogFn(3, true)
+
+		err := bm.AddLog(big.NewInt(1), log)
+
+		require.NoError(t, err)
+
+		require.EqualValues(t, 1, len(bm.unexecutedBatches))
+	})
+
+	// This test illustrates a scenario where a batch containing two ordinary and two rollback
+	// messages (IDs for both types are 1 and 2) exists in the unexecuted list, with multiple
+	// messages remaining unexecuted, where an execution result arrives for an ordinary message
+	// that is part of the batch.
+	//
+	// Expected: the unexecuted list should remain unchanged.
+	t.Run("3", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		batch := createBatchFn(2, 1, 2)
+		bm.unexecutedBatches = append(bm.unexecutedBatches, batch)
+
+		insertFn(bm, false, 1)
+		insertFn(bm, true, 2)
+
+		log := createLogFn(2, false)
+
+		err := bm.AddLog(big.NewInt(1), log)
+
+		require.NoError(t, err)
+
+		require.EqualValues(t, 1, len(bm.unexecutedBatches))
+	})
+
+	// This test illustrates a scenario where a batch containing two ordinary and two rollback
+	// messages (IDs for both types are 1 and 2) exists in the unexecuted list, with multiple
+	// messages remaining unexecuted, where an execution result arrives for a rollback message
+	// that is part of the batch.
+	//
+	// Expected: the unexecuted list should remain unchanged.
+	t.Run("4", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		batch := createBatchFn(2, 1, 2)
+		bm.unexecutedBatches = append(bm.unexecutedBatches, batch)
+
+		insertFn(bm, false, 1)
+		insertFn(bm, true, 2)
+
+		log := createLogFn(1, true)
+
+		err := bm.AddLog(big.NewInt(1), log)
+
+		require.NoError(t, err)
+
+		require.EqualValues(t, 1, len(bm.unexecutedBatches))
+	})
+
+	// This test illustrates a scenario where a batch containing two ordinary and two rollback
+	// messages (IDs for both types are 1 and 2) exists in the unexecuted list, with only the
+	// ordinary message with ID 2 remaining unexecuted, where the execution result exactly for
+	// that message arrives.
+	//
+	// Expected: the batch should be removed from the unexecuted list, making it empty.
+	t.Run("5", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		batch := createBatchFn(2, 1, 2)
+		bm.unexecutedBatches = append(bm.unexecutedBatches, batch)
+
+		insertFn(bm, false, 1)
+		insertFn(bm, true, 1, 2)
+
+		log := createLogFn(2, false)
+
+		err := bm.AddLog(big.NewInt(1), log)
+
+		require.NoError(t, err)
+
+		require.EqualValues(t, 0, len(bm.unexecutedBatches))
+	})
+
+	// This test illustrates a scenario where a batch containing two ordinary and two rollback
+	// messages (IDs for both types are 1 and 2) exists in the unexecuted list, with only the
+	// rollback message with ID 1 remaining unexecuted, where the execution result exactly for
+	// that message arrives.
+	//
+	// Expected: the batch should be removed from the unexecuted list, making it empty.
+	t.Run("6", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		batch := createBatchFn(2, 1, 2)
+		bm.unexecutedBatches = append(bm.unexecutedBatches, batch)
+
+		insertFn(bm, false, 1, 2)
+		insertFn(bm, true, 2)
+
+		log := createLogFn(1, true)
+
+		err := bm.AddLog(big.NewInt(1), log)
+
+		require.NoError(t, err)
+
+		require.EqualValues(t, 0, len(bm.unexecutedBatches))
+	})
+
+	// This test illustrates a scenario where two batches exist in the unexecuted list, and the
+	// execution result arrives for the only remaining unexecuted message in one of the batches.
+	//
+	// Expected: the corresponding batch should be removed from the unexecuted list, leaving only
+	// one batch within list.
+	t.Run("7", func(t *testing.T) {
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			bc,
+		)
+
+		batch1 := createBatchFn(2, 1, 2)
+		batch2 := createBatchFn(0, 3, 4)
+		bm.unexecutedBatches = append(bm.unexecutedBatches, batch1, batch2)
+
+		insertFn(bm, false, 1)
+		insertFn(bm, true, 1, 2)
+
+		log := createLogFn(2, false)
+
+		err := bm.AddLog(big.NewInt(1), log)
+
+		require.NoError(t, err)
+
+		require.EqualValues(t, 1, len(bm.unexecutedBatches))
 	})
 }
 
