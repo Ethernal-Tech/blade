@@ -56,6 +56,10 @@ type Runtime interface {
 	IsActiveValidator() bool
 }
 
+type JSONRPCClient interface {
+	GetBlockByNumber(jsonrpc.BlockNumber, bool) (*types.Block, error)
+}
+
 // BridgeManager is an interface that defines functions for bridge workflow
 type BridgeManager interface {
 	state.EventSubscriber
@@ -120,7 +124,7 @@ type bridgeEventManager struct {
 	unexecutedBatches       []*PendingBridgeBatch
 	retryBatches            map[types.Hash]PendingBridgeBatch
 	pendingRetryBatches     map[types.Hash][]*PendingBridgeBatch
-	externalClient          jsonrpc.EthClient
+	externalClient          JSONRPCClient
 	validatorSet            validator.ValidatorSet
 	epoch                   uint64
 	nextEventIDE2I          uint64
@@ -140,6 +144,7 @@ func newBridgeManager(
 	state *BridgeManagerStore,
 	config *bridgeEventManagerConfig,
 	runtime Runtime,
+	externalClient JSONRPCClient,
 	externalChainID, internalChainID uint64, blockchain polychain.Blockchain) *bridgeEventManager {
 	return &bridgeEventManager{
 		logger:              logger,
@@ -147,6 +152,7 @@ func newBridgeManager(
 		config:              config,
 		retryBatches:        make(map[types.Hash]PendingBridgeBatch),
 		pendingRetryBatches: make(map[types.Hash][]*PendingBridgeBatch),
+		externalClient:      externalClient,
 		runtime:             runtime,
 		externalChainID:     externalChainID,
 		internalChainID:     internalChainID,
@@ -167,13 +173,6 @@ func (b *bridgeEventManager) Start(runtimeConfig *config.Runtime) error {
 
 	b.tracker = tracker
 	b.externalConfirmationDepth = big.NewInt(int64(runtimeConfig.EventTracker.NumBlockConfirmations))
-
-	relayer, err := createBridgeTxRelayer(b.config.bridgeCfg.JSONRPCEndpoint, b.logger)
-	if err != nil {
-		return fmt.Errorf("failed to initialize bridge external client. Error: %w", err)
-	}
-
-	b.externalClient = *relayer.Client()
 
 	return nil
 }
