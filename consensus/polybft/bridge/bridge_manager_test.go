@@ -2217,6 +2217,21 @@ func Test_handleRetry(t *testing.T) {
 	batch.Threshold = big.NewInt(120)
 	batch.CommitCounter = big.NewInt(1)
 
+	// Function to check whether the state structures reflect the correct state.
+	checkFn := func(bm *bridgeEventManager, retNum, unNum int, removed bool) {
+		require.EqualValues(t, retNum, len(bm.retryBatches))
+
+		require.EqualValues(t, retNum, len(bm.pendingRetryBatches))
+
+		require.EqualValues(t, unNum, len(bm.unexecutedBatches))
+
+		_, ok := bm.retryBatches[hash]
+		require.EqualValues(t, removed, ok)
+
+		_, ok = bm.pendingRetryBatches[hash]
+		require.EqualValues(t, removed, ok)
+	}
+
 	// This test illustrates a scenario where the batch being checked has its threshold set at
 	// block 120, while the current block on the external chain is at 100.
 
@@ -2250,17 +2265,7 @@ func Test_handleRetry(t *testing.T) {
 
 		bm.handleRetry(ss, nil)
 
-		require.EqualValues(t, 1, len(bm.retryBatches))
-
-		require.EqualValues(t, 1, len(bm.retryBatches))
-
-		require.EqualValues(t, 2, len(bm.unexecutedBatches))
-
-		_, ok := bm.retryBatches[hash]
-		require.EqualValues(t, false, ok)
-
-		_, ok = bm.pendingRetryBatches[hash]
-		require.EqualValues(t, false, ok)
+		checkFn(bm, 1, 2, false)
 	})
 
 	// This test illustrates a scenario where the batch being checked has its threshold set at
@@ -2297,17 +2302,7 @@ func Test_handleRetry(t *testing.T) {
 
 		bm.handleRetry(ss, nil)
 
-		require.EqualValues(t, 2, len(bm.retryBatches))
-
-		require.EqualValues(t, 2, len(bm.retryBatches))
-
-		require.EqualValues(t, 1, len(bm.unexecutedBatches))
-
-		_, ok := bm.retryBatches[hash]
-		require.EqualValues(t, true, ok)
-
-		_, ok = bm.pendingRetryBatches[hash]
-		require.EqualValues(t, true, ok)
+		checkFn(bm, 2, 1, true)
 	})
 }
 
