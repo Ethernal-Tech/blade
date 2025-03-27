@@ -55,22 +55,27 @@ func (j *journal) load(add func(*types.Transaction) error) error {
 		return nil
 	}
 
+	txs := make([]*types.Transaction, 0)
 	// decode txs
-	txs := &types.Transactions{}
-	if err := txs.UnmarshalRLP(data); err != nil {
-		j.logger.Error("failed to decode journaled tx", "err", err)
+	for len(data) > 0 {
+		tx := &types.Transaction{}
+		if err := tx.UnmarshalRLP(data); err != nil {
+			j.logger.Error("failed to decode journaled tx", "err", err)
 
-		return err
+			return err
+		}
+
+		data = data[tx.Size():]
+		txs = append(txs, tx)
 	}
 
 	// temporarily discard any journal additions (don't double add on load)
 	j.writer = new(devNull)
 	defer func() { j.writer = nil }()
 
-	// inject all transactions from the journal into the pool
 	total, dropped := 0, 0
-
-	for _, tx := range *txs {
+	// inject all transactions from the journal into the pool
+	for _, tx := range txs {
 		if err := add(tx); err != nil {
 			dropped++
 
