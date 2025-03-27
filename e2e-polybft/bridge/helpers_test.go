@@ -283,21 +283,21 @@ func compareBucketsFromDBs(t *testing.T, db1, db2 *bbolt.DB, sourceChainID, dest
 			bridgeMessageBucket2 := tx2.Bucket([]byte("bridgeMessageEvents"))
 
 			if bridgeMessageBucket1 == nil || bridgeMessageBucket2 == nil {
-				return fmt.Errorf("one or both buckets do not exist 1")
+				return fmt.Errorf("bridge message events bucket does not exist")
 			}
 
 			bridgeMessageChainIDBucket1 := bridgeMessageBucket1.Bucket(sourceChainID)
 			bridgeMessageChainIDBucket2 := bridgeMessageBucket2.Bucket(sourceChainID)
 
 			if bridgeMessageChainIDBucket1 == nil || bridgeMessageChainIDBucket2 == nil {
-				return fmt.Errorf("one or both buckets do not exist 2")
+				return fmt.Errorf("source chain ID bucket does not exist")
 			}
 
 			bridgeMessageChainIDBucket1External = bridgeMessageChainIDBucket1.Bucket(destinationChainID)
 			bridgeMessageChainIDBucket2External = bridgeMessageChainIDBucket2.Bucket(destinationChainID)
 
 			if bridgeMessageChainIDBucket1External == nil || bridgeMessageChainIDBucket2External == nil {
-				return fmt.Errorf("one or both buckets do not exist 3")
+				return fmt.Errorf("destination chain ID bucket does not exist")
 			}
 
 			if isExecuted {
@@ -310,14 +310,14 @@ func compareBucketsFromDBs(t *testing.T, db1, db2 *bbolt.DB, sourceChainID, dest
 				finalBridgeMessageBucket2 = bridgeMessageChainIDBucket2External.Bucket([]byte("rollback"))
 
 				if finalBridgeMessageBucket1 == nil || finalBridgeMessageBucket2 == nil {
-					return fmt.Errorf("one or both buckets do not exist 4")
+					return fmt.Errorf("rollback bucket does not exist")
 				}
 			} else {
 				finalBridgeMessageBucket1 = bridgeMessageChainIDBucket1External.Bucket([]byte("ordinary"))
 				finalBridgeMessageBucket2 = bridgeMessageChainIDBucket2External.Bucket([]byte("ordinary"))
 
 				if finalBridgeMessageBucket1 == nil || finalBridgeMessageBucket2 == nil {
-					return fmt.Errorf("one or both buckets do not exist 4")
+					return fmt.Errorf("ordinary bucket does not exist")
 				}
 			}
 
