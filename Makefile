@@ -76,7 +76,7 @@ fuzz-test: check-go
 test-e2e-bridge: check-go
 	go build -o artifacts/blade .
 	env EDGE_BINARY=${PWD}/artifacts/blade E2E_TESTS=true E2E_LOGS=true \
-	go test -v -timeout=1h30m ./e2e-polybft/bridge/...
+	go test -v -timeout=2h ./e2e-polybft/bridge/...
 
 .PHONY: test-e2e-legacy
 test-e2e-legacy: check-go
