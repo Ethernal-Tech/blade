@@ -1520,9 +1520,9 @@ func (b *bridgeEventManager) isBridgeMessageCommitted(
 
 	if msg.IsRollback {
 		if b.internalChainID == msg.SourceChainID.Uint64() {
-			return sysState.GetConfirmedRollbackedI2E(b.externalChainID, msg.ID)
+			return sysState.GetCommittedRollbackedI2E(b.externalChainID, msg.ID)
 		} else {
-			return sysState.GetConfirmedRollbackedE2I(b.externalChainID, msg.ID)
+			return sysState.GetCommittedRollbackedE2I(b.externalChainID, msg.ID)
 		}
 	}
 

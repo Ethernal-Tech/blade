@@ -1972,7 +1972,7 @@ func Test_isBridgeMessageCommitted(t *testing.T) {
 
 		bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
 		bc.On("GetSystemState", mock.Anything).Return(ss)
-		ss.On("GetConfirmedRollbackedI2E", mock.Anything).Return(true)
+		ss.On("GetCommittedRollbackedI2E", mock.Anything).Return(true)
 
 		bm := newTestBridgeManager(t,
 			vals.GetValidator("0"),
@@ -2003,7 +2003,7 @@ func Test_isBridgeMessageCommitted(t *testing.T) {
 
 		bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
 		bc.On("GetSystemState", mock.Anything).Return(ss)
-		ss.On("GetConfirmedRollbackedE2I", mock.Anything).Return(true)
+		ss.On("GetCommittedRollbackedE2I", mock.Anything).Return(true)
 
 		bm := newTestBridgeManager(t,
 			vals.GetValidator("0"),
@@ -2034,7 +2034,7 @@ func Test_isBridgeMessageCommitted(t *testing.T) {
 
 		bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
 		bc.On("GetSystemState", mock.Anything).Return(ss)
-		ss.On("GetConfirmedRollbackedI2E", mock.Anything).Return(false)
+		ss.On("GetCommittedRollbackedI2E", mock.Anything).Return(false)
 
 		bm := newTestBridgeManager(t,
 			vals.GetValidator("0"),
@@ -2065,7 +2065,7 @@ func Test_isBridgeMessageCommitted(t *testing.T) {
 
 		bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
 		bc.On("GetSystemState", mock.Anything).Return(ss)
-		ss.On("GetConfirmedRollbackedE2I", mock.Anything).Return(false)
+		ss.On("GetCommittedRollbackedE2I", mock.Anything).Return(false)
 
 		bm := newTestBridgeManager(t,
 			vals.GetValidator("0"),

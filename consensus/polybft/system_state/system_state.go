@@ -39,10 +39,10 @@ type SystemState interface {
 	// fields are set to 0. See the buildBridgeMessage method of [BridgeManager] for a concrete
 	// example.
 	GetBatchCommitCounter(batchHash types.Hash) (*big.Int, error)
-	// GetConfirmedRollbackedI2E returns whether the I2E rollback bridge message is committed.
-	GetConfirmedRollbackedI2E(chainID uint64, id *big.Int) (bool, error)
-	// GetConfirmedRollbackedE2I returns whether the E2I rollback bridge message is committed.
-	GetConfirmedRollbackedE2I(chainID uint64, id *big.Int) (bool, error)
+	// GetCommittedRollbackedI2E returns whether the I2E rollback bridge message is committed.
+	GetCommittedRollbackedI2E(chainID uint64, id *big.Int) (bool, error)
+	// GetCommittedRollbackedE2I returns whether the E2I rollback bridge message is committed.
+	GetCommittedRollbackedE2I(chainID uint64, id *big.Int) (bool, error)
 }
 
 var _ SystemState = &SystemStateImpl{}
@@ -173,25 +173,15 @@ func (s *SystemStateImpl) GetBatchCommitCounter(hash types.Hash) (*big.Int, erro
 	return num, nil
 }
 
-func (s *SystemStateImpl) GetConfirmedRollbackedI2E(chainID uint64, id *big.Int) (bool, error) {
-	funcName := "getConfirmedRollbackedI2E"
-
-	rawResult, err := s.bridgeStorageContract.Call(funcName, ethgo.Latest, new(big.Int).SetUint64(chainID), id)
-	if err != nil {
-		return false, err
-	}
-
-	committed, isOk := rawResult["0"].(bool)
-	if !isOk {
-		return false, fmt.Errorf("failed to decode batch commit counter")
-	}
-
-	return committed, nil
+func (s *SystemStateImpl) GetCommittedRollbackedI2E(chainID uint64, id *big.Int) (bool, error) {
+	return s.getCommittedRollbacked("getConfirmedRollbackedI2E", chainID, id)
 }
 
-func (s *SystemStateImpl) GetConfirmedRollbackedE2I(chainID uint64, id *big.Int) (bool, error) {
-	funcName := "getConfirmedRollbackedE2I"
+func (s *SystemStateImpl) GetCommittedRollbackedE2I(chainID uint64, id *big.Int) (bool, error) {
+	return s.getCommittedRollbacked("getConfirmedRollbackedE2I", chainID, id)
+}
 
+func (s *SystemStateImpl) getCommittedRollbacked(funcName string, chainID uint64, id *big.Int) (bool, error) {
 	rawResult, err := s.bridgeStorageContract.Call(funcName, ethgo.Latest, new(big.Int).SetUint64(chainID), id)
 	if err != nil {
 		return false, err
@@ -199,7 +189,7 @@ func (s *SystemStateImpl) GetConfirmedRollbackedE2I(chainID uint64, id *big.Int)
 
 	committed, isOk := rawResult["0"].(bool)
 	if !isOk {
-		return false, fmt.Errorf("failed to decode batch commit counter")
+		return false, fmt.Errorf("failed to decode whether the rollback message is committed")
 	}
 
 	return committed, nil

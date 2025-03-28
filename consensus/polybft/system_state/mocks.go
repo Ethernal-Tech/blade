@@ -72,7 +72,7 @@ func (m *SystemStateMock) GetBatchCommitCounter(hash types.Hash) (*big.Int, erro
 	return num, nil
 }
 
-func (m *SystemStateMock) GetConfirmedRollbackedI2E(chainID uint64, id *big.Int) (bool, error) {
+func (m *SystemStateMock) GetCommittedRollbackedI2E(chainID uint64, id *big.Int) (bool, error) {
 	args := m.Called(id)
 
 	committed, _ := args.Get(0).(bool)
@@ -80,7 +80,7 @@ func (m *SystemStateMock) GetConfirmedRollbackedI2E(chainID uint64, id *big.Int)
 	return committed, nil
 }
 
-func (m *SystemStateMock) GetConfirmedRollbackedE2I(chainID uint64, id *big.Int) (bool, error) {
+func (m *SystemStateMock) GetCommittedRollbackedE2I(chainID uint64, id *big.Int) (bool, error) {
 	args := m.Called()
 
 	committed, _ := args.Get(0).(bool)

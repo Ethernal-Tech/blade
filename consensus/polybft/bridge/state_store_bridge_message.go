@@ -575,9 +575,9 @@ func (bms *BridgeManagerStore) getBridgeMessages(
 			)
 
 			if bms.internalChainID == sid {
-				committed, err = sysState.GetConfirmedRollbackedI2E(did, event.ID)
+				committed, err = sysState.GetCommittedRollbackedI2E(did, event.ID)
 			} else {
-				committed, err = sysState.GetConfirmedRollbackedE2I(sid, event.ID)
+				committed, err = sysState.GetCommittedRollbackedE2I(sid, event.ID)
 			}
 
 			if err != nil {

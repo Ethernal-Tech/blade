@@ -250,9 +250,9 @@ func TestSystemState_GetConfirmedRollbacked(t *testing.T) {
 		)
 
 		if test.i2e {
-			committed, err = systemState.GetConfirmedRollbackedI2E(test.chainID, id)
+			committed, err = systemState.GetCommittedRollbackedI2E(test.chainID, id)
 		} else {
-			committed, err = systemState.GetConfirmedRollbackedE2I(test.chainID, id)
+			committed, err = systemState.GetCommittedRollbackedE2I(test.chainID, id)
 		}
 
 		require.NoError(t, err)
