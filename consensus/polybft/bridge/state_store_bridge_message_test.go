@@ -264,7 +264,7 @@ func Test_getBridgeMessages(t *testing.T) {
 		insertFn(2, true, s)
 
 		sysState := &systemstate.SystemStateMock{}
-		sysState.On("GetConfirmedRollbackedI2E", mock.Anything).Return(false)
+		sysState.On("GetCommittedRollbackedI2E", mock.Anything).Return(false)
 
 		msgs, ord, err := s.getBridgeMessages(1, 10, 100, 1, sysState, nil)
 
@@ -322,7 +322,7 @@ func Test_getBridgeMessages(t *testing.T) {
 		insertFn(2, true, s)
 
 		sysState := &systemstate.SystemStateMock{}
-		sysState.On("GetConfirmedRollbackedI2E", mock.Anything).Return(false)
+		sysState.On("GetCommittedRollbackedI2E", mock.Anything).Return(false)
 
 		msgs, ord, err := s.getBridgeMessages(7, 10, 100, 1, sysState, nil)
 
@@ -358,7 +358,7 @@ func Test_getBridgeMessages(t *testing.T) {
 		insertFn(7, true, s)
 
 		sysState := &systemstate.SystemStateMock{}
-		sysState.On("GetConfirmedRollbackedI2E", mock.Anything).Return(false)
+		sysState.On("GetCommittedRollbackedI2E", mock.Anything).Return(false)
 
 		msgs, ord, err := s.getBridgeMessages(7, 10, 100, 1, sysState, nil)
 
@@ -392,7 +392,7 @@ func Test_getBridgeMessages(t *testing.T) {
 		insertFn(4, true, s)
 
 		sysState := &systemstate.SystemStateMock{}
-		sysState.On("GetConfirmedRollbackedI2E", mock.Anything).Return(false)
+		sysState.On("GetCommittedRollbackedI2E", mock.Anything).Return(false)
 
 		msgs, ord, err := s.getBridgeMessages(7, 10, 100, 1, sysState, nil)
 
@@ -422,7 +422,7 @@ func Test_getBridgeMessages(t *testing.T) {
 		insertFn(12, true, s)
 
 		sysState := &systemstate.SystemStateMock{}
-		sysState.On("GetConfirmedRollbackedI2E", mock.Anything).Return(false)
+		sysState.On("GetCommittedRollbackedI2E", mock.Anything).Return(false)
 
 		msgs, ord, err := s.getBridgeMessages(7, 10, 100, 1, sysState, nil)
 
@@ -457,7 +457,7 @@ func Test_getBridgeMessages(t *testing.T) {
 		committed := []bool{true, false, false, true, false}
 
 		for i := range 5 {
-			sysState.On("GetConfirmedRollbackedI2E", big.NewInt(int64(i)+1)).Return(committed[i])
+			sysState.On("GetCommittedRollbackedI2E", big.NewInt(int64(i)+1)).Return(committed[i])
 		}
 
 		msgs, ord, err := s.getBridgeMessages(7, 10, 100, 1, sysState, nil)
@@ -504,7 +504,7 @@ func Test_getBridgeMessages(t *testing.T) {
 		committed := []bool{true, false, false, true, false}
 
 		for i := range 5 {
-			sysState.On("GetConfirmedRollbackedI2E", big.NewInt(int64(i)+1)).Return(committed[i])
+			sysState.On("GetCommittedRollbackedI2E", big.NewInt(int64(i)+1)).Return(committed[i])
 		}
 
 		msgs, ord, err := s.getBridgeMessages(1, 10, 100, 1, sysState, nil)
@@ -600,7 +600,7 @@ func Test_getBridgeMessages(t *testing.T) {
 		committed := []bool{true, true, true, true, false}
 
 		for i := range 5 {
-			sysState.On("GetConfirmedRollbackedI2E", big.NewInt(int64(i)+1)).Return(committed[i])
+			sysState.On("GetCommittedRollbackedI2E", big.NewInt(int64(i)+1)).Return(committed[i])
 		}
 
 		msgs, ord, err := s.getBridgeMessages(1, 10, 100, 1, sysState, nil)
@@ -655,7 +655,7 @@ func Test_getBridgeMessages(t *testing.T) {
 		committed := []bool{true, false, true, true, true}
 
 		for i := range 5 {
-			sysState.On("GetConfirmedRollbackedI2E", big.NewInt(int64(i)+1)).Return(committed[i])
+			sysState.On("GetCommittedRollbackedI2E", big.NewInt(int64(i)+1)).Return(committed[i])
 		}
 
 		msgs, ord, err := s.getBridgeMessages(1, 10, 100, 1, sysState, nil)
@@ -715,7 +715,7 @@ func Test_getBridgeMessages(t *testing.T) {
 		committed := []bool{true, false, true, true, true, false, true}
 
 		for i := range 7 {
-			sysState.On("GetConfirmedRollbackedI2E", big.NewInt(int64(i)+1)).Return(committed[i])
+			sysState.On("GetCommittedRollbackedI2E", big.NewInt(int64(i)+1)).Return(committed[i])
 		}
 
 		msgs, ord, err := s.getBridgeMessages(4, 10, 100, 1, sysState, nil)
@@ -782,7 +782,7 @@ func Test_getBridgeMessages(t *testing.T) {
 		}
 
 		for i := range 12 {
-			sysState.On("GetConfirmedRollbackedI2E", big.NewInt(int64(i)+1)).Return(committed[i])
+			sysState.On("GetCommittedRollbackedI2E", big.NewInt(int64(i)+1)).Return(committed[i])
 		}
 
 		msgs, ord, err := s.getBridgeMessages(4, 10, 100, 1, sysState, nil)
@@ -832,7 +832,7 @@ func Test_getBridgeMessages(t *testing.T) {
 
 		sysState := &systemstate.SystemStateMock{}
 
-		sysState.On("GetConfirmedRollbackedI2E", big.NewInt(1)).Return(true)
+		sysState.On("GetCommittedRollbackedI2E", big.NewInt(1)).Return(true)
 
 		msgs, ord, err := s.getBridgeMessages(1, 10, 100, 1, sysState, nil)
 
