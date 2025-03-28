@@ -9,7 +9,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/helpers"
 )
 
-func decodeStateTransaction(txData []byte) (contractsapi.ABIEncoder, error) {
+func decodeBridgeStateTransaction(txData []byte) (contractsapi.ABIEncoder, error) {
 	if len(txData) < helpers.AbiMethodIDLength {
 		return nil, fmt.Errorf("state transactions have input")
 	}
@@ -19,6 +19,7 @@ func decodeStateTransaction(txData []byte) (contractsapi.ABIEncoder, error) {
 	var (
 		commitBridgeTxFn     contractsapi.CommitBatchBridgeStorageFn
 		commitValidatorSetFn contractsapi.CommitValidatorSetBridgeStorageFn
+		receiveBatch         contractsapi.ReceiveBatchGatewayFn
 		commitEpochFn        contractsapi.CommitEpochEpochManagerFn
 		distributeRewardsFn  contractsapi.DistributeRewardForEpochManagerFn
 		obj                  contractsapi.ABIEncoder
@@ -40,9 +41,11 @@ func decodeStateTransaction(txData []byte) (contractsapi.ABIEncoder, error) {
 	case bytes.Equal(sig, commitValidatorSetFn.Sig()):
 		// commit validator set
 		obj = &contractsapi.CommitValidatorSetBridgeStorageFn{}
-
+	case bytes.Equal(sig, receiveBatch.Sig()):
+		// receive batch
+		obj = &contractsapi.ReceiveBatchGatewayFn{}
 	default:
-		return nil, fmt.Errorf("unknown state transaction")
+		return nil, fmt.Errorf("unknown state transaction %v", sig)
 	}
 
 	if err := obj.DecodeAbi(txData); err != nil {

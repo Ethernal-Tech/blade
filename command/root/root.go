@@ -13,7 +13,9 @@ import (
 	"github.com/0xPolygon/polygon-edge/command/genesis"
 	"github.com/0xPolygon/polygon-edge/command/helper"
 	"github.com/0xPolygon/polygon-edge/command/loadtest"
-	"github.com/0xPolygon/polygon-edge/command/mint"
+	mintERC1155 "github.com/0xPolygon/polygon-edge/command/mint/erc1155"
+	mintERC20 "github.com/0xPolygon/polygon-edge/command/mint/erc20"
+	mintERC721 "github.com/0xPolygon/polygon-edge/command/mint/erc721"
 	"github.com/0xPolygon/polygon-edge/command/monitor"
 	"github.com/0xPolygon/polygon-edge/command/peers"
 	"github.com/0xPolygon/polygon-edge/command/regenesis"
@@ -60,7 +62,9 @@ func (rc *RootCommand) registerSubCommands() {
 		polybftsecrets.GetCommand(),
 		bridge.GetCommand(),
 		regenesis.GetCommand(),
-		mint.GetCommand(),
+		mintERC20.GetCommand(),
+		mintERC721.GetCommand(),
+		mintERC1155.GetCommand(),
 		validator.GetCommand(),
 		loadtest.GetCommand(),
 		sanitycheck.GetCommand(),

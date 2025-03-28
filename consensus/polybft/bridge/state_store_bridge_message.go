@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
+	systemstate "github.com/0xPolygon/polygon-edge/consensus/polybft/system_state"
 	"github.com/0xPolygon/polygon-edge/helper/common"
 	bolt "go.etcd.io/bbolt"
 )
@@ -23,6 +24,8 @@ var (
 
 	ordinaryMessages = []byte("ordinary")
 	rollbackMessages = []byte("rollback")
+
+	executedMessages = []byte("executed")
 
 	// errNotEnoughBridgeEvents error message
 	errNotEnoughBridgeEvents = errors.New("there is either a gap or not enough bridge events")
@@ -52,15 +55,16 @@ type BridgeBatchVote struct {
 }
 
 type BridgeManagerStore struct {
-	db       *bolt.DB
-	chainIDs []uint64
+	db              *bolt.DB
+	chainIDs        []uint64
+	internalChainID uint64
 }
 
 func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, externalChainsIDs []uint64,
 	internalChainID uint64) (*BridgeManagerStore, error) {
 	var err error
 
-	store := &BridgeManagerStore{db: db, chainIDs: externalChainsIDs}
+	store := &BridgeManagerStore{db: db, chainIDs: externalChainsIDs, internalChainID: internalChainID}
 
 	initFn := func(tx *bolt.Tx) error {
 		var bridgeMessageBucket, bridgeBatchesBucket, epochBucket *bolt.Bucket
@@ -96,6 +100,18 @@ func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, externalChainsIDs []uint6
 			return bridgeMessageChainIDBucket, nil
 		}
 
+		createOrdinaryAndRollbackBucket := func(bucket *bolt.Bucket) error {
+			if _, err := bucket.CreateBucketIfNotExists(ordinaryMessages); err != nil {
+				return fmt.Errorf("failed to create bucket for ordinary messages: %w", err)
+			}
+
+			if _, err := bucket.CreateBucketIfNotExists(rollbackMessages); err != nil {
+				return fmt.Errorf("failed to create bucket for rollback messages: %w", err)
+			}
+
+			return nil
+		}
+
 		internalChainIDBytes := common.EncodeUint64ToBytes(internalChainID)
 
 		internalBridgeMessageBucket, err := createBucketsAndReturnBridgeMessageBucket(internalChainIDBytes)
@@ -124,12 +140,17 @@ func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, externalChainsIDs []uint6
 			}
 
 			for _, bucket := range buckets {
-				if _, err := bucket.CreateBucketIfNotExists(ordinaryMessages); err != nil {
-					return fmt.Errorf("failed to create bucket for ordinary messages: %w", err)
+				if err := createOrdinaryAndRollbackBucket(bucket); err != nil {
+					return err
 				}
 
-				if _, err := bucket.CreateBucketIfNotExists(rollbackMessages); err != nil {
-					return fmt.Errorf("failed to create bucket for rollback messages: %w", err)
+				executedBucket, err := bucket.CreateBucketIfNotExists(executedMessages)
+				if err != nil {
+					return fmt.Errorf("failed to create buckets for executed messages: %w", err)
+				}
+
+				if err := createOrdinaryAndRollbackBucket(executedBucket); err != nil {
+					return err
 				}
 			}
 		}
@@ -144,6 +165,10 @@ func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, externalChainsIDs []uint6
 	}
 
 	return store, err
+}
+
+func (bms *BridgeManagerStore) BeginDBTransaction(isWriteTx bool) (*bolt.Tx, error) {
+	return bms.db.Begin(isWriteTx)
 }
 
 // insertBridgeMessageEvent inserts a new bridge message event to state event bucket in db
@@ -200,7 +225,7 @@ func (bms *BridgeManagerStore) getBridgeMessageEvent(messageID, sourceChainID, d
 	isRollback bool, dbTx *bolt.Tx) (*contractsapi.BridgeMsgEvent, error) {
 	var message *contractsapi.BridgeMsgEvent
 
-	insertFn := func(tx *bolt.Tx) error {
+	getFn := func(tx *bolt.Tx) error {
 		id := common.EncodeUint64ToBytes(messageID.Uint64())
 
 		bucket := tx.Bucket(bridgeMessageEventsBucket).
@@ -227,18 +252,160 @@ func (bms *BridgeManagerStore) getBridgeMessageEvent(messageID, sourceChainID, d
 	}
 
 	if dbTx == nil {
-		if err := bms.db.Update(insertFn); err != nil {
+		if err := bms.db.View(getFn); err != nil {
 			return nil, err
 		}
 
 		return message, nil
 	}
 
-	if err := insertFn(dbTx); err != nil {
+	if err := getFn(dbTx); err != nil {
 		return nil, err
 	}
 
 	return message, nil
+}
+
+func (bms *BridgeManagerStore) isBridgeMessageKnown(message *contractsapi.BridgeMessage, dbTx *bolt.Tx) bool {
+	var known bool
+
+	getFn := func(tx *bolt.Tx) error {
+		id := common.EncodeUint64ToBytes(message.ID.Uint64())
+
+		bucket := tx.Bucket(bridgeMessageEventsBucket).
+			Bucket(common.EncodeUint64ToBytes(message.SourceChainID.Uint64())).
+			Bucket(common.EncodeUint64ToBytes(message.DestinationChainID.Uint64()))
+
+		var data []byte
+
+		if message.IsRollback {
+			data = bucket.Bucket(rollbackMessages).Get(id)
+		} else {
+			data = bucket.Bucket(ordinaryMessages).Get(id)
+		}
+
+		if data != nil {
+			known = true
+		}
+
+		return nil
+	}
+
+	if dbTx == nil {
+		bms.db.View(getFn) //nolint:errcheck
+	} else {
+		getFn(dbTx) //nolint:errcheck
+	}
+
+	return known
+}
+
+func (bms *BridgeManagerStore) isBridgeMessageExecuted(message *contractsapi.BridgeMessage, dbTx *bolt.Tx) bool {
+	var executed bool
+
+	getFn := func(tx *bolt.Tx) error {
+		id := common.EncodeUint64ToBytes(message.ID.Uint64())
+
+		bucket := tx.Bucket(bridgeMessageEventsBucket).
+			Bucket(common.EncodeUint64ToBytes(message.SourceChainID.Uint64())).
+			Bucket(common.EncodeUint64ToBytes(message.DestinationChainID.Uint64())).
+			Bucket(executedMessages)
+
+		var data []byte
+
+		if message.IsRollback {
+			data = bucket.Bucket(rollbackMessages).Get(id)
+		} else {
+			data = bucket.Bucket(ordinaryMessages).Get(id)
+		}
+
+		if data != nil {
+			executed = true
+		}
+
+		return nil
+	}
+
+	if dbTx == nil {
+		bms.db.View(getFn) //nolint:errcheck
+	} else {
+		getFn(dbTx) //nolint:errcheck
+	}
+
+	return executed
+}
+
+func (bms *BridgeManagerStore) insertBridgeMessageResultEvent(result *contractsapi.BridgeMessageResultEvent,
+	dbTx *bolt.Tx) error {
+	insertFn := func(tx *bolt.Tx) error {
+		raw, err := json.Marshal(result)
+		if err != nil {
+			return err
+		}
+
+		bucket := tx.Bucket(bridgeMessageEventsBucket).
+			Bucket(common.EncodeUint64ToBytes(result.SourceChainID.Uint64())).
+			Bucket(common.EncodeUint64ToBytes(result.DestinationChainID.Uint64())).
+			Bucket(executedMessages)
+
+		if result.IsRollback {
+			return bucket.Bucket(rollbackMessages).Put(common.EncodeUint64ToBytes(result.ID.Uint64()), raw)
+		}
+
+		return bucket.Bucket(ordinaryMessages).Put(common.EncodeUint64ToBytes(result.ID.Uint64()), raw)
+	}
+
+	if dbTx == nil {
+		return bms.db.Update(insertFn)
+	}
+
+	return insertFn(dbTx)
+}
+
+func (bms *BridgeManagerStore) getBridgeMessageResult(message *contractsapi.BridgeMessage,
+	dbTx *bolt.Tx) (*contractsapi.BridgeMessageResultEvent, error) {
+	var result *contractsapi.BridgeMessageResultEvent
+
+	getFn := func(tx *bolt.Tx) error {
+		id := common.EncodeUint64ToBytes(message.ID.Uint64())
+
+		bucket := tx.Bucket(bridgeMessageEventsBucket).
+			Bucket(common.EncodeUint64ToBytes(message.SourceChainID.Uint64())).
+			Bucket(common.EncodeUint64ToBytes(message.DestinationChainID.Uint64())).
+			Bucket(executedMessages)
+
+		var data []byte
+
+		if message.IsRollback {
+			data = bucket.Bucket(rollbackMessages).Get(id)
+		} else {
+			data = bucket.Bucket(ordinaryMessages).Get(id)
+		}
+
+		if data == nil {
+			return nil
+		}
+
+		if err := json.Unmarshal(data, &result); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	if dbTx == nil {
+		if err := bms.db.View(getFn); err != nil {
+			return nil, err
+		}
+
+		return result, nil
+	}
+
+	if err := getFn(dbTx); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 // removeBridgeEvents removes bridge events and their proofs from the buckets in db
@@ -332,8 +499,13 @@ func (bms *BridgeManagerStore) list(internalChainID uint64) ([]*contractsapi.Bri
 	return messages, err
 }
 
-func (bms *BridgeManagerStore) getBridgeMessages(fromIndex, limit, sid, did uint64, dbTx *bolt.Tx) (
-	[]*contractsapi.BridgeMessage, uint64, error) {
+func (bms *BridgeManagerStore) getBridgeMessages(
+	fromIndex,
+	limit,
+	sid,
+	did uint64,
+	sysState systemstate.SystemState,
+	dbTx *bolt.Tx) ([]*contractsapi.BridgeMessage, uint64, error) {
 	if limit == 0 {
 		return nil, 0, nil
 	}
@@ -341,7 +513,7 @@ func (bms *BridgeManagerStore) getBridgeMessages(fromIndex, limit, sid, did uint
 	var (
 		messages          []*contractsapi.BridgeMessage
 		err               error
-		limitReachedErr   error
+		limitReachedErr   = errors.New("limit reached")
 		numOfOrdinaryMsgs uint64
 	)
 
@@ -386,6 +558,8 @@ func (bms *BridgeManagerStore) getBridgeMessages(fromIndex, limit, sid, did uint
 			return nil
 		}
 
+		var toRemove []*big.Int
+
 		err := tx.Bucket(bridgeMessageEventsBucket).
 			Bucket(common.EncodeUint64ToBytes(sid)).
 			Bucket(common.EncodeUint64ToBytes(did)).
@@ -393,6 +567,27 @@ func (bms *BridgeManagerStore) getBridgeMessages(fromIndex, limit, sid, did uint
 			var event *contractsapi.BridgeMsgEvent
 			if err := json.Unmarshal(v, &event); err != nil {
 				return err
+			}
+
+			var (
+				committed bool
+				err       error
+			)
+
+			if bms.internalChainID == sid {
+				committed, err = sysState.GetCommittedRollbackedI2E(did, event.ID)
+			} else {
+				committed, err = sysState.GetCommittedRollbackedE2I(sid, event.ID)
+			}
+
+			if err != nil {
+				return err
+			}
+
+			if committed {
+				toRemove = append(toRemove, event.ID)
+
+				return nil
 			}
 
 			message := &contractsapi.BridgeMessage{
@@ -416,6 +611,17 @@ func (bms *BridgeManagerStore) getBridgeMessages(fromIndex, limit, sid, did uint
 			return nil
 		})
 
+		for _, id := range toRemove {
+			id := common.EncodeUint64ToBytes(id.Uint64())
+
+			if err := tx.Bucket(bridgeMessageEventsBucket).
+				Bucket(common.EncodeUint64ToBytes(sid)).
+				Bucket(common.EncodeUint64ToBytes(did)).
+				Bucket(rollbackMessages).Delete(id); err != nil {
+				return err
+			}
+		}
+
 		if err != nil {
 			if errors.Is(err, limitReachedErr) {
 				return nil
@@ -428,7 +634,7 @@ func (bms *BridgeManagerStore) getBridgeMessages(fromIndex, limit, sid, did uint
 	}
 
 	if dbTx == nil {
-		err = bms.db.View(getFn)
+		err = bms.db.Update(getFn)
 	} else {
 		err = getFn(dbTx)
 	}
@@ -610,9 +816,17 @@ func getNestedBucketInEpoch(tx *bolt.Tx, epoch uint64, bucketKey []byte, chainID
 
 // getEpochBucket returns bucket from db associated with given epoch
 func getEpochBucket(tx *bolt.Tx, epoch uint64, chainID uint64) (*bolt.Bucket, error) {
-	epochBucket := tx.Bucket(epochsBucket).
-		Bucket(common.EncodeUint64ToBytes(chainID)).
-		Bucket(common.EncodeUint64ToBytes(epoch))
+	epochBucket := tx.Bucket(epochsBucket)
+	if epochBucket == nil {
+		return nil, fmt.Errorf("could not find epoch bucket")
+	}
+
+	epochBucket = epochBucket.Bucket(common.EncodeUint64ToBytes(chainID))
+	if epochBucket == nil {
+		return nil, fmt.Errorf("could not find epoch bucket for chain %d", chainID)
+	}
+
+	epochBucket = epochBucket.Bucket(common.EncodeUint64ToBytes(epoch))
 	if epochBucket == nil {
 		return nil, fmt.Errorf("could not find bucket for epoch: %v", epoch)
 	}

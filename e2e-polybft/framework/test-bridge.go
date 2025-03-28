@@ -193,6 +193,48 @@ func (t *TestBridge) Deposit(token bridgeCommon.TokenType, rootTokenAddr, rootPr
 	return t.cmdRun(args...)
 }
 
+func (t *TestBridge) Mint(tokenType bridgeCommon.TokenType, token types.Address,
+	addresses, tokens, amounts, jsonRPCAddr, minterKey string) error {
+	args := []string{}
+
+	if addresses == "" {
+		return errors.New("address is required")
+	}
+
+	if jsonRPCAddr == "" {
+		return errors.New("provide a JSON RPC endpoint URL")
+	}
+
+	if minterKey == "" {
+		return errors.New("minter key is required")
+	}
+
+	switch tokenType {
+	case bridgeCommon.ERC20:
+		args = append(args, "mint-erc20")
+	case bridgeCommon.ERC721:
+		args = append(args, "mint-erc721")
+	case bridgeCommon.ERC1155:
+		args = append(args, "mint-erc1155")
+	}
+
+	args = append(args,
+		"--token", token.String(),
+		"--addresses", addresses,
+		"--private-key", minterKey,
+		"--jsonrpc", jsonRPCAddr)
+
+	if amounts != "" {
+		args = append(args, "--amounts", amounts)
+	}
+
+	if tokens != "" {
+		args = append(args, "--tokens", tokens)
+	}
+
+	return t.cmdRun(args...)
+}
+
 // Withdraw function is used to invoke bridge withdrawals for any kind of ERC tokens
 // from the internal to the external chain
 // with given receivers, amounts and/or token ids
@@ -440,7 +482,7 @@ func (t *TestBridge) mintNativeRootToken(validatorAddresses []types.Address, tok
 	args := []string{
 		"mint-erc20",
 		"--jsonrpc", t.JSONRPCAddr(),
-		"--erc20-token", polybftConfig.Bridge[tokenConfig.ChainID].ExternalNativeERC20Addr.String(),
+		"--token", polybftConfig.Bridge[tokenConfig.ChainID].ExternalNativeERC20Addr.String(),
 	}
 
 	// mint something for every validator

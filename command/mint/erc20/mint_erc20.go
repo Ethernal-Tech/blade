@@ -6,7 +6,6 @@ import (
 	"github.com/0xPolygon/polygon-edge/command"
 	bridgeHelper "github.com/0xPolygon/polygon-edge/command/bridge/helper"
 	"github.com/0xPolygon/polygon-edge/command/helper"
-	polybftsecrets "github.com/0xPolygon/polygon-edge/command/secrets/init"
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/spf13/cobra"
@@ -42,7 +41,7 @@ func preRunCommand(cmd *cobra.Command, _ []string) error {
 func setFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(
 		&params.minterPrivateKey,
-		polybftsecrets.PrivateKeyFlag,
+		bridgeHelper.PrivateKeyFlag,
 		"",
 		"the minter private key",
 	)
@@ -63,7 +62,7 @@ func setFlags(cmd *cobra.Command) {
 
 	cmd.Flags().StringVar(
 		&params.tokenAddr,
-		bridgeHelper.Erc20TokenFlag,
+		bridgeHelper.TokenFlag,
 		"",
 		"erc20 token address",
 	)
@@ -75,7 +74,7 @@ func setFlags(cmd *cobra.Command) {
 		helper.TxTimeoutDesc,
 	)
 
-	_ = cmd.MarkFlagRequired(bridgeHelper.Erc20TokenFlag)
+	_ = cmd.MarkFlagRequired(bridgeHelper.TokenFlag)
 }
 
 func runCommand(cmd *cobra.Command, _ []string) {
@@ -115,7 +114,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 				addr := types.StringToAddress(params.addresses[i])
 				amount := params.amountValues[i]
 
-				mintTxn, err := bridgeHelper.CreateMintTxn(addr, tokenAddr, amount, true)
+				mintTxn, err := bridgeHelper.CreateMintERC20Txn(addr, tokenAddr, amount, false)
 				if err != nil {
 					return fmt.Errorf("failed to create mint native tokens transaction for validator '%s'. err: %w",
 						addr, err)

@@ -20,8 +20,8 @@ var (
 type ChainType int
 
 const (
-	Internal ChainType = iota // Internal = 0
-	External                  // External = 1
+	I2E ChainType = iota // Internal = 0
+	E2I                  // External = 1
 )
 
 // SystemState is an interface to interact with the consensus system contracts in the chain
@@ -30,12 +30,19 @@ type SystemState interface {
 	GetEpoch() (uint64, error)
 	// GetNextCommittedIndex retrieves next committed bridge message index, based on the chain type
 	GetNextCommittedIndex(chainID uint64, chainType ChainType) (uint64, error)
-	// GetBridgeBatchByNumber return bridge batch by number
+	// GetBridgeBatchByNumber returns bridge batch by number
 	GetBridgeBatchByNumber(numberOfBatch *big.Int) (*contractsapi.SignedBridgeMessageBatch, error)
-	// GetValidatorSetByNumber return validator set by number
+	// GetValidatorSetByNumber returns validator set by number
 	GetValidatorSetByNumber(numberOfValidatorSet *big.Int) (*contractsapi.SignedValidatorSet, error)
-
+	// GetBatchCommitCounter returns the commit counter for the batch with the given batch hash.
+	// The base hash includes only messages, the source, and the destination chain, while other
+	// fields are set to 0. See the buildBridgeMessage method of [BridgeManager] for a concrete
+	// example.
 	GetBatchCommitCounter(batchHash types.Hash) (*big.Int, error)
+	// GetCommittedRollbackedI2E returns whether the I2E rollback bridge message is committed.
+	GetCommittedRollbackedI2E(chainID uint64, id *big.Int) (bool, error)
+	// GetCommittedRollbackedE2I returns whether the E2I rollback bridge message is committed.
+	GetCommittedRollbackedE2I(chainID uint64, id *big.Int) (bool, error)
 }
 
 var _ SystemState = &SystemStateImpl{}
@@ -85,9 +92,9 @@ func (s *SystemStateImpl) GetNextCommittedIndex(chainID uint64, chainType ChainT
 	var funcName string
 
 	switch chainType {
-	case Internal:
+	case I2E:
 		funcName = "lastCommittedI2E"
-	case External:
+	case E2I:
 		funcName = "lastCommittedE2I"
 	default:
 		return 0, fmt.Errorf("unsupported chain type: %d", chainType)
@@ -98,12 +105,12 @@ func (s *SystemStateImpl) GetNextCommittedIndex(chainID uint64, chainType ChainT
 		return 0, err
 	}
 
-	nextCommittedIndex, isOk := rawResult["0"].(*big.Int)
+	lastCommittedIndex, isOk := rawResult["0"].(*big.Int)
 	if !isOk {
-		return 0, fmt.Errorf("failed to decode next committed index")
+		return 0, fmt.Errorf("failed to decode last committed index")
 	}
 
-	return nextCommittedIndex.Uint64() + 1, nil
+	return lastCommittedIndex.Uint64() + 1, nil
 }
 
 func (s *SystemStateImpl) GetBridgeBatchByNumber(batchID *big.Int) (*contractsapi.SignedBridgeMessageBatch, error) {
@@ -164,6 +171,28 @@ func (s *SystemStateImpl) GetBatchCommitCounter(hash types.Hash) (*big.Int, erro
 	}
 
 	return num, nil
+}
+
+func (s *SystemStateImpl) GetCommittedRollbackedI2E(chainID uint64, id *big.Int) (bool, error) {
+	return s.getCommittedRollbacked("getConfirmedRollbackedI2E", chainID, id)
+}
+
+func (s *SystemStateImpl) GetCommittedRollbackedE2I(chainID uint64, id *big.Int) (bool, error) {
+	return s.getCommittedRollbacked("getConfirmedRollbackedE2I", chainID, id)
+}
+
+func (s *SystemStateImpl) getCommittedRollbacked(funcName string, chainID uint64, id *big.Int) (bool, error) {
+	rawResult, err := s.bridgeStorageContract.Call(funcName, ethgo.Latest, new(big.Int).SetUint64(chainID), id)
+	if err != nil {
+		return false, err
+	}
+
+	committed, isOk := rawResult["0"].(bool)
+	if !isOk {
+		return false, fmt.Errorf("failed to decode whether the rollback message is committed")
+	}
+
+	return committed, nil
 }
 
 var _ contract.Provider = &stateProvider{}

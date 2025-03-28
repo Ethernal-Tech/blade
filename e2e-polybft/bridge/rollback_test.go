@@ -163,34 +163,6 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 	startEventNum := func() uint64 { return (evNum-1)*transfersCount + evNum }
 	endEventNum := func() uint64 { return (evNum)*transfersCount + evNum }
 
-	validateBridgeRollback := func(externalBlockStart uint64, internalBlockStart uint64) {
-		latest, err := validatorSrv.JSONRPC().BlockNumber()
-		require.NoError(t, err)
-
-		var bridgeMessageResult contractsapi.BridgeMessageResultEvent
-		logs, err := getFilteredLogs(bridgeMessageResult.Sig(), internalBlockStart, latest, validatorSrv.JSONRPC())
-		require.NoError(t, err)
-
-		assertBridgeEventResultNotSuccessful(t, logs, numOfRollback)
-
-		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
-			for i := startEventNum(); i <= endEventNum(); i++ {
-				if i%2 == 0 && !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, true) {
-					return false
-				}
-			}
-
-			return true
-		}))
-
-		latest = waitForBlocksOnExternal(t, 20, externalRPC, 2*time.Minute)
-
-		logs, err = getFilteredLogs(bridgeMessageResult.Sig(), externalBlockStart, latest, externalRPC)
-		require.NoError(t, err)
-
-		assertBridgeEventResultSuccessful(t, logs, numOfRollback)
-	}
-
 	t.Run("Rollback_ERC20", func(t *testing.T) {
 		deployTx := types.NewTx(types.NewLegacyTx(
 			types.WithTo(nil),
@@ -235,7 +207,14 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 			return true
 		}))
 
-		validateBridgeRollback(0, 0)
+		validateBridgeRollbackExternal(t,
+			cluster,
+			0, 0,
+			startEventNum(), endEventNum(),
+			numOfRollback,
+			externalChainTxRelayer,
+			bridgeCfg.ExternalGatewayAddr,
+			externalRPC)
 	})
 
 	evNum++
@@ -295,7 +274,14 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 			return true
 		}))
 
-		validateBridgeRollback(startBlockExternal, startBlockInternal)
+		validateBridgeRollbackExternal(t,
+			cluster,
+			startBlockExternal, startBlockInternal,
+			startEventNum(), endEventNum(),
+			numOfRollback,
+			externalChainTxRelayer,
+			bridgeCfg.ExternalGatewayAddr,
+			externalRPC)
 	})
 
 	evNum++
@@ -353,7 +339,14 @@ func TestE2E_Rollback_E2I(t *testing.T) {
 			return true
 		}))
 
-		validateBridgeRollback(startBlockExternal, startBlockInternal)
+		validateBridgeRollbackExternal(t,
+			cluster,
+			startBlockExternal, startBlockInternal,
+			startEventNum(), endEventNum(),
+			numOfRollback,
+			externalChainTxRelayer,
+			bridgeCfg.ExternalGatewayAddr,
+			externalRPC)
 	})
 }
 
@@ -443,35 +436,6 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 	startEventNum := func() uint64 { return (evNum-1)*transfersCount + evNum }
 	endEventNum := func() uint64 { return evNum*transfersCount + evNum }
 
-	// validate bridge rollback with events
-	validateBridgeRollback := func(externalBlockStart, internalBlockStart uint64) {
-		latest := waitForBlocksOnExternal(t, 20, externalRPC, 2*time.Minute)
-
-		var bridgeMessageResult contractsapi.BridgeMessageResultEvent
-		logs, err := getFilteredLogs(bridgeMessageResult.Sig(), externalBlockStart, latest, externalRPC)
-		require.NoError(t, err)
-
-		assertBridgeEventResultNotSuccessful(t, logs, numOfRollback)
-
-		require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
-			for i := startEventNum(); i <= endEventNum(); i++ {
-				if i%2 == 0 && !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i, true) {
-					return false
-				}
-			}
-
-			return true
-		}))
-
-		latest, err = validatorSrv.JSONRPC().BlockNumber()
-		require.NoError(t, err)
-
-		logs, err = getFilteredLogs(bridgeMessageResult.Sig(), internalBlockStart, latest, validatorSrv.JSONRPC())
-		require.NoError(t, err)
-
-		assertBridgeEventResultSuccessful(t, logs, numOfRollback)
-	}
-
 	t.Run("Rollback_ERC20", func(t *testing.T) {
 		rootToken := contracts.NativeERC20TokenContract
 
@@ -500,7 +464,17 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 			return true
 		}))
 
-		validateBridgeRollback(0, 0)
+		validateBridgeRollbackInternal(
+			t,
+			cluster,
+			0,
+			0,
+			startEventNum(),
+			endEventNum(),
+			numOfRollback,
+			bridgeCfg.InternalGatewayAddr,
+			internalChainTxRelayer,
+			externalRPC)
 	})
 
 	evNum++
@@ -553,7 +527,18 @@ func TestE2E_Rollback_I2E(t *testing.T) {
 			return true
 		}))
 
-		validateBridgeRollback(startBlockOnExternal, startBlockOnInternal)
+		validateBridgeRollbackInternal(
+			t,
+			cluster,
+			startBlockOnExternal,
+			startBlockOnInternal,
+			startEventNum(),
+			endEventNum(),
+			numOfRollback,
+			bridgeCfg.InternalGatewayAddr,
+			internalChainTxRelayer,
+			externalRPC,
+		)
 	})
 }
 

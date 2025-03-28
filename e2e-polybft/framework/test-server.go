@@ -326,7 +326,7 @@ func (t *TestServer) MintERC20Token(addresses []string, amounts []*big.Int, erc2
 	args := []string{
 		"mint-erc20",
 		"--jsonrpc", t.JSONRPCAddr(),
-		"--erc20-token", erc20Token.String(),
+		"--token", erc20Token.String(),
 		"--private-key", hex.EncodeToString(rawKey),
 	}
 

@@ -735,11 +735,11 @@ func (p *Polybft) PreCommitState(block *types.Block, _ *state.Transition) error 
 
 	// validate bridge transactions
 	for _, tx := range block.Transactions {
-		if tx.Type() != types.BridgeTxType {
+		if tx.Type() != types.BridgeTxType && tx.Type() != types.StateTxType {
 			continue
 		}
 
-		decodedBridgeTx, err := decodeStateTransaction(tx.Input())
+		decodedBridgeTx, err := decodeBridgeStateTransaction(tx.Input())
 		if err != nil {
 			return fmt.Errorf("unknown state transaction: tx=%v, error: %w", tx.Hash(), err)
 		}
