@@ -2206,30 +2206,3 @@ func (b *BridgeMsgEvent) ParseLog(log *ethgo.Log) (bool, error) {
 func (b *BridgeMsgEvent) Decode(input []byte) error {
 	return Gateway.Abi.Events["BridgeMsg"].Inputs.DecodeStruct(input, &b)
 }
-
-type BridgeBatchProcessedEvent struct {
-	Success            bool     `abi:"success"`
-	SourceChainID      *big.Int `abi:"sourceChainId"`
-	DestinationChainID *big.Int `abi:"destinationChainId"`
-	BatchHash          []byte   `abi:"batchHash"`
-}
-
-func (*BridgeBatchProcessedEvent) Sig() ethgo.Hash {
-	return Gateway.Abi.Events["BridgeBatchProcessed"].ID()
-}
-
-func (b *BridgeBatchProcessedEvent) Encode() ([]byte, error) {
-	return Gateway.Abi.Events["BridgeBatchProcessed"].Inputs.Encode(b)
-}
-
-func (b *BridgeBatchProcessedEvent) ParseLog(log *ethgo.Log) (bool, error) {
-	if !Gateway.Abi.Events["BridgeBatchProcessed"].Match(log) {
-		return false, nil
-	}
-
-	return true, decodeEvent(Gateway.Abi.Events["BridgeBatchProcessed"], log, b)
-}
-
-func (b *BridgeBatchProcessedEvent) Decode(input []byte) error {
-	return Gateway.Abi.Events["BridgeBatchProcessed"].Inputs.DecodeStruct(input, &b)
-}

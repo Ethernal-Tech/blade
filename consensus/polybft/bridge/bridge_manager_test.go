@@ -2204,7 +2204,7 @@ func Test_handleRetry(t *testing.T) {
 			SourceChainID:         big.NewInt(100),
 			DestinationChainID:    big.NewInt(1),
 			Threshold:             big.NewInt(0),
-			NumberOfRegularEvents: big.NewInt(0),
+			NumberOfRegularEvents: big.NewInt(5),
 			CommitCounter:         big.NewInt(0),
 		},
 	}
@@ -2213,7 +2213,6 @@ func Test_handleRetry(t *testing.T) {
 
 	require.NoError(t, err)
 
-	batch.NumberOfRegularEvents = big.NewInt(5)
 	batch.Threshold = big.NewInt(120)
 	batch.CommitCounter = big.NewInt(1)
 

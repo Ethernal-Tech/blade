@@ -44,7 +44,6 @@ var (
 
 	// Bridge events signatures
 	bridgeMessageEventSig         = new(contractsapi.BridgeMsgEvent).Sig()
-	bridgeBatchProcessedEventSig  = new(contractsapi.BridgeBatchProcessedEvent).Sig()
 	bridgeMessageResultEventSig   = new(contractsapi.BridgeMessageResultEvent).Sig()
 	newBatchEventSig              = new(contractsapi.NewBatchEvent).Sig()
 	newValidatorSetStoredEventSig = new(contractsapi.NewValidatorSetStoredEvent).Sig()
@@ -598,7 +597,7 @@ func (b *bridgeEventManager) buildBridgeBatch(
 			SourceChainID:         big.NewInt(int64(sourceChainID)),
 			DestinationChainID:    big.NewInt(int64(destinationChainID)),
 			Threshold:             big.NewInt(0),
-			NumberOfRegularEvents: big.NewInt(0),
+			NumberOfRegularEvents: big.NewInt(int64(numOfOrdinaryMsgs)),
 			CommitCounter:         big.NewInt(0),
 		},
 		Epoch: epoch,
@@ -611,7 +610,6 @@ func (b *bridgeEventManager) buildBridgeBatch(
 
 	pendingBatch.Threshold = new(big.Int).SetUint64(uint64((math.Ceil(float64(blockNumber)/10) * 10)) +
 		b.config.bridgeCfg.BridgeBatchThreshold)
-	pendingBatch.NumberOfRegularEvents = big.NewInt(int64(numOfOrdinaryMsgs))
 	pendingBatch.CommitCounter = big.NewInt(1)
 
 	fullHash, err := pendingBatch.Hash()
@@ -710,7 +708,6 @@ func (b *bridgeEventManager) handleRetry(
 		// salt and potential reorganization). If so, batch is ready for retry.
 		if blockNumber.Cmp(rt) >= 0 {
 			retryBatch := *b.unexecutedBatches[i]
-			retryBatch.NumberOfRegularEvents = big.NewInt(0)
 			retryBatch.Threshold = big.NewInt(0)
 			retryBatch.CommitCounter = big.NewInt(0)
 
@@ -829,13 +826,7 @@ func (b *bridgeEventManager) buildRetryBridgeBatch(
 	pendingRetryBatches := b.pendingRetryBatches[baseHash]
 	b.pendingRetryBatches[baseHash] = append(pendingRetryBatches, &pendingBatch)
 
-	numOfOrdinaryMsgs := 0
-
-	for _, message := range pendingBatch.Messages {
-		if !message.IsRollback {
-			numOfOrdinaryMsgs++
-		}
-	}
+	numOfOrdinaryMsgs := pendingBatch.NumberOfRegularEvents.Uint64()
 
 	firstID := big.NewInt(0)
 	lastID := big.NewInt(0)
@@ -850,7 +841,7 @@ func (b *bridgeEventManager) buildRetryBridgeBatch(
 		"direction", fmt.Sprintf("%d -> %d", rb.SourceChainID.Uint64(), rb.DestinationChainID.Uint64()),
 		"total number of messages", len(pendingBatch.Messages),
 		"number of ordinary", fmt.Sprintf("%d (%s-%s)", numOfOrdinaryMsgs, firstID.String(), lastID.String()),
-		"number of rollback", len(pendingBatch.Messages)-numOfOrdinaryMsgs,
+		"number of rollback", len(pendingBatch.Messages)-int(numOfOrdinaryMsgs),
 		"threshold", pendingBatch.Threshold,
 		"base hash", baseHash.String(),
 		"full hash", hash.String(),
