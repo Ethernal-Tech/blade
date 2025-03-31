@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"os"
 	"sync"
-	"sync/atomic"
 
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/hashicorp/go-hclog"
@@ -101,8 +100,8 @@ func (j *journal) insert(tx *types.Transaction) error {
 
 	_, err := j.writer.Write(tx.MarshalRLP())
 	if err == nil {
-		// this has to be atomic
-		if atomic.AddUint32(&j.count, 1) == journalRotate {
+		j.count++
+		if j.count == journalRotate {
 			// send event
 			j.journalCh <- struct{}{}
 		}
