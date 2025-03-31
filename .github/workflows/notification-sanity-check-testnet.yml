@@ -41,14 +41,6 @@ jobs:
       - name: Short SHA
         id: short_sha
         run: echo "value=`echo ${{ github.sha }} | cut -c1-7`" >> $GITHUB_OUTPUT
-      - name: Part of the day
-        id: part_of_the_day
-        run: |
-          if [ "$(date +"%H")" -ge 8 ]; then
-            echo "name=Daily" >> $GITHUB_OUTPUT
-          else
-            echo "name=Nightly" >> $GITHUB_OUTPUT
-          fi
       - name: Notify Slack
         uses: slackapi/slack-github-action@v1.25.0
         env:
@@ -66,8 +58,22 @@ jobs:
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "${{ steps.part_of_the_day.outputs.name }} sanity check tests on testnet"
+                    "text": "Nightly sanity check tests on testnet"
                   }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "Workflow Run"
+                      },
+                      "style": "${{ inputs.sanity_check_tests_output == 'PASSED' && env.succeed_bnt || env.failed_bnt }}",
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
                 },
                 {
                   "type": "divider"
@@ -75,10 +81,6 @@ jobs:
                 {
                   "type": "section",
                   "fields": [
-                    {
-                      "type": "mrkdwn",
-                      "text": "${{ inputs.sanity_check_tests_output == 'PASSED' && env.succeed_job || env.failed_job }} *Stake Test*"
-                    },
                     {
                       "type": "mrkdwn",
                       "text": "${{ inputs.stake_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Stake Test*"
