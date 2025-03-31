@@ -97,7 +97,7 @@ func TestSystemState_GetBatchCommitCounter(t *testing.T) {
 			mapping(bytes => uint256) public batchCommitCounter;
 
 			function init() public payable {
-				bytes memory key = hex"eeaf98277d42d00c558a5d33dcdd41dfc03f213a99a7fc12a722135a8de99e1c";
+				bytes memory key = hex"e6a378ae4eb1be9b2bb2abc03bbb5e60c89c42f7359471af2554baed3479a2bd";
 				batchCommitCounter[key] = 8;
 			}
 		`
