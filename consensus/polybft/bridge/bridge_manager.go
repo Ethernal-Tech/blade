@@ -845,7 +845,7 @@ func (b *bridgeEventManager) buildRetryBridgeBatch(
 		"direction", fmt.Sprintf("%d -> %d", rb.SourceChainID.Uint64(), rb.DestinationChainID.Uint64()),
 		"total number of messages", len(pendingBatch.Messages),
 		"number of ordinary", fmt.Sprintf("%d (%s-%s)", numOfOrdinaryMsgs, firstID.String(), lastID.String()),
-		"number of rollback", len(pendingBatch.Messages)-int(numOfOrdinaryMsgs),
+		"number of rollback", len(pendingBatch.Messages)-numOfOrdinaryMsgs,
 		"threshold", pendingBatch.Threshold,
 		"base hash", baseHash.String(),
 		"full hash", hash.String(),
