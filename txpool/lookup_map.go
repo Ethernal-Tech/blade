@@ -52,8 +52,8 @@ func (m *lookupMap) get(hash types.Hash) (*types.Transaction, bool) {
 
 // local returns local transactions from the map. [thread-safe]
 func (m *lookupMap) local() []*types.Transaction {
-	m.Lock()
-	defer m.Unlock()
+	m.RLock()
+	defer m.RUnlock()
 
 	txs := make([]*types.Transaction, 0)
 
