@@ -139,12 +139,11 @@ func TestSystemState_GetBatchCommitCounter(t *testing.T) {
 	}
 
 	batch := &contractsapi.BridgeMessageBatch{
-		Messages:              msgs,
-		SourceChainID:         big.NewInt(int64(100)),
-		DestinationChainID:    big.NewInt(int64(1)),
-		Threshold:             big.NewInt(0),
-		NumberOfRegularEvents: big.NewInt(0),
-		CommitCounter:         big.NewInt(0),
+		Messages:           msgs,
+		SourceChainID:      big.NewInt(int64(100)),
+		DestinationChainID: big.NewInt(int64(1)),
+		Threshold:          big.NewInt(0),
+		CommitCounter:      big.NewInt(0),
 	}
 
 	data, err := batch.EncodeAbi()

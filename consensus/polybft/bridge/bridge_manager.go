@@ -593,12 +593,11 @@ func (b *bridgeEventManager) buildBridgeBatch(
 
 	pendingBatch := &PendingBridgeBatch{
 		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-			Messages:              messages,
-			SourceChainID:         big.NewInt(int64(sourceChainID)),
-			DestinationChainID:    big.NewInt(int64(destinationChainID)),
-			Threshold:             big.NewInt(0),
-			NumberOfRegularEvents: big.NewInt(int64(numOfOrdinaryMsgs)),
-			CommitCounter:         big.NewInt(0),
+			Messages:           messages,
+			SourceChainID:      big.NewInt(int64(sourceChainID)),
+			DestinationChainID: big.NewInt(int64(destinationChainID)),
+			Threshold:          big.NewInt(0),
+			CommitCounter:      big.NewInt(0),
 		},
 		Epoch: epoch,
 	}
@@ -785,8 +784,7 @@ func (b *bridgeEventManager) buildRetryBridgeBatch(
 			Threshold: new(big.Int).SetUint64(
 				uint64((math.Ceil(float64(blockNumber)/10) * 10)) +
 					b.config.bridgeCfg.BridgeBatchThreshold),
-			NumberOfRegularEvents: rb.NumberOfRegularEvents,
-			CommitCounter:         rb.CommitCounter,
+			CommitCounter: rb.CommitCounter,
 		},
 		Epoch: b.epoch,
 	}
@@ -826,7 +824,13 @@ func (b *bridgeEventManager) buildRetryBridgeBatch(
 	pendingRetryBatches := b.pendingRetryBatches[baseHash]
 	b.pendingRetryBatches[baseHash] = append(pendingRetryBatches, &pendingBatch)
 
-	numOfOrdinaryMsgs := pendingBatch.NumberOfRegularEvents.Uint64()
+	numOfOrdinaryMsgs := 0
+
+	for _, message := range pendingBatch.Messages {
+		if !message.IsRollback {
+			numOfOrdinaryMsgs++
+		}
+	}
 
 	firstID := big.NewInt(0)
 	lastID := big.NewInt(0)
@@ -995,12 +999,11 @@ func (b *bridgeEventManager) ProcessLog(
 
 		baseUnexecutedBatch := &PendingBridgeBatch{
 			BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-				Messages:              bridgeBatch.Batch.Messages,
-				SourceChainID:         bridgeBatch.Batch.SourceChainID,
-				DestinationChainID:    bridgeBatch.Batch.DestinationChainID,
-				Threshold:             big.NewInt(0),
-				NumberOfRegularEvents: big.NewInt(0),
-				CommitCounter:         big.NewInt(0),
+				Messages:           bridgeBatch.Batch.Messages,
+				SourceChainID:      bridgeBatch.Batch.SourceChainID,
+				DestinationChainID: bridgeBatch.Batch.DestinationChainID,
+				Threshold:          big.NewInt(0),
+				CommitCounter:      big.NewInt(0),
 			},
 		}
 
