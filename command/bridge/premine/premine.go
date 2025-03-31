@@ -60,7 +60,7 @@ func setFlags(cmd *cobra.Command) {
 
 	cmd.Flags().StringVar(
 		&params.nativeTokenRoot,
-		bridgeHelper.Erc20TokenFlag,
+		bridgeHelper.ERC20TokenFlag,
 		"",
 		"address of root erc20 native token",
 	)
@@ -96,7 +96,7 @@ func setFlags(cmd *cobra.Command) {
 	cmd.MarkFlagsMutuallyExclusive(polybftsecrets.AccountDirFlag, polybftsecrets.AccountConfigFlag)
 	cmd.MarkFlagsMutuallyExclusive(polybftsecrets.PrivateKeyFlag, polybftsecrets.AccountConfigFlag)
 	cmd.MarkFlagsMutuallyExclusive(polybftsecrets.PrivateKeyFlag, polybftsecrets.AccountDirFlag)
-	_ = cmd.MarkFlagRequired(bridgeHelper.Erc20TokenFlag)
+	_ = cmd.MarkFlagRequired(bridgeHelper.TokenFlag)
 }
 
 func runPreRun(cmd *cobra.Command, _ []string) error {

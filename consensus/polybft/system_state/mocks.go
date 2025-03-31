@@ -36,9 +36,9 @@ func (m *SystemStateMock) GetBridgeBatchByNumber(numberOfBatch *big.Int) (
 	*contractsapi.SignedBridgeMessageBatch, error) {
 	args := m.Called()
 	if len(args) == 1 {
-		batch, _ := args.Get(0).(contractsapi.SignedBridgeMessageBatch)
+		batch, _ := args.Get(0).(*contractsapi.SignedBridgeMessageBatch)
 
-		return &batch, nil
+		return batch, nil
 	} else if len(args) == 2 {
 		batch, _ := args.Get(0).(contractsapi.SignedBridgeMessageBatch)
 
@@ -70,6 +70,22 @@ func (m *SystemStateMock) GetBatchCommitCounter(hash types.Hash) (*big.Int, erro
 	num, _ := args.Get(0).(*big.Int)
 
 	return num, nil
+}
+
+func (m *SystemStateMock) GetCommittedRollbackedI2E(chainID uint64, id *big.Int) (bool, error) {
+	args := m.Called(id)
+
+	committed, _ := args.Get(0).(bool)
+
+	return committed, nil
+}
+
+func (m *SystemStateMock) GetCommittedRollbackedE2I(chainID uint64, id *big.Int) (bool, error) {
+	args := m.Called()
+
+	committed, _ := args.Get(0).(bool)
+
+	return committed, nil
 }
 
 func (m *SystemStateMock) GetEpoch() (uint64, error) {

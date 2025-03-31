@@ -110,12 +110,18 @@ func NewBridge(runtime Runtime,
 
 	for externalChainID, cfg := range runtimeConfig.GenesisConfig.Bridge {
 		logger := logger.With("chainID", externalChainID)
+
+		relayer, err := createBridgeTxRelayer(cfg.JSONRPCEndpoint, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize bridge external client. Error: %w", err)
+		}
+
 		bridgeManager := newBridgeManager(logger, store, &bridgeEventManagerConfig{
 			bridgeCfg:         cfg,
 			topic:             bridgeTopic,
 			key:               runtimeConfig.Key,
 			maxNumberOfEvents: maxNumberOfBatchEvents,
-		}, runtime, externalChainID, internalChainID, blockchain)
+		}, runtime, relayer.Client(), externalChainID, internalChainID, blockchain)
 		bridge.bridgeManagers[externalChainID] = bridgeManager
 
 		if err := bridgeManager.Start(runtimeConfig); err != nil {

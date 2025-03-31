@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/Ethernal-Tech/ethgo"
 	"github.com/Ethernal-Tech/ethgo/abi"
 	"github.com/stretchr/testify/require"
+	"go.etcd.io/bbolt"
 
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	"github.com/0xPolygon/polygon-edge/crypto"
@@ -282,4 +284,174 @@ func erc1155BalanceOf(t *testing.T, account, tokenAddr types.Address, id int, re
 	require.NoError(t, err)
 
 	return balance
+}
+
+// compareBucketsFromDBs compares a bucket from db1 with a bucket from db2
+func compareBucketsFromDBs(t *testing.T, db1, db2 *bbolt.DB, sourceChainID, destinationChainID []byte, isRollback, isExecuted bool) {
+	t.Helper()
+
+	var (
+		bridgeMessageChainIDBucket1External *bbolt.Bucket
+		bridgeMessageChainIDBucket2External *bbolt.Bucket
+		finalBridgeMessageBucket1           *bbolt.Bucket
+		finalBridgeMessageBucket2           *bbolt.Bucket
+	)
+	// Open read transactions for both databases
+	require.NoError(t, db1.View(func(tx1 *bbolt.Tx) error {
+		require.NoError(t, db2.View(func(tx2 *bbolt.Tx) error {
+			bridgeMessageBucket1 := tx1.Bucket([]byte("bridgeMessageEvents"))
+			bridgeMessageBucket2 := tx2.Bucket([]byte("bridgeMessageEvents"))
+
+			if bridgeMessageBucket1 == nil || bridgeMessageBucket2 == nil {
+				return fmt.Errorf("bridge message events bucket does not exist")
+			}
+
+			bridgeMessageChainIDBucket1 := bridgeMessageBucket1.Bucket(sourceChainID)
+			bridgeMessageChainIDBucket2 := bridgeMessageBucket2.Bucket(sourceChainID)
+
+			if bridgeMessageChainIDBucket1 == nil || bridgeMessageChainIDBucket2 == nil {
+				return fmt.Errorf("source chain ID bucket does not exist")
+			}
+
+			bridgeMessageChainIDBucket1External = bridgeMessageChainIDBucket1.Bucket(destinationChainID)
+			bridgeMessageChainIDBucket2External = bridgeMessageChainIDBucket2.Bucket(destinationChainID)
+
+			if bridgeMessageChainIDBucket1External == nil || bridgeMessageChainIDBucket2External == nil {
+				return fmt.Errorf("destination chain ID bucket does not exist")
+			}
+
+			if isExecuted {
+				bridgeMessageChainIDBucket1External = bridgeMessageChainIDBucket1External.Bucket([]byte("executed"))
+				bridgeMessageChainIDBucket2External = bridgeMessageChainIDBucket2External.Bucket([]byte("executed"))
+			}
+
+			if isRollback {
+				finalBridgeMessageBucket1 = bridgeMessageChainIDBucket1External.Bucket([]byte("rollback"))
+				finalBridgeMessageBucket2 = bridgeMessageChainIDBucket2External.Bucket([]byte("rollback"))
+
+				if finalBridgeMessageBucket1 == nil || finalBridgeMessageBucket2 == nil {
+					return fmt.Errorf("rollback bucket does not exist")
+				}
+			} else {
+				finalBridgeMessageBucket1 = bridgeMessageChainIDBucket1External.Bucket([]byte("ordinary"))
+				finalBridgeMessageBucket2 = bridgeMessageChainIDBucket2External.Bucket([]byte("ordinary"))
+
+				if finalBridgeMessageBucket1 == nil || finalBridgeMessageBucket2 == nil {
+					return fmt.Errorf("ordinary bucket does not exist")
+				}
+			}
+
+			// Compare keys and values in db1 -> db2
+			err := finalBridgeMessageBucket1.ForEach(func(k, v1 []byte) error {
+				v2 := finalBridgeMessageBucket2.Get(k)
+				if v2 == nil {
+					return fmt.Errorf("Key %s is missing in %s (DB2)\n", k, "ordinary bucket")
+				} else if string(v1) != string(v2) {
+					return fmt.Errorf("Key %s has different values: %s (DB1) vs %s (DB2)\n", k, v1, v2)
+				}
+
+				return nil
+			})
+
+			if err != nil {
+				return err
+			}
+
+			// Check for extra keys in db2 -> db1
+			err = finalBridgeMessageBucket2.ForEach(func(k, _ []byte) error {
+				if finalBridgeMessageBucket1.Get(k) == nil {
+					return fmt.Errorf("Key %s is missing in %s (DB1)\n", k, "ordinary bucket")
+				}
+
+				return nil
+			})
+
+			return err
+		}))
+
+		return nil
+	}))
+}
+
+func validateBridgeRollbackExternal(
+	t *testing.T,
+	cluster *framework.TestCluster,
+	externalBlockStart,
+	internalBlockStart,
+	startEventNum,
+	endEventNum uint64,
+	numOfRollback int,
+	txRelayer txrelayer.TxRelayer,
+	gatewayAddr types.Address,
+	externalJSONRPC *jsonrpc.EthClient) {
+	t.Helper()
+
+	validatorSrv := cluster.Servers[0]
+
+	latest, err := validatorSrv.JSONRPC().BlockNumber()
+	require.NoError(t, err)
+
+	var bridgeMessageResult contractsapi.BridgeMessageResultEvent
+	logs, err := getFilteredLogs(bridgeMessageResult.Sig(), internalBlockStart, latest, validatorSrv.JSONRPC())
+	require.NoError(t, err)
+
+	assertBridgeEventResultNotSuccessful(t, logs, numOfRollback)
+
+	require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
+		for i := startEventNum; i <= endEventNum; i++ {
+			if i%2 == 0 && !isEventProcessed(t, gatewayAddr, txRelayer, i, true) {
+				return false
+			}
+		}
+
+		return true
+	}))
+
+	latest = waitForBlocksOnExternal(t, 20, externalJSONRPC, 2*time.Minute)
+
+	logs, err = getFilteredLogs(bridgeMessageResult.Sig(), externalBlockStart, latest, externalJSONRPC)
+	require.NoError(t, err)
+
+	assertBridgeEventResultSuccessful(t, logs, numOfRollback)
+}
+
+func validateBridgeRollbackInternal(
+	t *testing.T, cluster *framework.TestCluster,
+	externalBlockStart,
+	internalBlockStart,
+	startEventNum,
+	endEventNum uint64,
+	numOfRollback int,
+	gatewayAddr types.Address,
+	txRelayer txrelayer.TxRelayer,
+	externalJSONRPC *jsonrpc.EthClient) {
+	t.Helper()
+
+	validatorSrv := cluster.Servers[0]
+
+	latest := waitForBlocksOnExternal(t, 20, externalJSONRPC, 2*time.Minute)
+
+	var bridgeMessageResult contractsapi.BridgeMessageResultEvent
+	logs, err := getFilteredLogs(bridgeMessageResult.Sig(), externalBlockStart, latest, externalJSONRPC)
+	require.NoError(t, err)
+
+	assertBridgeEventResultNotSuccessful(t, logs, numOfRollback)
+
+	require.NoError(t, cluster.WaitUntil(time.Minute*3, time.Second*2, func() bool {
+		for i := startEventNum; i <= endEventNum; i++ {
+			if i%2 == 0 && !isEventProcessed(t, gatewayAddr, txRelayer, i, true) {
+				return false
+			}
+		}
+
+		return true
+	}))
+
+	latest, err = validatorSrv.JSONRPC().BlockNumber()
+	require.NoError(t, err)
+
+	logs, err = getFilteredLogs(bridgeMessageResult.Sig(), internalBlockStart, latest, validatorSrv.JSONRPC())
+	require.NoError(t, err)
+
+	assertBridgeEventResultSuccessful(t, logs, numOfRollback)
 }
