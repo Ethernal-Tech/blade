@@ -86,12 +86,11 @@ func newTestBridgeBatchSigned(t *testing.T, sourceChainID, destinationChainID ui
 
 	return &BridgeBatchSigned{
 		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-			Messages:              []*contractsapi.BridgeMessage{},
-			SourceChainID:         new(big.Int).SetUint64(sourceChainID),
-			DestinationChainID:    new(big.Int).SetUint64(destinationChainID),
-			Threshold:             big.NewInt(100),
-			NumberOfRegularEvents: big.NewInt(5),
-			CommitCounter:         big.NewInt(1),
+			Messages:           []*contractsapi.BridgeMessage{},
+			SourceChainID:      new(big.Int).SetUint64(sourceChainID),
+			DestinationChainID: new(big.Int).SetUint64(destinationChainID),
+			Threshold:          big.NewInt(100),
+			CommitCounter:      big.NewInt(1),
 		},
 		AggSignature: polytypes.Signature{},
 	}

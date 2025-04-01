@@ -44,7 +44,6 @@ var (
 
 	// Bridge events signatures
 	bridgeMessageEventSig         = new(contractsapi.BridgeMsgEvent).Sig()
-	bridgeBatchProcessedEventSig  = new(contractsapi.BridgeBatchProcessedEvent).Sig()
 	bridgeMessageResultEventSig   = new(contractsapi.BridgeMessageResultEvent).Sig()
 	newBatchEventSig              = new(contractsapi.NewBatchEvent).Sig()
 	newValidatorSetStoredEventSig = new(contractsapi.NewValidatorSetStoredEvent).Sig()
@@ -594,12 +593,11 @@ func (b *bridgeEventManager) buildBridgeBatch(
 
 	pendingBatch := &PendingBridgeBatch{
 		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-			Messages:              messages,
-			SourceChainID:         big.NewInt(int64(sourceChainID)),
-			DestinationChainID:    big.NewInt(int64(destinationChainID)),
-			Threshold:             big.NewInt(0),
-			NumberOfRegularEvents: big.NewInt(0),
-			CommitCounter:         big.NewInt(0),
+			Messages:           messages,
+			SourceChainID:      big.NewInt(int64(sourceChainID)),
+			DestinationChainID: big.NewInt(int64(destinationChainID)),
+			Threshold:          big.NewInt(0),
+			CommitCounter:      big.NewInt(0),
 		},
 		Epoch: epoch,
 	}
@@ -611,7 +609,6 @@ func (b *bridgeEventManager) buildBridgeBatch(
 
 	pendingBatch.Threshold = new(big.Int).SetUint64(uint64((math.Ceil(float64(blockNumber)/10) * 10)) +
 		b.config.bridgeCfg.BridgeBatchThreshold)
-	pendingBatch.NumberOfRegularEvents = big.NewInt(int64(numOfOrdinaryMsgs))
 	pendingBatch.CommitCounter = big.NewInt(1)
 
 	fullHash, err := pendingBatch.Hash()
@@ -710,7 +707,6 @@ func (b *bridgeEventManager) handleRetry(
 		// salt and potential reorganization). If so, batch is ready for retry.
 		if blockNumber.Cmp(rt) >= 0 {
 			retryBatch := *b.unexecutedBatches[i]
-			retryBatch.NumberOfRegularEvents = big.NewInt(0)
 			retryBatch.Threshold = big.NewInt(0)
 			retryBatch.CommitCounter = big.NewInt(0)
 
@@ -788,8 +784,7 @@ func (b *bridgeEventManager) buildRetryBridgeBatch(
 			Threshold: new(big.Int).SetUint64(
 				uint64((math.Ceil(float64(blockNumber)/10) * 10)) +
 					b.config.bridgeCfg.BridgeBatchThreshold),
-			NumberOfRegularEvents: rb.NumberOfRegularEvents,
-			CommitCounter:         rb.CommitCounter,
+			CommitCounter: rb.CommitCounter,
 		},
 		Epoch: b.epoch,
 	}
@@ -1004,12 +999,11 @@ func (b *bridgeEventManager) ProcessLog(
 
 		baseUnexecutedBatch := &PendingBridgeBatch{
 			BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-				Messages:              bridgeBatch.Batch.Messages,
-				SourceChainID:         bridgeBatch.Batch.SourceChainID,
-				DestinationChainID:    bridgeBatch.Batch.DestinationChainID,
-				Threshold:             big.NewInt(0),
-				NumberOfRegularEvents: big.NewInt(0),
-				CommitCounter:         big.NewInt(0),
+				Messages:           bridgeBatch.Batch.Messages,
+				SourceChainID:      bridgeBatch.Batch.SourceChainID,
+				DestinationChainID: bridgeBatch.Batch.DestinationChainID,
+				Threshold:          big.NewInt(0),
+				CommitCounter:      big.NewInt(0),
 			},
 		}
 

@@ -131,11 +131,10 @@ func TestGetTransactions(t *testing.T) {
 				bridgeManagerMock := NewBridgeManagerMock(t)
 				bridgeManagerMock.On("BridgeBatch", blockInfo.CurrentBlock()).Return([]*BridgeBatchSigned{{
 					BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-						Threshold:             big.NewInt(100),
-						NumberOfRegularEvents: big.NewInt(1),
-						CommitCounter:         big.NewInt(1),
-						SourceChainID:         big.NewInt(1),
-						DestinationChainID:    big.NewInt(2),
+						Threshold:          big.NewInt(100),
+						CommitCounter:      big.NewInt(1),
+						SourceChainID:      big.NewInt(1),
+						DestinationChainID: big.NewInt(2),
 					},
 					AggSignature: *signature,
 				}}, nil)
@@ -429,11 +428,10 @@ func createAndSignBridgeBatch(t *testing.T, numOfValidators int,
 
 	pendingBridgeBatch := &PendingBridgeBatch{
 		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-			Threshold:             bigZero,
-			SourceChainID:         big.NewInt(int64(sourceChainID)),
-			DestinationChainID:    big.NewInt(int64(destinationChainID)),
-			CommitCounter:         big.NewInt(1),
-			NumberOfRegularEvents: big.NewInt(1),
+			Threshold:          bigZero,
+			SourceChainID:      big.NewInt(int64(sourceChainID)),
+			DestinationChainID: big.NewInt(int64(destinationChainID)),
+			CommitCounter:      big.NewInt(1),
 		},
 		Epoch: epoch,
 	}

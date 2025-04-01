@@ -303,12 +303,11 @@ func TestBridgeEventManager_BuildBridgeBatch(t *testing.T) {
 	}
 
 	bridgeMessageBatch := contractsapi.BridgeMessageBatch{
-		Messages:              []*contractsapi.BridgeMessage{&bridgeMessage},
-		SourceChainID:         big.NewInt(1),
-		DestinationChainID:    big.NewInt(2),
-		Threshold:             big.NewInt(10000),
-		NumberOfRegularEvents: big.NewInt(1),
-		CommitCounter:         big.NewInt(1),
+		Messages:           []*contractsapi.BridgeMessage{&bridgeMessage},
+		SourceChainID:      big.NewInt(1),
+		DestinationChainID: big.NewInt(2),
+		Threshold:          big.NewInt(10000),
+		CommitCounter:      big.NewInt(1),
 	}
 
 	s.pendingBridgeBatchesE2I = []*PendingBridgeBatch{
@@ -979,12 +978,11 @@ func Test_AddLog_Unexecuted_list(t *testing.T) {
 
 		return &PendingBridgeBatch{
 			BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-				Messages:              msgs,
-				SourceChainID:         big.NewInt(100),
-				DestinationChainID:    big.NewInt(1),
-				Threshold:             big.NewInt(0),
-				NumberOfRegularEvents: big.NewInt(0),
-				CommitCounter:         big.NewInt(0),
+				Messages:           msgs,
+				SourceChainID:      big.NewInt(100),
+				DestinationChainID: big.NewInt(1),
+				Threshold:          big.NewInt(0),
+				CommitCounter:      big.NewInt(0),
 			},
 		}
 	}
@@ -1241,12 +1239,11 @@ func Test_updateStateOnBatchCommit(t *testing.T) {
 
 		i2eBatch := &PendingBridgeBatch{
 			BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-				Messages:              []*contractsapi.BridgeMessage{msg1, msg2},
-				SourceChainID:         big.NewInt(100),
-				DestinationChainID:    big.NewInt(1),
-				Threshold:             big.NewInt(0),
-				NumberOfRegularEvents: big.NewInt(0),
-				CommitCounter:         big.NewInt(0),
+				Messages:           []*contractsapi.BridgeMessage{msg1, msg2},
+				SourceChainID:      big.NewInt(100),
+				DestinationChainID: big.NewInt(1),
+				Threshold:          big.NewInt(0),
+				CommitCounter:      big.NewInt(0),
 			},
 		}
 
@@ -1470,12 +1467,11 @@ func Test_ProcessLog_Remove_Rollback_messages(t *testing.T) {
 
 	sigBatch := &contractsapi.SignedBridgeMessageBatch{
 		Batch: &contractsapi.BridgeMessageBatch{
-			Messages:              []*contractsapi.BridgeMessage{msg1, msg2},
-			SourceChainID:         big.NewInt(100),
-			DestinationChainID:    big.NewInt(1),
-			Threshold:             big.NewInt(0),
-			NumberOfRegularEvents: big.NewInt(0),
-			CommitCounter:         big.NewInt(1),
+			Messages:           []*contractsapi.BridgeMessage{msg1, msg2},
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+			Threshold:          big.NewInt(0),
+			CommitCounter:      big.NewInt(1),
 		},
 	}
 
@@ -2200,12 +2196,11 @@ func Test_handleRetry(t *testing.T) {
 
 	batch := &PendingBridgeBatch{
 		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
-			Messages:              []*contractsapi.BridgeMessage{},
-			SourceChainID:         big.NewInt(100),
-			DestinationChainID:    big.NewInt(1),
-			Threshold:             big.NewInt(0),
-			NumberOfRegularEvents: big.NewInt(0),
-			CommitCounter:         big.NewInt(0),
+			Messages:           []*contractsapi.BridgeMessage{},
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+			Threshold:          big.NewInt(0),
+			CommitCounter:      big.NewInt(0),
 		},
 	}
 
@@ -2213,7 +2208,6 @@ func Test_handleRetry(t *testing.T) {
 
 	require.NoError(t, err)
 
-	batch.NumberOfRegularEvents = big.NewInt(5)
 	batch.Threshold = big.NewInt(120)
 	batch.CommitCounter = big.NewInt(1)
 
