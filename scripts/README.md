@@ -4,7 +4,7 @@
 
 When deploying with `polybft` consensus, there are some additional dependencies:
 
-* [go 1.23.x](https://go.dev/dl/)
+* [go 1.24.x](https://go.dev/dl/)
 * [jq](https://jqlang.github.io/jq)
 * [curl](https://everything.curl.dev/get)
 
