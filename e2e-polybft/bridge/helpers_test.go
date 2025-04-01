@@ -266,12 +266,12 @@ func waitForBlocksOnExternal(t *testing.T, numberOfBlocks uint64,
 	}
 }
 
-func erc1155BalanceOf(t *testing.T, account, tokenAddr types.Address, id int, relayer txrelayer.TxRelayer) *big.Int {
+func erc1155BalanceOf(t *testing.T, account, tokenAddr types.Address, id *big.Int, relayer txrelayer.TxRelayer) *big.Int {
 	t.Helper()
 
 	balanceOfFn := &contractsapi.BalanceOfChildERC1155Fn{
 		Account: account,
-		ID:      big.NewInt(int64(id)),
+		ID:      id,
 	}
 
 	balanceInput, err := balanceOfFn.EncodeAbi()
