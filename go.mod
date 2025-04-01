@@ -1,7 +1,6 @@
 module github.com/0xPolygon/polygon-edge
 
 go 1.24.1
-
 require (
 	cloud.google.com/go/secretmanager v1.14.5
 	github.com/0xPolygon/go-ibft v0.4.1-0.20240621090555-e81a63ff50d7
@@ -16,7 +15,7 @@ require (
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/cockroachdb/pebble v1.1.4
-	github.com/docker/docker v28.0.1+incompatible
+	github.com/docker/docker v28.0.4+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/envoyproxy/protoc-gen-validate v1.2.1
 	github.com/erigontech/mdbx-go v0.39.3
