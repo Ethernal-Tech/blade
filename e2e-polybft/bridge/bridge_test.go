@@ -2380,7 +2380,6 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 		sourceRPC, destinationRPC, dtype string, sourceRelayer, destinationRelayer txrelayer.TxRelayer,
 		ID1, ID2, ID3, ID4 uint64,
 		checkFn func(accountAddr, tokenAddr types.Address, tokenID *big.Int, relayer txrelayer.TxRelayer) error) {
-
 		// Used if tokenType is ERC1155 because it starts from 1
 		erc1155TokenID := uint64(0)
 		tokenTypeStr := "ERC"
@@ -2594,6 +2593,7 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 		t.Logf("%s tokens checked %s", tokenTypeStr, dtype)
 		errChan <- nil
 	}
+
 	t.Run("ERC20", func(t *testing.T) {
 		checkERC20 := func(accountAddr, tokenAddr types.Address, tokenID *big.Int, relayer txrelayer.TxRelayer) error {
 			balance := erc20BalanceOf(t, accountAddr, tokenAddr, relayer)
