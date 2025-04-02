@@ -72,7 +72,7 @@ func (j *journal) load(add func(*types.Transaction) error) error {
 	j.writer = new(devNull)
 	defer func() { j.writer = nil }()
 
-	total, dropped := 0, 0
+	dropped := 0
 	// inject all transactions from the journal into the pool
 	for _, tx := range txs {
 		if err := add(tx); err != nil {
@@ -80,11 +80,9 @@ func (j *journal) load(add func(*types.Transaction) error) error {
 
 			j.logger.Debug("failed to add journaled transaction", "err", err)
 		}
-
-		total++
 	}
 
-	j.logger.Info("loaded local transaction journal", "transactions", total, "dropped", dropped)
+	j.logger.Info("loaded local transaction journal", "transactions", len(txs), "dropped", dropped)
 
 	return nil
 }
