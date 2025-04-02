@@ -941,10 +941,8 @@ func (p *TxPool) addTx(origin txOrigin, tx *types.Transaction) error {
 		p.logger.Trace("add tx", "origin", origin.String(), "hash", tx.Hash().String(), "type", tx.Type())
 	}
 
-	// check if local tx
-	if origin == local {
-		tx.IsLocal = true
-	}
+	// set IsLocal
+	tx.IsLocal = origin == local
 
 	// validate incoming tx
 	if err := p.validateTx(tx); err != nil {
