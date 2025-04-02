@@ -64,6 +64,9 @@ type Transaction struct {
 
 	// Cache
 	size atomic.Pointer[uint64]
+
+	// IsLocal
+	IsLocal bool
 }
 
 type Transactions []*Transaction
