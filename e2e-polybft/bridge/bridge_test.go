@@ -1947,11 +1947,10 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 		rpcAddr, dtype string, sourceRelayer, destinationRelayer txrelayer.TxRelayer,
 		firstID, secondID uint64,
 		checkFn func(accountAddr, tokenAddr types.Address, tokenID *big.Int, relayer txrelayer.TxRelayer) error) {
-
 		// Used if tokenType is ERC1155 because it starts from 1
 		erc1155TokenID := int64(0)
-
 		tokenTypeStr := "ERC"
+
 		switch tokenType {
 		case common.ERC20:
 			tokenTypeStr += "20"
@@ -1967,6 +1966,7 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 		// deploy contract
 		{
 			var code []byte
+
 			switch tokenType {
 			case common.ERC20:
 				code = contractsapi.RootERC20.Bytecode
@@ -2118,13 +2118,12 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 		childTokenAddr := getChildToken(t, contractsapi.RootERC20Predicate.Abi, predAddr, tokenAddr, sourceRelayer)
 
 		for i := range int64(transfersCount) {
-
-			if err := checkFn(accountAddrs[i], childTokenAddr, big.NewInt(i+int64(erc1155TokenID)), destinationRelayer); err != nil {
+			if err := checkFn(accountAddrs[i], childTokenAddr, big.NewInt(i+erc1155TokenID), destinationRelayer); err != nil {
 				errChan <- err
 			}
 
 			if tokenType != common.ERC20 {
-				if err := checkFn(accountAddrs[i], childTokenAddr, big.NewInt(i+int64(erc1155TokenID)+transfersCount), destinationRelayer); err != nil {
+				if err := checkFn(accountAddrs[i], childTokenAddr, big.NewInt(i+erc1155TokenID+transfersCount), destinationRelayer); err != nil {
 					errChan <- err
 				}
 			}
@@ -2268,6 +2267,16 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 	})
 }
 
+// Create X ERC20/ERC721/ERC1155 bridge withdraw transactions between source and destination chain, where the following is done sequentially:
+//   - X/4 bridge withdraw transaction execute and settle on the destination chain while
+//   - another X/4 bridge withdraw transactions fail due to insufficient funds on source chain.
+//   - X/4 funding withdraw transactions are made on source chain.
+//   - the same X/4 bridge withdraw transactions are resubmitted, being executed and settled on the destination chain.
+//
+// Ensure the bridge correctly handles the failed withdraw transactions.
+// Use X/4 different source addresses.
+// The test should be parametrized. X=60.
+// The test should be run for Blade as source chain and an external chain as destination chain and vice verse in parallel.
 func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 	const (
 		// X = 60
@@ -2374,8 +2383,8 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 
 		// Used if tokenType is ERC1155 because it starts from 1
 		erc1155TokenID := uint64(0)
-
 		tokenTypeStr := "ERC"
+
 		switch tokenType {
 		case common.ERC20:
 			tokenTypeStr += "20"
@@ -2391,6 +2400,7 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 		// deploy contract
 		{
 			var code []byte
+
 			switch tokenType {
 			case common.ERC20:
 				code = contractsapi.RootERC20.Bytecode
@@ -2609,6 +2619,7 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 			externalChainTxRelayer, internalChainTxRelayer,
 			erc20ID1, erc20ID2, erc20ID3, erc20ID4,
 			checkERC20)
+
 		counter := 0
 
 		for {
@@ -2678,7 +2689,6 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 	t.Run("ERC1155", func(t *testing.T) {
 		checkERC1155 := func(accountAddr, tokenAddr types.Address, tokenID *big.Int, relayer txrelayer.TxRelayer) error {
 			balance := erc1155BalanceOf(t, accountAddr, tokenAddr, tokenID, relayer)
-
 			if balance.Cmp(amountBI) != 0 {
 				return fmt.Errorf("balance of %s is not %s", tokenID.String(), amountStr)
 			}
@@ -2721,5 +2731,4 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 			}
 		}
 	})
-
 }
