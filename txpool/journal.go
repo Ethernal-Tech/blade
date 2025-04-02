@@ -163,6 +163,9 @@ func (j *journal) rotate(local []*types.Transaction) error {
 
 // close flushes the transaction journal contents to disk and closes the file.
 func (j *journal) close() error {
+	j.lock.Lock()
+	defer j.lock.Unlock()
+
 	var err error
 
 	if j.writer != nil {

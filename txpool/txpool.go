@@ -366,6 +366,8 @@ func (p *TxPool) startJournal() {
 		for {
 			select {
 			case <-p.shutdownCh:
+				p.journal.close()
+
 				return
 			case <-p.journalCh:
 				if err := p.journal.rotate(p.index.local()); err != nil {
@@ -422,7 +424,6 @@ func (p *TxPool) Start() {
 func (p *TxPool) Close() {
 	p.eventManager.Close()
 	close(p.shutdownCh)
-	p.journal.close()
 	p.stopGossipBatchers() // wait for gossip flush
 }
 
