@@ -4,10 +4,6 @@ name: Load Tests
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:
     inputs:
-      environment:
-        description: The environment to run against
-        type: choice
-        options: [dev, test] # nightly should not be initiated manually
       type:
         description: The type of load test to run
         type: choice
@@ -46,10 +42,6 @@ on: # yamllint disable-line rule:truthy
         default: true
   workflow_call:
     inputs:
-      environment:
-        description: The environment to run against
-        type: string
-        required: true
       type:
         description: The type of load test to run
         type: string
@@ -174,7 +166,7 @@ jobs:
           github-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           aws-resource-tags: >
             [
-              {"Key": "Name", "Value": "${{ inputs.environment }}-load-test-runner"}
+              {"Key": "Name", "Value": "testnet-load-test-runner"}
             ]
   load_test:
     name: Run Load Test
@@ -245,7 +237,7 @@ jobs:
     uses: ./.github/workflows/notification-load-test.yml
     if: (always() && inputs.notification && needs.load_test.outputs.test_output_success == 'true')
     with:
-      environment: ${{ inputs.environment }}
+      environment: testnet
       type: ${{ inputs.type }}
       dynamic: ${{ inputs.dynamic }}
       vus: ${{ inputs.vus }}
@@ -270,7 +262,6 @@ jobs:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   destroy_load_test_runner:
     name: Destroy Load Test Runner
-    environment: ${{ inputs.environment }}
     needs: [load_test_runner, load_test, txpool_status]
     if: always()
     runs-on: ubuntu-latest

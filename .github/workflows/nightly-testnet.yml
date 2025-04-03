@@ -45,7 +45,6 @@ jobs:
     uses: ./.github/workflows/load-test-testnet.yml
     needs: [sanity_check_tests]
     with:
-      environment: testnet
       type: EOA
       dynamic: true
       vus: "100"
@@ -69,7 +68,6 @@ jobs:
     uses: ./.github/workflows/load-test-testnet.yml
     needs: [sanity_check_tests, load_test_eoa]
     with:
-      environment: testnet
       type: ERC20
       dynamic: true
       vus: "100"
@@ -93,7 +91,6 @@ jobs:
     uses: ./.github/workflows/load-test-testnet.yml
     needs: [sanity_check_tests, load_test_eoa, load_test_erc20]
     with:
-      environment: testnet
       type: ERC721
       dynamic: true
       vus: "100"
@@ -118,7 +115,6 @@ jobs:
     needs:
       [sanity_check_tests, load_test_eoa, load_test_erc20, load_test_erc721]
     with:
-      environment: testnet
       type: MIXED
       dynamic: true
       vus: "100"
