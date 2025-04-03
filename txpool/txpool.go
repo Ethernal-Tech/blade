@@ -104,6 +104,7 @@ type Config struct {
 	MaxSlots           uint64
 	MaxAccountEnqueued uint64
 	TxGossipBatchSize  uint64
+	JournalRotateSize  uint64
 	ChainID            *big.Int
 	PeerID             peer.ID
 	DataDir            string
@@ -210,6 +211,9 @@ type TxPool struct {
 	// journal channel
 	journalCh chan struct{}
 
+	// number of local txs in journal when rotate will be executed
+	journalRotateSize uint64
+
 	// data dir
 	dataDir string
 }
@@ -238,6 +242,7 @@ func NewTxPool(
 		localPeerID:       config.PeerID,
 		dataDir:           config.DataDir,
 		txGossipBatchSize: int(config.TxGossipBatchSize),
+		journalRotateSize: config.JournalRotateSize,
 
 		//	main loop channels
 		promoteReqCh: make(chan promoteRequest),
@@ -349,7 +354,8 @@ func (p *TxPool) startJournal() {
 		p.logger.Error("txpool journal directory setup failed", "err", err)
 	}
 
-	p.journal = newTxJournal(filepath.Join(p.dataDir, journalDir, "transactions.rlp"), p.logger, p.journalCh)
+	p.journal = newTxJournal(filepath.Join(p.dataDir, journalDir, "transactions.rlp"),
+		p.logger, p.journalCh, p.journalRotateSize)
 
 	if err := p.journal.load(func(tx *types.Transaction) error {
 		return p.AddTx(tx)
