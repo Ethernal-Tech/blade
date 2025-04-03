@@ -47,11 +47,10 @@ func TestEncoding_Struct(t *testing.T) {
 
 	bridgeBatch := SignedBridgeMessageBatch{
 		Batch: &BridgeMessageBatch{
-			SourceChainID:         big.NewInt(1),
-			DestinationChainID:    big.NewInt(0),
-			Threshold:             big.NewInt(0),
-			NumberOfRegularEvents: big.NewInt(0),
-			CommitCounter:         big.NewInt(1),
+			SourceChainID:      big.NewInt(1),
+			DestinationChainID: big.NewInt(0),
+			Threshold:          big.NewInt(0),
+			CommitCounter:      big.NewInt(1),
 		},
 		Signature:           [2]*big.Int{big.NewInt(1), big.NewInt(2)},
 		ValidatorSetBatchID: big.NewInt(0),

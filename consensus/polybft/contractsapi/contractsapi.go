@@ -1938,15 +1938,14 @@ func (b *BridgeMessage) DecodeAbi(buf []byte) error {
 }
 
 type BridgeMessageBatch struct {
-	Messages              []*BridgeMessage `abi:"messages"`
-	SourceChainID         *big.Int         `abi:"sourceChainId"`
-	DestinationChainID    *big.Int         `abi:"destinationChainId"`
-	Threshold             *big.Int         `abi:"threshold"`
-	NumberOfRegularEvents *big.Int         `abi:"numberOfRegularEvents"`
-	CommitCounter         *big.Int         `abi:"commitCounter"`
+	Messages           []*BridgeMessage `abi:"messages"`
+	SourceChainID      *big.Int         `abi:"sourceChainId"`
+	DestinationChainID *big.Int         `abi:"destinationChainId"`
+	Threshold          *big.Int         `abi:"threshold"`
+	CommitCounter      *big.Int         `abi:"commitCounter"`
 }
 
-var BridgeMessageBatchABIType = abi.MustNewType("tuple(tuple(uint256 id,uint256 sourceChainId,uint256 destinationChainId,address sender,address receiver,bool isRollback,bytes payload)[] messages,uint256 sourceChainId,uint256 destinationChainId,uint256 threshold,uint256 numberOfRegularEvents,uint256 commitCounter)")
+var BridgeMessageBatchABIType = abi.MustNewType("tuple(tuple(uint256 id,uint256 sourceChainId,uint256 destinationChainId,address sender,address receiver,bool isRollback,bytes payload)[] messages,uint256 sourceChainId,uint256 destinationChainId,uint256 threshold,uint256 commitCounter)")
 
 func (b *BridgeMessageBatch) EncodeAbi() ([]byte, error) {
 	return BridgeMessageBatchABIType.Encode(b)
@@ -1963,7 +1962,7 @@ type SignedBridgeMessageBatch struct {
 	ValidatorSetBatchID *big.Int            `abi:"validatorSetBatchId"`
 }
 
-var SignedBridgeMessageBatchABIType = abi.MustNewType("tuple(tuple(tuple(uint256 id,uint256 sourceChainId,uint256 destinationChainId,address sender,address receiver,bool isRollback,bytes payload)[] messages,uint256 sourceChainId,uint256 destinationChainId,uint256 threshold,uint256 numberOfRegularEvents,uint256 commitCounter) batch,uint256[2] signature,bytes bitmap,uint256 validatorSetBatchId)")
+var SignedBridgeMessageBatchABIType = abi.MustNewType("tuple(tuple(tuple(uint256 id,uint256 sourceChainId,uint256 destinationChainId,address sender,address receiver,bool isRollback,bytes payload)[] messages,uint256 sourceChainId,uint256 destinationChainId,uint256 threshold,uint256 commitCounter) batch,uint256[2] signature,bytes bitmap,uint256 validatorSetBatchId)")
 
 func (s *SignedBridgeMessageBatch) EncodeAbi() ([]byte, error) {
 	return SignedBridgeMessageBatchABIType.Encode(s)
@@ -2205,31 +2204,4 @@ func (b *BridgeMsgEvent) ParseLog(log *ethgo.Log) (bool, error) {
 
 func (b *BridgeMsgEvent) Decode(input []byte) error {
 	return Gateway.Abi.Events["BridgeMsg"].Inputs.DecodeStruct(input, &b)
-}
-
-type BridgeBatchProcessedEvent struct {
-	Success            bool     `abi:"success"`
-	SourceChainID      *big.Int `abi:"sourceChainId"`
-	DestinationChainID *big.Int `abi:"destinationChainId"`
-	BatchHash          []byte   `abi:"batchHash"`
-}
-
-func (*BridgeBatchProcessedEvent) Sig() ethgo.Hash {
-	return Gateway.Abi.Events["BridgeBatchProcessed"].ID()
-}
-
-func (b *BridgeBatchProcessedEvent) Encode() ([]byte, error) {
-	return Gateway.Abi.Events["BridgeBatchProcessed"].Inputs.Encode(b)
-}
-
-func (b *BridgeBatchProcessedEvent) ParseLog(log *ethgo.Log) (bool, error) {
-	if !Gateway.Abi.Events["BridgeBatchProcessed"].Match(log) {
-		return false, nil
-	}
-
-	return true, decodeEvent(Gateway.Abi.Events["BridgeBatchProcessed"], log, b)
-}
-
-func (b *BridgeBatchProcessedEvent) Decode(input []byte) error {
-	return Gateway.Abi.Events["BridgeBatchProcessed"].Inputs.DecodeStruct(input, &b)
 }

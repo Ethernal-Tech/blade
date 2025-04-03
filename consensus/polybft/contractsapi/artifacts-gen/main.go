@@ -37,59 +37,59 @@ func main() {
 			"NativeERC20Mintable",
 		},
 		{
-			"blade/ChildERC20.sol",
+			"bridge/internal/ChildERC20.sol",
 			"ChildERC20",
 		},
 		{
-			"blade/ChildERC20Predicate.sol",
+			"bridge/common/ChildERC20Predicate.sol",
 			"ChildERC20Predicate",
 		},
 		{
-			"blade/ChildERC20PredicateAccessList.sol",
+			"bridge/internal/ChildERC20PredicateAccessList.sol",
 			"ChildERC20PredicateACL",
 		},
 		{
-			"bridge/RootERC20Predicate.sol",
+			"bridge/common/RootERC20Predicate.sol",
 			"RootERC20Predicate",
 		},
 		{
-			"blade/RootMintableERC20PredicateAccessList.sol",
+			"bridge/internal/RootMintableERC20PredicateAccessList.sol",
 			"RootMintableERC20PredicateACL",
 		},
 		{
-			"blade/ChildERC721.sol",
+			"bridge/internal/ChildERC721.sol",
 			"ChildERC721",
 		},
 		{
-			"blade/ChildERC721Predicate.sol",
+			"bridge/common/ChildERC721Predicate.sol",
 			"ChildERC721Predicate",
 		},
 		{
-			"blade/ChildERC721PredicateAccessList.sol",
+			"bridge/internal/ChildERC721PredicateAccessList.sol",
 			"ChildERC721PredicateACL",
 		},
 		{
-			"bridge/RootERC721Predicate.sol",
+			"bridge/common/RootERC721Predicate.sol",
 			"RootERC721Predicate",
 		},
 		{
-			"blade/RootMintableERC721PredicateAccessList.sol",
+			"bridge/internal/RootMintableERC721PredicateAccessList.sol",
 			"RootMintableERC721PredicateACL",
 		},
 		{
-			"blade/ChildERC1155.sol",
+			"bridge/internal/ChildERC1155.sol",
 			"ChildERC1155",
 		},
 		{
-			"blade/ChildERC1155Predicate.sol",
+			"bridge/common/ChildERC1155Predicate.sol",
 			"ChildERC1155Predicate",
 		},
 		{
-			"blade/ChildERC1155PredicateAccessList.sol",
+			"bridge/internal/ChildERC1155PredicateAccessList.sol",
 			"ChildERC1155PredicateACL",
 		},
 		{
-			"blade/RootMintableERC1155PredicateAccessList.sol",
+			"bridge/internal/RootMintableERC1155PredicateAccessList.sol",
 			"RootMintableERC1155PredicateACL",
 		},
 		{
@@ -117,7 +117,7 @@ func main() {
 			"MockERC1155",
 		},
 		{
-			"bridge/RootERC1155Predicate.sol",
+			"bridge/common/RootERC1155Predicate.sol",
 			"RootERC1155Predicate",
 		},
 		{
@@ -133,7 +133,7 @@ func main() {
 			"EIP1559Burn",
 		},
 		{
-			"bridge/BladeManager.sol",
+			"bridge/common/BladeManager.sol",
 			"BladeManager",
 		},
 		{
@@ -161,15 +161,15 @@ func main() {
 			"ChildTimelock",
 		},
 		{
-			"blade/BridgeStorage.sol",
+			"bridge/internal/BridgeStorage.sol",
 			"BridgeStorage",
 		},
 		{
-			"blade/Gateway.sol",
+			"bridge/common/Gateway.sol",
 			"Gateway",
 		},
 		{
-			"blade/TestRollbackGateway.sol",
+			"bridge/common/TestRollbackGateway.sol",
 			"TestRollbackGateway",
 		},
 	}
