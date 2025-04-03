@@ -34,7 +34,7 @@ on: # yamllint disable-line rule:truthy
         required: true
 
 jobs:
-  notification:
+  notification_sanity_check:
     name: Notification
     runs-on: ubuntu-latest
     steps:
@@ -58,7 +58,7 @@ jobs:
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "Nightly sanity check tests on testnet"
+                    "text": "Nightly sanity check tests - TESTNET"
                   }
                 },
                 {
