@@ -43,6 +43,7 @@ const (
 	dbEngineFlag                 = "db-engine"
 	gossipMessageSizeFlag        = "gossip-msg-size"
 	txGossipBatchSizeFlag        = "tx-gossip-batch-size"
+	journalRotateSizeFlag        = "journal-rotate-size"
 
 	relayerFlag = "relayer"
 
@@ -186,6 +187,7 @@ func (p *serverParams) generateConfig() *server.Config {
 		MaxSlots:           p.rawConfig.TxPool.MaxSlots,
 		MaxAccountEnqueued: p.rawConfig.TxPool.MaxAccountEnqueued,
 		TxGossipBatchSize:  p.rawConfig.TxPool.TxGossipBatchSize,
+		JournalRotateSize:  p.rawConfig.TxPool.JournalRotateSize,
 		SecretsManager:     p.secretsConfig,
 		RestoreFile:        p.getRestoreFilePath(),
 		LogLevel:           hclog.LevelFromString(p.rawConfig.LogLevel),
