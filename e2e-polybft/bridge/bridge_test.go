@@ -2066,7 +2066,7 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 
 		t.Logf("%s tokens deposited %s", tokenTypeStr, dtype)
 
-		// should be processed because there are enough ERC20 funds
+		// should be processed because there are enough funds
 		if err := cluster.WaitUntil(2*time.Minute, 2*time.Second, func() bool {
 			for i := firstID; i < firstID+transfersCount+1; i++ {
 				if !isEventProcessed(t, destinationGW, destinationRelayer, i, false) {
@@ -2081,7 +2081,7 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 
 		t.Logf("All events processed " + dtype)
 
-		// second transfer - should fail because there are not enough ERC20 funds
+		// second transfer - should fail because there are not enough funds
 		if err := transferFunc(true, 0); err != nil {
 			errChan <- err
 		}
@@ -2436,7 +2436,7 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 
 		t.Logf("Token %s deployed %s", tokenTypeStr, dtype)
 
-		// transfer function
+		// deposit function
 		depositFunc := func(startID uint64) error {
 			amount := ""
 			if tokenType != common.ERC721 {
@@ -2476,7 +2476,7 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 			errChan <- err
 		}
 
-		// should be processed because there are enough ERC20 funds
+		// should be processed because there are enough funds
 		if err := cluster.WaitUntil(2*time.Minute, 2*time.Second, func() bool {
 			for i := ID1; i < ID1+transfersCount+1; i++ {
 				if !isEventProcessed(t, destinationGW, destinationRelayer, i, false) {
@@ -2505,7 +2505,7 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 		childTokenAddr := getChildToken(t, predicate, sourcePred, tokenAddr, sourceRelayer)
 
 		withdrawFunc := func(shouldThrowError bool, startID, startEventID uint64) error {
-			// withdraw - should be processed because there are enough ERC20 funds
+			// withdraw - should be processed because there are enough funds
 			amount := ""
 			if tokenType != common.ERC721 {
 				amount = amountStr
