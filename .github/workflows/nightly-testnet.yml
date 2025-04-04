@@ -133,6 +133,36 @@ jobs:
       AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
       PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  load_test_perf:
+    name: Load Test PERFORMANCE CONTRACT
+    uses: ./.github/workflows/load-test-testnet.yml
+    needs:
+      [
+        sanity_check_tests,
+        load_test_eoa,
+        load_test_erc20,
+        load_test_erc721,
+        load_test_mixed,
+      ]
+    with:
+      type: PERF-CONTRACT
+      dynamic: true
+      vus: "100"
+      txs_per_user: "10000"
+      txpool_timeout: "55m0s"
+      wait_txpool: true
+      receipts_timeout: "5m0s"
+      batch_size: "10000"
+      notification: false
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
+      AWS_LOADTESTRUNNER_AMI_ID: ${{ secrets.AWS_LOADTESTRUNNER_AMI_ID }}
+      AWS_LOADTESTRUNNER_SUBNET_ID: ${{ secrets.AWS_LOADTESTRUNNER_SUBNET_ID }}
+      AWS_LOADTESTRUNNER_SG_ID: ${{ secrets.AWS_LOADTESTRUNNER_SG_ID }}
+      AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
+      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   notification_sanity_check:
     name: Nightly Notification
     uses: ./.github/workflows/notification-testnet.yml
