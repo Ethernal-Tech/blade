@@ -2117,6 +2117,7 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 		t.Logf("All events processed " + dtype)
 
 		var predicate *abi.ABI
+
 		switch tokenType {
 		case common.ERC20:
 			predicate = contractsapi.RootERC20Predicate.Abi
@@ -2491,6 +2492,7 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 		t.Logf("All events processed " + dtype)
 
 		var predicate *abi.ABI
+
 		switch tokenType {
 		case common.ERC20:
 			predicate = contractsapi.RootERC20Predicate.Abi
