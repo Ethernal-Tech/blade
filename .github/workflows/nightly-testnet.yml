@@ -175,6 +175,7 @@ jobs:
       register_validator_test_output: ${{ needs.sanity_check_tests.outputs.register_validator_test_output }}
       withdraw_rewards_test_output: ${{ needs.sanity_check_tests.outputs.withdraw_rewards_test_output }}
       unstake_all_test_output: ${{ needs.sanity_check_tests.outputs.unstake_all_test_output }}
+      results_artifact_id: ${{ needs.sanity_check_tests.outputs.results_artifact_id }}
     secrets:
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

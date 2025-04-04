@@ -27,6 +27,10 @@ on: # yamllint disable-line rule:truthy
         description: Unstake All Test output
         type: string
         required: true
+      results_artifact_id:
+        description: Results artifact ID
+        type: string
+        required: true
     secrets:
       AWS_S3_BLADE_BUCKET:
         required: true
@@ -60,6 +64,15 @@ jobs:
                     "type": "plain_text",
                     "text": "Nightly sanity check tests - TESTNET"
                   }
+                },
+                {
+                  "type": "button",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "${{ inputs.results_artifact_id != '' && 'Results' || 'No Results' }}"
+                  },
+                  "style": "${{ inputs.results_artifact_id != '' && env.succeed_bnt || env.failed_bnt }}",
+                  "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ inputs.results_artifact_id }}"
                 },
                 {
                   "type": "actions",

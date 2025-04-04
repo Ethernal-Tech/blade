@@ -44,6 +44,7 @@ jobs:
       register_validator_test: ${{ steps.sanity_check_tests_results.outputs.register_validator_test }}
       withdraw_rewards_test: ${{ steps.sanity_check_tests_results.outputs.withdraw_rewards_test }}
       unstake_all_test: ${{ steps.sanity_check_tests_results.outputs.unstake_all_test }}
+      results_artifact_id: ${{ steps.artifact-upload.outputs.artifact-id }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4.1.1
@@ -73,6 +74,7 @@ jobs:
       - name: Archive Sanity Check Test results
         if: always()
         uses: actions/upload-artifact@v4.3.0
+        id: artifact-upload
         with:
           name: sanity-check-results
           path: sanity_check_results.json
