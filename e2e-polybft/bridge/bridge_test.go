@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Ethernal-Tech/ethgo"
+	"github.com/Ethernal-Tech/ethgo/abi"
 	"github.com/stretchr/testify/require"
 
 	"github.com/0xPolygon/polygon-edge/command"
@@ -1948,7 +1949,7 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 		firstID, secondID uint64,
 		checkFn func(accountAddr, tokenAddr types.Address, tokenID *big.Int, relayer txrelayer.TxRelayer) error) {
 		// Used if tokenType is ERC1155 because it starts from 1
-		erc1155TokenID := int64(0)
+		ercTokenID := int64(0)
 		tokenTypeStr := "ERC"
 
 		switch tokenType {
@@ -1958,7 +1959,7 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 			tokenTypeStr += "721"
 		case common.ERC1155:
 			tokenTypeStr += "1155"
-			erc1155TokenID = 1
+			ercTokenID = 1
 		}
 
 		var tokenAddr types.Address
@@ -2001,7 +2002,7 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 
 			for i := range int64(transfersCount) {
 				if tokenType == common.ERC1155 {
-					tokenID = fmt.Sprintf("%d", startID+i+erc1155TokenID)
+					tokenID = fmt.Sprintf("%d", startID+i+ercTokenID)
 				}
 
 				if err := bridge.Mint(tokenType, tokenAddr, accounts[i],
@@ -2030,7 +2031,7 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 
 			for i := range int64(transfersCount) {
 				if tokenType != common.ERC20 {
-					tokenID = fmt.Sprintf("%d", startID+i+erc1155TokenID)
+					tokenID = fmt.Sprintf("%d", startID+i+ercTokenID)
 				}
 
 				err := bridge.Deposit(
@@ -2093,14 +2094,14 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 
 		t.Logf("%s tokens minted again %s", tokenTypeStr, dtype)
 
-		// should be processed because there are enough ERC20 funds
+		// should be processed because there are enough funds
 		if err := transferFunc(false, transfersCount); err != nil {
 			errChan <- err
 		}
 
 		t.Logf("%s tokens deposited again %s", tokenTypeStr, dtype)
 
-		// should be processed because there are enough ERC20 funds
+		// should be processed because there are enough funds
 		if err := cluster.WaitUntil(2*time.Minute, 2*time.Second, func() bool {
 			for i := secondID; i < secondID+transfersCount; i++ {
 				if !isEventProcessed(t, destinationGW, destinationRelayer, i, false) {
@@ -2115,15 +2116,25 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 
 		t.Logf("All events processed " + dtype)
 
-		childTokenAddr := getChildToken(t, contractsapi.RootERC20Predicate.Abi, predAddr, tokenAddr, sourceRelayer)
+		var predicate *abi.ABI
+		switch tokenType {
+		case common.ERC20:
+			predicate = contractsapi.RootERC20Predicate.Abi
+		case common.ERC721:
+			predicate = contractsapi.RootERC721Predicate.Abi
+		case common.ERC1155:
+			predicate = contractsapi.RootERC1155Predicate.Abi
+		}
+
+		childTokenAddr := getChildToken(t, predicate, predAddr, tokenAddr, sourceRelayer)
 
 		for i := range int64(transfersCount) {
-			if err := checkFn(accountAddrs[i], childTokenAddr, big.NewInt(i+erc1155TokenID), destinationRelayer); err != nil {
+			if err := checkFn(accountAddrs[i], childTokenAddr, big.NewInt(i+ercTokenID), destinationRelayer); err != nil {
 				errChan <- err
 			}
 
 			if tokenType != common.ERC20 {
-				if err := checkFn(accountAddrs[i], childTokenAddr, big.NewInt(i+erc1155TokenID+transfersCount), destinationRelayer); err != nil {
+				if err := checkFn(accountAddrs[i], childTokenAddr, big.NewInt(i+ercTokenID+transfersCount), destinationRelayer); err != nil {
 					errChan <- err
 				}
 			}
@@ -2171,7 +2182,7 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 
 					return
 				}
-			case <-time.After(10 * time.Minute):
+			case <-time.After(6 * time.Minute):
 				t.Fatal("timeout")
 			}
 		}
@@ -2215,7 +2226,7 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 
 					return
 				}
-			case <-time.After(10 * time.Minute):
+			case <-time.After(6 * time.Minute):
 				t.Fatal("timeout")
 			}
 		}
@@ -2260,7 +2271,7 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 
 					return
 				}
-			case <-time.After(10 * time.Minute):
+			case <-time.After(6 * time.Minute):
 				t.Fatal("timeout")
 			}
 		}
@@ -2381,7 +2392,7 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 		ID1, ID2, ID3, ID4 uint64,
 		checkFn func(accountAddr, tokenAddr types.Address, tokenID *big.Int, relayer txrelayer.TxRelayer) error) {
 		// Used if tokenType is ERC1155 because it starts from 1
-		erc1155TokenID := uint64(0)
+		ercTokenID := uint64(0)
 		tokenTypeStr := "ERC"
 
 		switch tokenType {
@@ -2391,7 +2402,7 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 			tokenTypeStr += "721"
 		case common.ERC1155:
 			tokenTypeStr += "1155"
-			erc1155TokenID = 1
+			ercTokenID = 1
 		}
 
 		var tokenAddr types.Address
@@ -2435,7 +2446,7 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 
 			for i := range uint64(transfersCount) {
 				if tokenType != common.ERC20 {
-					tokenID = fmt.Sprintf("%d", startID+i+erc1155TokenID)
+					tokenID = fmt.Sprintf("%d", startID+i+ercTokenID)
 				}
 
 				if err := bridge.Deposit(
@@ -2479,7 +2490,17 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 
 		t.Logf("All events processed " + dtype)
 
-		childTokenAddr := getChildToken(t, contractsapi.RootERC20Predicate.Abi, sourcePred, tokenAddr, sourceRelayer)
+		var predicate *abi.ABI
+		switch tokenType {
+		case common.ERC20:
+			predicate = contractsapi.RootERC20Predicate.Abi
+		case common.ERC721:
+			predicate = contractsapi.RootERC721Predicate.Abi
+		case common.ERC1155:
+			predicate = contractsapi.RootERC1155Predicate.Abi
+		}
+
+		childTokenAddr := getChildToken(t, predicate, sourcePred, tokenAddr, sourceRelayer)
 
 		withdrawFunc := func(shouldThrowError bool, startID, startEventID uint64) error {
 			// withdraw - should be processed because there are enough ERC20 funds
@@ -2492,7 +2513,7 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 
 			for i := range uint64(transfersCount) {
 				if tokenType != common.ERC20 {
-					tokenID = fmt.Sprintf("%d", startID+i+erc1155TokenID)
+					tokenID = fmt.Sprintf("%d", startID+i+ercTokenID)
 				}
 
 				err := bridge.Withdraw(
@@ -2517,7 +2538,7 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 			}
 
 			if !shouldThrowError {
-				// should be processed because there are enough ERC20 funds
+				// should be processed because there are enough funds
 				if err := cluster.WaitUntil(2*time.Minute, 2*time.Second, func() bool {
 					for i := startEventID; i < startEventID+transfersCount; i++ {
 						if !isEventProcessed(t, sourceGW, sourceRelayer, i, false) {
@@ -2553,12 +2574,12 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 
 		t.Logf("Second %s withdraw failed %s", tokenTypeStr, dtype)
 
-		// should be processed because there are enough ERC20 funds
+		// should be processed because there are enough funds
 		if err := depositFunc(transfersCount); err != nil {
 			errChan <- err
 		}
 
-		// should be processed because there are enough ERC20 funds
+		// should be processed because there are enough funds
 		if err := cluster.WaitUntil(2*time.Minute, 2*time.Second, func() bool {
 			for i := ID3; i < ID3+transfersCount; i++ {
 				if !isEventProcessed(t, destinationGW, destinationRelayer, i, false) {
@@ -2579,12 +2600,12 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 		}
 
 		for i := range int64(transfersCount) {
-			if err := checkFn(accountAddrs[i], tokenAddr, big.NewInt(i+int64(erc1155TokenID)), sourceRelayer); err != nil {
+			if err := checkFn(accountAddrs[i], tokenAddr, big.NewInt(i+int64(ercTokenID)), sourceRelayer); err != nil {
 				errChan <- err
 			}
 
 			if tokenType != common.ERC20 {
-				if err := checkFn(accountAddrs[i], tokenAddr, big.NewInt(i+int64(erc1155TokenID)+transfersCount), sourceRelayer); err != nil {
+				if err := checkFn(accountAddrs[i], tokenAddr, big.NewInt(i+int64(ercTokenID)+transfersCount), sourceRelayer); err != nil {
 					errChan <- err
 				}
 			}
@@ -2634,7 +2655,7 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 
 					return
 				}
-			case <-time.After(10 * time.Minute):
+			case <-time.After(7 * time.Minute):
 				t.Fatal("timeout")
 			}
 		}
@@ -2680,7 +2701,7 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 
 					return
 				}
-			case <-time.After(10 * time.Minute):
+			case <-time.After(7 * time.Minute):
 				t.Fatal("timeout")
 			}
 		}
@@ -2726,7 +2747,7 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 
 					return
 				}
-			case <-time.After(10 * time.Minute):
+			case <-time.After(7 * time.Minute):
 				t.Fatal("timeout")
 			}
 		}
