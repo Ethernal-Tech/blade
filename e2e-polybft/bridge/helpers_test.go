@@ -266,6 +266,26 @@ func waitForBlocksOnExternal(t *testing.T, numberOfBlocks uint64,
 	}
 }
 
+func erc1155BalanceOf(t *testing.T, account, tokenAddr types.Address, id *big.Int, relayer txrelayer.TxRelayer) *big.Int {
+	t.Helper()
+
+	balanceOfFn := &contractsapi.BalanceOfChildERC1155Fn{
+		Account: account,
+		ID:      id,
+	}
+
+	balanceInput, err := balanceOfFn.EncodeAbi()
+	require.NoError(t, err)
+
+	balanceRaw, err := relayer.Call(types.ZeroAddress, tokenAddr, balanceInput)
+	require.NoError(t, err)
+
+	balance, err := common.ParseUint256orHex(&balanceRaw)
+	require.NoError(t, err)
+
+	return balance
+}
+
 // compareBucketsFromDBs compares a bucket from db1 with a bucket from db2
 func compareBucketsFromDBs(t *testing.T, db1, db2 *bbolt.DB, sourceChainID, destinationChainID []byte, isRollback, isExecuted bool) {
 	t.Helper()
