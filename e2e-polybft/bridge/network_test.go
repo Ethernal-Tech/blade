@@ -3,7 +3,10 @@ package bridge
 import (
 	"fmt"
 	"math/big"
+	"os"
 	"path"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -23,6 +26,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func init() {
+	wd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	parent := filepath.Dir(wd)
+	parent = strings.Trim(parent, "e2e-polybft")
+	wd = filepath.Join(parent, "/artifacts/blade")
+	os.Setenv("EDGE_BINARY", wd)
+	os.Setenv("E2E_TESTS", "true")
+	os.Setenv("E2E_LOGS", "true")
+	os.Setenv("E2E_LOG_LEVEL", "debug")
+}
+
 func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 	const (
 		validatorsCount = 4
@@ -31,6 +49,7 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 		numberOfBridges = 1
 		bridgeAmount    = 100
 		bridgeAmountStr = "100"
+		threshold       = 10
 	)
 
 	accountAddrs := make([]types.Address, transfersCount)
@@ -57,6 +76,7 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 	cluster := framework.NewTestCluster(t, validatorsCount,
 		framework.WithBridges(numberOfBridges),
 		framework.WithEpochSize(epochSize),
+		framework.WithBridgeBatchThreshold(threshold),
 		framework.WithRelayerPrivateKey(relayerPrivateKey),
 		framework.WithSecretsCallback(func(addrs []types.Address, tcc *framework.TestClusterConfig) {
 			for i := 0; i < len(addrs); i++ {
@@ -99,6 +119,10 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 
 	deployerKey, err := bridgeHelper.DecodePrivateKey("")
 	require.NoError(t, err)
+
+	// stop relayer until
+	relayer := cluster.BridgeRelayers[0]
+	relayer.Stop()
 
 	var internalERC20Addr, externalERC20Addr types.Address
 
@@ -228,12 +252,51 @@ loop2:
 
 	t.Logf("Deposited ERC20 tokens")
 
+	currentBlock, err := internalEndpoint.BlockNumber()
+	require.NoError(t, err)
+
+	t.Logf("Current start block: %d", currentBlock)
+
 	wg := sync.WaitGroup{}
 	wg.Add(validatorsCount)
+
+	thresholdChan := make(chan interface{}, 1)
+
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+
+		timeout := time.After(5 * time.Minute)
+
+		for {
+			select {
+			case <-ticker.C:
+				block, err := internalEndpoint.BlockNumber()
+				require.NoError(t, err)
+
+				t.Logf("Current block: %d", block)
+
+				if block >= currentBlock+threshold {
+					close(thresholdChan)
+					errChan <- nil
+
+					return
+				}
+			case <-timeout:
+				close(thresholdChan)
+				errChan <- fmt.Errorf("timeout waiting for block %d", currentBlock+threshold)
+
+				return
+			}
+		}
+	}()
 
 	for i := range validatorsCount {
 		go func(validatorNum int) {
 			defer wg.Done()
+			<-thresholdChan
+
+			t.Logf("Stopping validator %d", validatorNum)
 
 			defer cluster.Servers[validatorNum].Start()
 			cluster.Servers[validatorNum].Stop()
@@ -242,7 +305,16 @@ loop2:
 		}(i)
 	}
 
+	if err := <-errChan; err != nil {
+		t.Fatal(err)
+
+		return
+	}
+
 	wg.Wait()
+
+	// start relayer again
+	relayer.Start()
 
 	t.Logf("Restarted validators")
 
