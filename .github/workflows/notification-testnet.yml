@@ -109,7 +109,7 @@ jobs:
                         "type": "plain_text",
                         "text": "Workflow Run"
                       },
-                      "style": "${{ inputs.bat_produce_blocks == 'true' && inputs.bat_fund_status == 'true' && inputs.bat_check_deployed_smart_contract_status == 'true' && inputs.bat_method_set_status == 'true' && inputs.bat_method_get_status == 'true' && inputs.sanity_check_tests_output == 'true' && env.succeed_bnt || env.failed_bnt }}",
+                      "style": "${{ inputs.bat_produce_blocks == 'true' && inputs.bat_fund_status == 'true' && inputs.bat_check_deployed_smart_contract_status == 'true' && inputs.bat_method_set_status == 'true' && inputs.bat_method_get_status == 'true' && inputs.sanity_check_tests_output == 'true' && inputs.pp_produce_blocks == 'true' && inputs.pp_fund_status == 'true' && inputs.pp_check_deployed_smart_contract_status == 'true' && inputs.pp_method_set_status == 'true' && inputs.pp_method_get_status == 'true' && env.succeed_bnt || env.failed_bnt }}",
                       "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                     },
                     {
