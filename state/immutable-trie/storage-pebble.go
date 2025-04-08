@@ -104,6 +104,7 @@ func (ps *pebbleStorage) Stat(property string) (string, error) {
 		return fmt.Sprintf("Virtual size: %dKB", ps.db.Metrics().VirtualSize()/1024), nil
 	case "memTable":
 		memTable := ps.db.Metrics().MemTable
+
 		return fmt.Sprintf("Size: %dKB\nCount: %d\nZombie size: %dKB\nZombie count: %d\n",
 			memTable.Size/1024, memTable.Count, memTable.ZombieSize/1024, memTable.ZombieCount), nil
 	default:
