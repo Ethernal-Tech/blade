@@ -25,7 +25,7 @@ func TestLoadRunner(t *testing.T) {
 	t.Skip("this is only added for the sake of the example and running it in local")
 
 	cfg := LoadTestConfig{
-		Mnemonnic:       "code code code code code code code code code code code quality",
+		Mnemonic:        "code code code code code code code code code code code quality",
 		LoadTestType:    "erc20",
 		LoadTestName:    "test",
 		JSONRPCUrls:     []string{"http://localhost:10002"},

@@ -50,7 +50,7 @@ type BlockInfo struct {
 
 // LoadTestConfig represents the configuration for a load test.
 type LoadTestConfig struct {
-	Mnemonnic string // Mnemonnic is the mnemonic phrase used for account generation, and VUs funding.
+	Mnemonic string // Mnemonnic is the mnemonic phrase used for account generation, and VUs funding.
 
 	LoadTestType string // LoadTestType is the type of load test.
 	LoadTestName string // LoadTestName is the name of the load test.
