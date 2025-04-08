@@ -139,8 +139,8 @@ func (p *PerfContractRunner) Run(ctx context.Context) error {
 	fmt.Println("Running PerfContract load test", p.cfg.LoadTestName)
 
 	// print state db metrics before and after test
-	p.printStateDbMetrics()
-	defer p.printStateDbMetrics()
+	p.printStateDBMetrics()
+	defer p.printStateDBMetrics()
 
 	if err := p.createVUs(); err != nil {
 		return err

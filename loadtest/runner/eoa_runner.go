@@ -38,8 +38,8 @@ func (e *EOARunner) Run(ctx context.Context) error {
 	fmt.Println("Running EOA load test", e.cfg.LoadTestName)
 
 	// print state db metrics before and after test
-	e.printStateDbMetrics()
-	defer e.printStateDbMetrics()
+	e.printStateDBMetrics()
+	defer e.printStateDBMetrics()
 
 	if err := e.createVUs(); err != nil {
 		return err

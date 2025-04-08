@@ -103,7 +103,7 @@ func NewBaseLoadTestRunner(cfg LoadTestConfig) (*BaseLoadTestRunner, error) {
 	}, nil
 }
 
-func (r *BaseLoadTestRunner) printStateDbMetrics() {
+func (r *BaseLoadTestRunner) printStateDBMetrics() {
 	fmt.Println("=============================================================")
 	fmt.Println("Getting state DB metrics...")
 

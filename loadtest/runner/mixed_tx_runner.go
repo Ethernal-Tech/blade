@@ -62,8 +62,8 @@ func (m *MixedTxRunner) Run(ctx context.Context) error {
 	fmt.Println("Running mixed load test", m.cfg.LoadTestName)
 
 	// print state db metrics before and after test
-	m.printStateDbMetrics()
-	defer m.printStateDbMetrics()
+	m.printStateDBMetrics()
+	defer m.printStateDBMetrics()
 
 	if err := m.createVUs(); err != nil {
 		return err
