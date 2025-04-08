@@ -3,10 +3,6 @@ name: Availability Tests
 on:
   workflow_call:
     inputs:
-      environment:
-        description: The environment to run against
-        required: true
-        type: string
       rpc_url:
         description: JSON-RPC URL
         required: true
@@ -156,19 +152,3 @@ jobs:
           [ ${{ steps.method_get.outputs.status }} = "true" ]; then
             echo "status=true" >> $GITHUB_OUTPUT
           fi
-
-  notification:
-    name: Availability Test Notification
-    needs: availability_test
-    uses: ./.github/workflows/notification-availability-test.yml
-    if: ((success() || failure()) && inputs.notification)
-    with:
-      environment: ${{ inputs.environment }}
-      availability_test_status: ${{ needs.availability_test.outputs.availability_test_status }}
-      produce_blocks: ${{ needs.availability_test.outputs.produce_blocks }}
-      fund_status: ${{ needs.availability_test.outputs.fund_status }}
-      check_deployed_smart_contract_status: ${{ needs.availability_test.outputs.check_deployed_smart_contract_status }}
-      method_set_status: ${{ needs.availability_test.outputs.method_set_status }}
-      method_get_status: ${{ needs.availability_test.outputs.method_get_status }}
-    secrets:
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

@@ -99,6 +99,9 @@ on: # yamllint disable-line rule:truthy
         description: Unstake All Test output
         type: string
         required: true
+      results_artifact_id:
+        type: string
+        required: true
       deploy_network_terraform_output:
         description: Deploy Network - Terraform output
         type: string
@@ -230,6 +233,15 @@ jobs:
                       },
                       "style": "${{ inputs.logs == 'true' && inputs.destroy_network_logs_output == '' && env.succeed_bnt || env.failed_bnt }}",
                       "url": "https://s3.console.aws.amazon.com/s3/buckets/${{ secrets.AWS_S3_BLADE_BUCKET }}?region=${{ vars.AWS_REGION }}&prefix=logs/${{ github.run_id }}/"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "Sanity Check Results"
+                      },
+                      "style": "${{ inputs.sanity_check_tests_output == 'true' && env.succeed_bnt || env.failed_bnt }}",
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ inputs.results_artifact_id }}"
                     }
                   ]
                 },

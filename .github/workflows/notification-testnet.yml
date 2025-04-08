@@ -1,34 +1,69 @@
 ---
-name: Notification - Sanity Check Testnet
+name: Testnet Notification
 on: # yamllint disable-line rule:truthy
   workflow_call:
     inputs:
+      bat_network:
+        type: string
+        required: true
+      bat_availability_test_status:
+        type: string
+        required: true
+      bat_produce_blocks:
+        type: string
+        required: true
+      bat_fund_status:
+        type: string
+        required: true
+      bat_check_deployed_smart_contract_status:
+        type: string
+        required: true
+      bat_method_set_status:
+        type: string
+        required: true
+      bat_method_get_status:
+        type: string
+        required: true
       sanity_check_tests_output:
-        description: Sanity Check Tests output
         type: string
         required: true
       stake_test_output:
-        description: Stake Test output
         type: string
         required: true
       unstake_test_output:
-        description: Unstake Test output
         type: string
         required: true
       register_validator_test_output:
-        description: Register Validator Test output
         type: string
         required: true
       withdraw_rewards_test_output:
-        description: Withdraw Rewards Test output
         type: string
         required: true
       unstake_all_test_output:
-        description: Unstake All Test output
         type: string
         required: true
       results_artifact_id:
-        description: Results artifact ID
+        type: string
+        required: true
+      pp_network:
+        type: string
+        required: true
+      pp_availability_test_status:
+        type: string
+        required: true
+      pp_produce_blocks:
+        type: string
+        required: true
+      pp_fund_status:
+        type: string
+        required: true
+      pp_check_deployed_smart_contract_status:
+        type: string
+        required: true
+      pp_method_set_status:
+        type: string
+        required: true
+      pp_method_get_status:
         type: string
         required: true
     secrets:
@@ -38,7 +73,7 @@ on: # yamllint disable-line rule:truthy
         required: true
 
 jobs:
-  notification_sanity_check:
+  notification:
     name: Notification
     runs-on: ubuntu-latest
     steps:
@@ -62,17 +97,8 @@ jobs:
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "Nightly sanity check tests - TESTNET"
+                    "text": "Nightly Testnet"
                   }
-                },
-                {
-                  "type": "button",
-                  "text": {
-                    "type": "plain_text",
-                    "text": "${{ inputs.results_artifact_id != '' && 'Results' || 'No Results' }}"
-                  },
-                  "style": "${{ inputs.results_artifact_id != '' && env.succeed_bnt || env.failed_bnt }}",
-                  "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ inputs.results_artifact_id }}"
                 },
                 {
                   "type": "actions",
@@ -83,13 +109,56 @@ jobs:
                         "type": "plain_text",
                         "text": "Workflow Run"
                       },
-                      "style": "${{ inputs.sanity_check_tests_output == 'PASSED' && env.succeed_bnt || env.failed_bnt }}",
+                      "style": "${{ inputs.bat_produce_blocks == 'true' && inputs.bat_fund_status == 'true' && inputs.bat_check_deployed_smart_contract_status == 'true' && inputs.bat_method_set_status == 'true' && inputs.bat_method_get_status == 'true' && inputs.sanity_check_tests_output == 'true' && env.succeed_bnt || env.failed_bnt }}",
                       "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "Sanity Check Results"
+                      },
+                      "style": "${{ inputs.sanity_check_tests_output == 'true' && env.succeed_bnt || env.failed_bnt }}",
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ inputs.results_artifact_id }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "Network: *${{ inputs.bat_network }}*"
                     }
                   ]
                 },
                 {
                   "type": "divider"
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.bat_produce_blocks == 'true' && env.succeed_job || env.failed_job }} *Produce Blocks*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.bat_fund_status == 'true' && env.succeed_job || env.failed_job }} *Fund Account*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.bat_check_deployed_smart_contract_status == 'true' && env.succeed_job || env.failed_job }} *Deploy Smart Contract*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.bat_method_set_status == 'true' && env.succeed_job || env.failed_job }} *Method set()*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.bat_method_get_status == 'true' && env.succeed_job || env.failed_job }} *Method get()*"
+                    }
+                  ]
                 },
                 {
                   "type": "section",
@@ -113,6 +182,43 @@ jobs:
                     {
                       "type": "mrkdwn",
                       "text": "${{ inputs.unstake_all_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Unstake All Test*"
+                    }
+                  ]
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "Network: *${{ inputs.pp_network }}*"
+                    }
+                  ]
+                },
+                {
+                  "type": "divider"
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.pp_produce_blocks == 'true' && env.succeed_job || env.failed_job }} *Produce Blocks*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.pp_fund_status == 'true' && env.succeed_job || env.failed_job }} *Fund Account*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.pp_check_deployed_smart_contract_status == 'true' && env.succeed_job || env.failed_job }} *Deploy Smart Contract*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.pp_method_set_status == 'true' && env.succeed_job || env.failed_job }} *Method set()*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.pp_method_get_status == 'true' && env.succeed_job || env.failed_job }} *Method get()*"
                     }
                   ]
                 }

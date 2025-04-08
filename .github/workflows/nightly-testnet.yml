@@ -7,12 +7,11 @@ on: # yamllint disable-line rule:truthy
   workflow_dispatch:
 
 jobs:
-  blade_testnet:
+  blade:
     name: Blade Testnet
     uses: ./.github/workflows/availability-tests.yml
     with:
-      environment: Blade Testnet
-      rpc_url: https://rpc.testnet.ethernal.work
+      rpc_url: ${{ vars.TESTNET_JSONRPC_URL }}
       fund_amount: "3"
       london: true
       notification: true
@@ -20,11 +19,10 @@ jobs:
       PREMINED_PRIVATE_KEY: ${{ secrets.FAUCET_PRIVATE_KEY }}
       ACCOUNT_PRIVATE_KEY: ${{ secrets.ACCOUNT_PRIVATE_KEY }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-  pink_panda_testnet:
+  pink_panda:
     name: Pink Panda Testnet
     uses: ./.github/workflows/availability-tests.yml
     with:
-      environment: Pink Panda Testnet
       rpc_url: https://blockchain-rpc.pinkpanda.network
       fund_amount: "3"
       london: true
@@ -35,16 +33,20 @@ jobs:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   sanity_check_tests:
     name: Sanity Check Tests
-    uses: ./.github/workflows/sanity-check-testnet.yml
+    uses: ./.github/workflows/sanity-check-test.yml
+    needs: blade
+    with:
+      environment: testnet
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
       AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
   load_test_eoa:
     name: Load Test EOA
-    uses: ./.github/workflows/load-test-testnet.yml
-    needs: [sanity_check_tests]
+    uses: ./.github/workflows/load-test.yml
+    needs: [blade, sanity_check_tests]
     with:
+      environment: testnet
       type: EOA
       dynamic: true
       vus: "100"
@@ -65,9 +67,10 @@ jobs:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   load_test_erc20:
     name: Load Test ERC20
-    uses: ./.github/workflows/load-test-testnet.yml
-    needs: [sanity_check_tests, load_test_eoa]
+    uses: ./.github/workflows/load-test.yml
+    needs: [blade, sanity_check_tests, load_test_eoa]
     with:
+      environment: testnet
       type: ERC20
       dynamic: true
       vus: "100"
@@ -88,9 +91,10 @@ jobs:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   load_test_erc721:
     name: Load Test ERC721
-    uses: ./.github/workflows/load-test-testnet.yml
-    needs: [sanity_check_tests, load_test_eoa, load_test_erc20]
+    uses: ./.github/workflows/load-test.yml
+    needs: [blade, sanity_check_tests, load_test_eoa, load_test_erc20]
     with:
+      environment: testnet
       type: ERC721
       dynamic: true
       vus: "100"
@@ -111,10 +115,10 @@ jobs:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   load_test_mixed:
     name: Load Test MIXED
-    uses: ./.github/workflows/load-test-testnet.yml
-    needs:
-      [sanity_check_tests, load_test_eoa, load_test_erc20, load_test_erc721]
+    uses: ./.github/workflows/load-test.yml
+    needs: [blade, sanity_check_tests, load_test_eoa, load_test_erc20, load_test_erc721]
     with:
+      environment: testnet
       type: MIXED
       dynamic: true
       vus: "100"
@@ -135,16 +139,10 @@ jobs:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   load_test_perf:
     name: Load Test PERFORMANCE CONTRACT
-    uses: ./.github/workflows/load-test-testnet.yml
-    needs:
-      [
-        sanity_check_tests,
-        load_test_eoa,
-        load_test_erc20,
-        load_test_erc721,
-        load_test_mixed,
-      ]
+    uses: ./.github/workflows/load-test.yml
+    needs: [blade, sanity_check_tests, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed]
     with:
+      environment: testnet
       type: PERF-CONTRACT
       dynamic: true
       vus: "100"
@@ -163,12 +161,19 @@ jobs:
       AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
       PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-  notification_sanity_check:
-    name: Nightly Notification
+  testnet_notification:
+    name: Testnet Nightly Notification
     uses: ./.github/workflows/notification-testnet.yml
-    needs: [sanity_check_tests]
+    needs: [blade, pink_panda, sanity_check_tests, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed, load_test_perf]
     if: success() || failure()
     with:
+      bat_network: Blade Testnet
+      bat_availability_test_status: ${{ needs.blade.outputs.availability_test_status }}
+      bat_produce_blocks: ${{ needs.blade.outputs.produce_blocks }}
+      bat_fund_status: ${{ needs.blade.outputs.fund_status }}
+      bat_check_deployed_smart_contract_status: ${{ needs.blade.outputs.check_deployed_smart_contract_status }}
+      bat_method_set_status: ${{ needs.blade.outputs.method_set_status }}
+      bat_method_get_status: ${{ needs.blade.outputs.method_get_status }}
       sanity_check_tests_output: ${{ needs.sanity_check_tests.outputs.sanity_check_tests_output }}
       stake_test_output: ${{ needs.sanity_check_tests.outputs.stake_test_output }}
       unstake_test_output: ${{ needs.sanity_check_tests.outputs.unstake_test_output }}
@@ -176,13 +181,20 @@ jobs:
       withdraw_rewards_test_output: ${{ needs.sanity_check_tests.outputs.withdraw_rewards_test_output }}
       unstake_all_test_output: ${{ needs.sanity_check_tests.outputs.unstake_all_test_output }}
       results_artifact_id: ${{ needs.sanity_check_tests.outputs.results_artifact_id }}
+      pp_network: Pink Panda Testnet
+      pp_availability_test_status: ${{ needs.pink_panda.outputs.availability_test_status }}
+      pp_produce_blocks: ${{ needs.pink_panda.outputs.produce_blocks }}
+      pp_fund_status: ${{ needs.pink_panda.outputs.fund_status }}
+      pp_check_deployed_smart_contract_status: ${{ needs.pink_panda.outputs.check_deployed_smart_contract_status }}
+      pp_method_set_status: ${{ needs.pink_panda.outputs.method_set_status }}
+      pp_method_get_status: ${{ needs.pink_panda.outputs.method_get_status }}
     secrets:
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   notification_load_test_eoa:
     name: Load Test EOA Notification
     uses: ./.github/workflows/notification-load-test.yml
-    needs: [load_test_eoa, notification_sanity_check]
+    needs: [load_test_eoa, testnet_notification]
     if: (always() && needs.load_test_eoa.outputs.load_test_output == 'true')
     with:
       environment: testnet
@@ -211,8 +223,7 @@ jobs:
   notification_load_test_erc20:
     name: Load Test ERC20 Notification
     uses: ./.github/workflows/notification-load-test.yml
-    needs:
-      [load_test_erc20, notification_sanity_check, notification_load_test_eoa]
+    needs: [load_test_erc20, testnet_notification, notification_load_test_eoa]
     if: (always() && needs.load_test_erc20.outputs.load_test_output == 'true')
     with:
       environment: testnet
@@ -241,13 +252,7 @@ jobs:
   notification_load_test_erc721:
     name: Load Test ERC721 Notification
     uses: ./.github/workflows/notification-load-test.yml
-    needs:
-      [
-        load_test_erc721,
-        notification_sanity_check,
-        notification_load_test_eoa,
-        notification_load_test_erc20,
-      ]
+    needs: [load_test_erc721, testnet_notification, notification_load_test_eoa, notification_load_test_erc20]
     if: (always() && needs.load_test_erc721.outputs.load_test_output == 'true')
     with:
       environment: testnet
@@ -276,14 +281,7 @@ jobs:
   notification_load_test_mixed:
     name: Load Test MIXED Notification
     uses: ./.github/workflows/notification-load-test.yml
-    needs:
-      [
-        load_test_mixed,
-        notification_sanity_check,
-        notification_load_test_eoa,
-        notification_load_test_erc20,
-        notification_load_test_erc721,
-      ]
+    needs: [load_test_mixed, testnet_notification, notification_load_test_eoa, notification_load_test_erc20, notification_load_test_erc721]
     if: (always() && needs.load_test_mixed.outputs.load_test_output == 'true')
     with:
       environment: testnet
@@ -307,5 +305,34 @@ jobs:
       txpool_pending: ${{ needs.load_test_mixed.outputs.txpool_pending }}
       txpool_queued: ${{ needs.load_test_mixed.outputs.txpool_queued }}
       results_artifact_id: ${{ needs.load_test_mixed.outputs.results_artifact_id }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  notification_load_test_perf:
+    name: Load Test PERFORMANCE CONTRACT Notification
+    uses: ./.github/workflows/notification-load-test.yml
+    needs: [load_test_perf, testnet_notification, notification_load_test_eoa, notification_load_test_erc20, notification_load_test_erc721, notification_load_test_mixed]
+    if: (always() && needs.load_test_perf.outputs.load_test_output == 'true')
+    with:
+      environment: testnet
+      type: PERF-CONTRACT
+      dynamic: true
+      vus: "100"
+      txs_per_user: "10000"
+      txpool_timeout: "55m0s"
+      wait_txpool: true
+      receipts_timeout: "5m0s"
+      batch_size: "10000"
+      total_time: ${{ needs.load_test_perf.outputs.total_time }}
+      total_txs: ${{ needs.load_test_perf.outputs.total_txs }}
+      total_blocks: ${{ needs.load_test_perf.outputs.total_blocks }}
+      avg_txs_per_second: ${{ needs.load_test_perf.outputs.avg_txs_per_second }}
+      max_txs_per_second: ${{ needs.load_test_perf.outputs.max_txs_per_second }}
+      total_gas_used: ${{ needs.load_test_perf.outputs.total_gas_used }}
+      avg_gas_per_tx: ${{ needs.load_test_perf.outputs.avg_gas_per_tx }}
+      avg_gas_utilization: ${{ needs.load_test_perf.outputs.avg_gas_utilization }}
+      max_gas_utilization: ${{ needs.load_test_perf.outputs.max_gas_utilization }}
+      txpool_pending: ${{ needs.load_test_perf.outputs.txpool_pending }}
+      txpool_queued: ${{ needs.load_test_perf.outputs.txpool_queued }}
+      results_artifact_id: ${{ needs.load_test_perf.outputs.results_artifact_id }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

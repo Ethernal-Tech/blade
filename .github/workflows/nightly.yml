@@ -43,7 +43,6 @@ jobs:
     uses: ./.github/workflows/availability-tests.yml
     needs: deploy_network
     with:
-      environment: nightly
       rpc_url: ${{ needs.deploy_network.outputs.rpc_url }}
       fund_amount: "5"
       london: true
@@ -201,6 +200,7 @@ jobs:
       register_validator_test_output: ${{ needs.sanity_check_tests.outputs.register_validator_test_output }}
       withdraw_rewards_test_output: ${{ needs.sanity_check_tests.outputs.withdraw_rewards_test_output }}
       unstake_all_test_output: ${{ needs.sanity_check_tests.outputs.unstake_all_test_output }}
+      results_artifact_id: ${{ needs.sanity_check_tests.outputs.results_artifact_id }}
       deploy_network_terraform_output: ${{ needs.deploy_network.outputs.terraform_output }}
       deploy_network_ansible_output: ${{ needs.deploy_network.outputs.ansible_output }}
       deploy_network_blade_healthcheck_output: ${{ needs.deploy_network.outputs.blade_healthcheck_output }}
