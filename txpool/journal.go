@@ -11,9 +11,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 )
 
-// number of txs in journal when rotate will be executed
-const journalRotate = 1000
-
 // devNull is a WriteCloser that just discards anything written into it. Its
 // goal is to allow the transaction journal to write into a fake journal when
 // loading transactions on startup without printing warnings due to no file
@@ -29,18 +26,21 @@ type journal struct {
 	path   string         // filesystem path to store the transactions at
 	writer io.WriteCloser // output stream to write new transactions into
 	logger hclog.Logger   // logger
-	count  uint32         // number of txs in journal
+	count  uint64         // number of txs in journal
 	lock   sync.Mutex     // used for journal locking during rotation
 
 	journalCh chan struct{} // used for sending journal rotation events to txpool
+
+	rotateSize uint64 // number of local txs in journal when rotate will be executed
 }
 
 // newTxJournal creates a new transaction journal to
-func newTxJournal(path string, logger hclog.Logger, journalCh chan struct{}) *journal {
+func newTxJournal(path string, logger hclog.Logger, journalCh chan struct{}, rotateSize uint64) *journal {
 	return &journal{
-		path:      path,
-		logger:    logger,
-		journalCh: journalCh,
+		path:       path,
+		logger:     logger,
+		journalCh:  journalCh,
+		rotateSize: rotateSize,
 	}
 }
 
@@ -99,7 +99,7 @@ func (j *journal) insert(tx *types.Transaction) error {
 	_, err := j.writer.Write(tx.MarshalRLP())
 	if err == nil {
 		j.count++
-		if j.count == journalRotate {
+		if j.count == j.rotateSize {
 			// send event
 			j.journalCh <- struct{}{}
 		}

@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const journalRotate = 1000
+
 func TestJournalLoad(t *testing.T) {
 	t.Parallel()
 
@@ -68,7 +70,7 @@ func TestJournalLoad(t *testing.T) {
 	}
 
 	// init journal
-	journal := newTxJournal(filepath.Join(path, "test.rlp"), hclog.NewNullLogger(), make(chan struct{}))
+	journal := newTxJournal(filepath.Join(path, "test.rlp"), hclog.NewNullLogger(), make(chan struct{}), journalRotate)
 
 	// add txs into journal with rotate
 	require.NoError(t, journal.rotate(originalTxs))
@@ -106,7 +108,7 @@ func TestJournalRotate(t *testing.T) {
 
 	// create journal
 	rotateCh := make(chan struct{})
-	journal := newTxJournal(filepath.Join(path, "test.rlp"), hclog.NewNullLogger(), rotateCh)
+	journal := newTxJournal(filepath.Join(path, "test.rlp"), hclog.NewNullLogger(), rotateCh, journalRotate)
 
 	// init journal
 	require.NoError(t, journal.rotate([]*types.Transaction{}))
