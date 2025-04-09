@@ -1,0 +1,109 @@
+---
+name: Nightly Testnet
+on: # yamllint disable-line rule:truthy
+  schedule:
+    # * is a special character in YAML so you have to quote this string
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  blade:
+    name: Blade Testnet
+    uses: ./.github/workflows/availability-tests.yml
+    with:
+      rpc_url: ${{ vars.TESTNET_JSONRPC_URL }}
+      fund_amount: "3"
+      london: true
+      notification: true
+    secrets:
+      PREMINED_PRIVATE_KEY: ${{ secrets.FAUCET_PRIVATE_KEY }}
+      ACCOUNT_PRIVATE_KEY: ${{ secrets.ACCOUNT_PRIVATE_KEY }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  pink_panda:
+    name: Pink Panda Testnet
+    uses: ./.github/workflows/availability-tests.yml
+    with:
+      rpc_url: https://blockchain-rpc.pinkpanda.network
+      fund_amount: "3"
+      london: true
+      notification: true
+    secrets:
+      PREMINED_PRIVATE_KEY: ${{ secrets.LOADTEST_PRIVATE_KEY }}
+      ACCOUNT_PRIVATE_KEY: ${{ secrets.ACCOUNT_PRIVATE_KEY }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  load_test_perf:
+    name: Load Test PERFORMANCE CONTRACT
+    uses: ./.github/workflows/load-test.yml
+    needs: [blade]
+    with:
+      environment: testnet
+      type: PERF-CONTRACT
+      dynamic: true
+      vus: "100"
+      txs_per_user: "1000"
+      txpool_timeout: "30m0s"
+      wait_txpool: true
+      receipts_timeout: "5m0s"
+      batch_size: "1000"
+      notification: false
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
+      AWS_LOADTESTRUNNER_AMI_ID: ${{ secrets.AWS_LOADTESTRUNNER_AMI_ID }}
+      AWS_LOADTESTRUNNER_SUBNET_ID: ${{ secrets.AWS_LOADTESTRUNNER_SUBNET_ID }}
+      AWS_LOADTESTRUNNER_SG_ID: ${{ secrets.AWS_LOADTESTRUNNER_SG_ID }}
+      AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
+      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  testnet_notification:
+    name: Testnet Nightly Notification
+    uses: ./.github/workflows/notification-testnet.yml
+    needs: [blade, pink_panda, load_test_perf]
+    if: success() || failure()
+    with:
+      bat_network: Blade Testnet
+      bat_availability_test_status: ${{ needs.blade.outputs.availability_test_status }}
+      bat_produce_blocks: ${{ needs.blade.outputs.produce_blocks }}
+      bat_fund_status: ${{ needs.blade.outputs.fund_status }}
+      bat_check_deployed_smart_contract_status: ${{ needs.blade.outputs.check_deployed_smart_contract_status }}
+      bat_method_set_status: ${{ needs.blade.outputs.method_set_status }}
+      bat_method_get_status: ${{ needs.blade.outputs.method_get_status }}
+      pp_network: Pink Panda Testnet
+      pp_availability_test_status: ${{ needs.pink_panda.outputs.availability_test_status }}
+      pp_produce_blocks: ${{ needs.pink_panda.outputs.produce_blocks }}
+      pp_fund_status: ${{ needs.pink_panda.outputs.fund_status }}
+      pp_check_deployed_smart_contract_status: ${{ needs.pink_panda.outputs.check_deployed_smart_contract_status }}
+      pp_method_set_status: ${{ needs.pink_panda.outputs.method_set_status }}
+      pp_method_get_status: ${{ needs.pink_panda.outputs.method_get_status }}
+    secrets:
+      AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  notification_load_test_perf:
+    name: Load Test PERFORMANCE CONTRACT Notification
+    uses: ./.github/workflows/notification-load-test.yml
+    needs: [load_test_perf]
+    if: (always() && needs.load_test_perf.outputs.load_test_output == 'true')
+    with:
+      environment: testnet
+      type: PERF-CONTRACT
+      dynamic: true
+      vus: "100"
+      txs_per_user: "1000"
+      txpool_timeout: "30m0s"
+      wait_txpool: true
+      receipts_timeout: "5m0s"
+      batch_size: "1000"
+      total_time: ${{ needs.load_test_perf.outputs.total_time }}
+      total_txs: ${{ needs.load_test_perf.outputs.total_txs }}
+      total_blocks: ${{ needs.load_test_perf.outputs.total_blocks }}
+      avg_txs_per_second: ${{ needs.load_test_perf.outputs.avg_txs_per_second }}
+      max_txs_per_second: ${{ needs.load_test_perf.outputs.max_txs_per_second }}
+      total_gas_used: ${{ needs.load_test_perf.outputs.total_gas_used }}
+      avg_gas_per_tx: ${{ needs.load_test_perf.outputs.avg_gas_per_tx }}
+      avg_gas_utilization: ${{ needs.load_test_perf.outputs.avg_gas_utilization }}
+      max_gas_utilization: ${{ needs.load_test_perf.outputs.max_gas_utilization }}
+      txpool_pending: ${{ needs.load_test_perf.outputs.txpool_pending }}
+      txpool_queued: ${{ needs.load_test_perf.outputs.txpool_queued }}
+      results_artifact_id: ${{ needs.load_test_perf.outputs.results_artifact_id }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

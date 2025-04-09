@@ -49,6 +49,10 @@ func NewERC20Runner(cfg LoadTestConfig) (*ERC20Runner, error) {
 func (e *ERC20Runner) Run(ctx context.Context) error {
 	fmt.Println("Running ERC20 load test", e.cfg.LoadTestName)
 
+	// print state db metrics before and after test
+	e.printStateDBMetrics()
+	defer e.printStateDBMetrics()
+
 	if err := e.createVUs(); err != nil {
 		return err
 	}

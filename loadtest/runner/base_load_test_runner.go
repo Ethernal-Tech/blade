@@ -20,6 +20,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/Ethernal-Tech/ethgo"
+	jr "github.com/Ethernal-Tech/ethgo/jsonrpc"
 	"github.com/Ethernal-Tech/ethgo/wallet"
 	"github.com/olekukonko/tablewriter"
 	"github.com/schollz/progressbar/v3"
@@ -63,7 +64,7 @@ type BaseLoadTestRunner struct {
 // If any error occurs during the initialization process, it returns nil and the error.
 // Otherwise, it returns a pointer to the initialized BaseLoadTestRunner and nil error.
 func NewBaseLoadTestRunner(cfg LoadTestConfig) (*BaseLoadTestRunner, error) {
-	key, err := wallet.NewWalletFromMnemonic(cfg.Mnemonnic)
+	key, err := wallet.NewWalletFromMnemonic(cfg.Mnemonic)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create wallet from mnemonic: %w", err)
 	}
@@ -100,6 +101,29 @@ func NewBaseLoadTestRunner(cfg LoadTestConfig) (*BaseLoadTestRunner, error) {
 		vus:                make([]*account, cfg.VUs),
 		vusAddresses:       make([]types.Address, cfg.VUs),
 	}, nil
+}
+
+func (r *BaseLoadTestRunner) printStateDBMetrics() {
+	fmt.Println("=============================================================")
+	fmt.Println("Getting state DB metrics...")
+
+	for _, rpc := range r.cfg.JSONRPCUrls {
+		jsonrpc, err := jr.NewClient(rpc)
+		if err != nil {
+			fmt.Println("Error creating JSON RPC client:", err)
+
+			continue
+		}
+
+		var result string
+		if err := jsonrpc.Call("debug_chaindbProperty", &result, ""); err != nil {
+			fmt.Println("Error getting DB metrics:", err)
+
+			continue
+		}
+
+		fmt.Printf("Result for %s node: \n%s\n", rpc, result)
+	}
 }
 
 // Close closes the BaseLoadTestRunner by closing the underlying client connection.

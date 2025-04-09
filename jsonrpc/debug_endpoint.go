@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"strings"
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/helper/hex"
@@ -956,12 +955,6 @@ func (d *Debug) ChaindbProperty(property string) (interface{}, error) {
 	return d.throttling.AttemptRequest(
 		context.Background(),
 		func() (interface{}, error) {
-			if property == "" {
-				property = "leveldb.stats"
-			} else if !strings.HasPrefix(property, "leveldb.") {
-				property = "leveldb." + property
-			}
-
 			return d.store.Stat(property)
 		},
 	)

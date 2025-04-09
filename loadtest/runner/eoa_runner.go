@@ -37,6 +37,10 @@ func NewEOARunner(cfg LoadTestConfig) (*EOARunner, error) {
 func (e *EOARunner) Run(ctx context.Context) error {
 	fmt.Println("Running EOA load test", e.cfg.LoadTestName)
 
+	// print state db metrics before and after test
+	e.printStateDBMetrics()
+	defer e.printStateDBMetrics()
+
 	if err := e.createVUs(); err != nil {
 		return err
 	}
