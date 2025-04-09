@@ -55,6 +55,29 @@ jobs:
       AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
       PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  testnet_notification:
+    name: Testnet Nightly Notification
+    uses: ./.github/workflows/notification-testnet.yml
+    needs: [blade, pink_panda, load_test_perf]
+    if: success() || failure()
+    with:
+      bat_network: Blade Testnet
+      bat_availability_test_status: ${{ needs.blade.outputs.availability_test_status }}
+      bat_produce_blocks: ${{ needs.blade.outputs.produce_blocks }}
+      bat_fund_status: ${{ needs.blade.outputs.fund_status }}
+      bat_check_deployed_smart_contract_status: ${{ needs.blade.outputs.check_deployed_smart_contract_status }}
+      bat_method_set_status: ${{ needs.blade.outputs.method_set_status }}
+      bat_method_get_status: ${{ needs.blade.outputs.method_get_status }}
+      pp_network: Pink Panda Testnet
+      pp_availability_test_status: ${{ needs.pink_panda.outputs.availability_test_status }}
+      pp_produce_blocks: ${{ needs.pink_panda.outputs.produce_blocks }}
+      pp_fund_status: ${{ needs.pink_panda.outputs.fund_status }}
+      pp_check_deployed_smart_contract_status: ${{ needs.pink_panda.outputs.check_deployed_smart_contract_status }}
+      pp_method_set_status: ${{ needs.pink_panda.outputs.method_set_status }}
+      pp_method_get_status: ${{ needs.pink_panda.outputs.method_get_status }}
+    secrets:
+      AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   notification_load_test_perf:
     name: Load Test PERFORMANCE CONTRACT Notification
     uses: ./.github/workflows/notification-load-test.yml
