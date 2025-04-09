@@ -3,10 +3,7 @@ package bridge
 import (
 	"fmt"
 	"math/big"
-	"os"
 	"path"
-	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -25,21 +22,6 @@ import (
 	"github.com/Ethernal-Tech/ethgo"
 	"github.com/stretchr/testify/require"
 )
-
-func init() {
-	wd, err := os.Getwd()
-	if err != nil {
-		return
-	}
-
-	parent := filepath.Dir(wd)
-	parent = strings.Trim(parent, "e2e-polybft")
-	wd = filepath.Join(parent, "/artifacts/blade")
-	os.Setenv("EDGE_BINARY", wd)
-	os.Setenv("E2E_TESTS", "true")
-	os.Setenv("E2E_LOGS", "true")
-	os.Setenv("E2E_LOG_LEVEL", "debug")
-}
 
 func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 	const (
