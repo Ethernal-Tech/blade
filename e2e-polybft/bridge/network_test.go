@@ -23,6 +23,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestE2E_Bridge_NetworkFailureAndRestart is an end-to-end test for the bridge functionality
+// in a PolyBFT network. It simulates a network failure and restart scenario to ensure the
+// bridge operates correctly under such conditions. The test performs the following steps:
+//
+//   - Initializes a test cluster with a specified number of validators, bridges, and other configurations.
+//   - Generates accounts and keys for token transfers.
+//   - Deploys and mints ERC20 tokens on both internal and external chains.
+//   - Deposits ERC20 tokens using the bridge and verifies the deposits.
+//   - Simulates a network failure by stopping validators and waits for a block threshold to be reached.
+//   - Restarts the validators and relayer, then performs additional deposits to verify bridge functionality.
+//   - Ensures all events are processed correctly and validates the final token balances on both chains.
+//
+// The test ensures that the bridge can handle network disruptions and continue processing
+// transactions correctly after the network is restored.
 func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 	const (
 		validatorsCount = 4
@@ -227,70 +241,57 @@ loop2:
 
 		case <-time.After(5 * time.Minute):
 			t.Fatal("timeout")
-
-			return
 		}
 	}
 
 	t.Logf("Deposited ERC20 tokens")
 
-	currentBlock, err := internalEndpoint.BlockNumber()
-	require.NoError(t, err)
-
-	t.Logf("Current start block: %d", currentBlock)
-
-	wg := sync.WaitGroup{}
-	wg.Add(validatorsCount)
-
-	thresholdChan := make(chan interface{}, 1)
-
-	go func() {
+	// wait to reach threshold block
+	{
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 
 		timeout := time.After(5 * time.Minute)
 
+		currentBlock, err := internalEndpoint.BlockNumber()
+		require.NoError(t, err)
+
+		t.Logf("Current start block: %d", currentBlock)
+
+		thresholdBlock := currentBlock + threshold
+
+	thresholdLoop:
 		for {
 			select {
 			case <-ticker.C:
 				block, err := internalEndpoint.BlockNumber()
 				require.NoError(t, err)
 
-				t.Logf("Current block: %d", block)
+				if block >= thresholdBlock {
+					t.Logf("Reached threshold block: %d", block)
 
-				if block >= currentBlock+threshold {
-					close(thresholdChan)
-					errChan <- nil
-
-					return
+					break thresholdLoop
 				}
 			case <-timeout:
-				close(thresholdChan)
-				errChan <- fmt.Errorf("timeout waiting for block %d", currentBlock+threshold)
-
-				return
+				t.Fatal("timeout")
 			}
 		}
-	}()
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(validatorsCount)
 
 	for i := range validatorsCount {
 		go func(validatorNum int) {
 			defer wg.Done()
-			<-thresholdChan
 
 			t.Logf("Stopping validator %d", validatorNum)
 
-			defer cluster.Servers[validatorNum].Start()
 			cluster.Servers[validatorNum].Stop()
+			defer cluster.Servers[validatorNum].Start()
 
-			time.Sleep(10 * time.Second)
+			time.Sleep(5 * time.Second)
 		}(i)
-	}
-
-	if err := <-errChan; err != nil {
-		t.Fatal(err)
-
-		return
 	}
 
 	wg.Wait()
@@ -317,8 +318,6 @@ loop3:
 
 		case <-time.After(5 * time.Minute):
 			t.Fatal("timeout")
-
-			return
 		}
 	}
 
