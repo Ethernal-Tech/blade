@@ -103,6 +103,107 @@ func NewBaseLoadTestRunner(cfg LoadTestConfig) (*BaseLoadTestRunner, error) {
 	}, nil
 }
 
+func (r *BaseLoadTestRunner) tearDown() error {
+	if !r.cfg.TearDown {
+		return nil
+	}
+
+	fmt.Println("=============================================================")
+	fmt.Println("Unfunding users...")
+
+	start := time.Now().UTC()
+	bar := progressbar.Default(int64(r.cfg.VUs), "Unfund users")
+
+	defer func() {
+		_ = bar.Close()
+
+		fmt.Println("Unfund users took", time.Since(start))
+	}()
+
+	txRelayer, err := txrelayer.NewTxRelayer(
+		txrelayer.WithClient(r.clients.getClient()),
+		txrelayer.WithoutNonceGet(),
+	)
+	if err != nil {
+		return err
+	}
+
+	g, ctx := errgroup.WithContext(context.Background())
+
+	loadTestAddr := r.loadTestAccount.key.Address()
+
+	chainID, err := r.clients.getClient().ChainID()
+	if err != nil {
+		return err
+	}
+
+	for _, vu := range r.vus {
+		vu := vu
+
+		g.Go(func() error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				addr := vu.key.Address()
+
+				balance, err := r.clients.getClient().GetBalance(addr, jsonrpc.LatestBlockNumberOrHash)
+				if err != nil {
+					return err
+				}
+
+				refundAmount := balance.Sub(balance, big.NewInt(1e16))
+
+				feeData, err := getFeeData(r.clients.getClient(), false)
+				if err != nil {
+					return err
+				}
+
+				var tx *types.Transaction
+
+				if r.cfg.DynamicTxs {
+					tx = types.NewTx(types.NewDynamicFeeTx(
+						types.WithNonce(vu.nonce),
+						types.WithTo(&loadTestAddr),
+						types.WithFrom(addr),
+						types.WithGasFeeCap(feeData.gasFeeCap),
+						types.WithGasTipCap(feeData.gasTipCap),
+						types.WithChainID(chainID),
+						types.WithValue(refundAmount),
+					))
+				} else {
+					tx = types.NewTx(types.NewLegacyTx(
+						types.WithNonce(vu.nonce),
+						types.WithTo(&loadTestAddr),
+						types.WithGasPrice(feeData.gasPrice),
+						types.WithFrom(addr),
+						types.WithValue(refundAmount),
+					))
+				}
+
+				receipt, err := txRelayer.SendTransaction(tx, vu.key)
+				if err != nil {
+					return fmt.Errorf("failed to send transaction: %w", err)
+				}
+
+				if receipt == nil || receipt.Status != uint64(types.ReceiptSuccess) {
+					return fmt.Errorf("failed to tear down user %s", vu.key.Address().String())
+				}
+
+				_ = bar.Add(1)
+
+				return nil
+			}
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (r *BaseLoadTestRunner) printStateDBMetrics() {
 	fmt.Println("=============================================================")
 	fmt.Println("Getting state DB metrics...")

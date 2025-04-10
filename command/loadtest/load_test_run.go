@@ -152,6 +152,13 @@ func setFlags(cmd *cobra.Command) {
 		"the deadband of block numbers, that is used when checking whether all the nodes are on the same block number",
 	)
 
+	cmd.Flags().BoolVar(
+		&params.tearDown,
+		tearDownFlag,
+		false,
+		"indicates whether to tear down the load test",
+	)
+
 	_ = cmd.MarkFlagRequired(MnemonicFlag)
 	_ = cmd.MarkFlagRequired(loadTestTypeFlag)
 
@@ -182,6 +189,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 		TxPoolReadThreads:    params.txpoolReadThreads,
 		ReceiversNum:         params.receiversNum,
 		BlockNumberDeadband:  params.blockNumberDeadband,
+		TearDown:             params.tearDown,
 	})
 
 	if err != nil {

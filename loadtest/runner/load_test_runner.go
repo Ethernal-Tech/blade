@@ -77,6 +77,9 @@ type LoadTestConfig struct {
 
 	// BlockNumberDeadband is the maximum allowed discrepancy in the latest block numbers among the nodes
 	BlockNumberDeadband uint64
+
+	// Tear down for the load test
+	TearDown bool // TearDown indicates whether to tear down the load test.
 }
 
 // LoadTestRunner represents a runner for load tests.

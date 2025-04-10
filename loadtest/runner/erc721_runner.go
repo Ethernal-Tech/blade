@@ -113,6 +113,10 @@ func (e *ERC721Runner) Run(ctx context.Context) error {
 		return err
 	}
 
+	if err := e.tearDown(); err != nil {
+		return err
+	}
+
 	return e.printNodeInfos(nodeInfos)
 }
 

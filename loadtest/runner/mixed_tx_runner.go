@@ -138,6 +138,10 @@ func (m *MixedTxRunner) Run(ctx context.Context) error {
 		return err
 	}
 
+	if err := m.tearDown(); err != nil {
+		return err
+	}
+
 	return m.printNodeInfos(nodeInfos)
 }
 
