@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"path"
@@ -21,6 +22,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/Ethernal-Tech/ethgo"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 )
 
 // TestE2E_Bridge_NetworkFailureAndRestart is an end-to-end test for the bridge functionality
@@ -150,9 +152,7 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 		return nil
 	}
 
-	errChan := make(chan error, 1)
-
-	deployAndMint := func(relayer txrelayer.TxRelayer, erc20Addr *types.Address) {
+	deployAndMint := func(relayer txrelayer.TxRelayer, erc20Addr *types.Address) error {
 		// deploy erc20
 		deployTx := types.NewTx(types.NewLegacyTx(
 			types.WithTo(nil),
@@ -169,39 +169,33 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 		// mint erc20
 		for _, acc := range accountAddrs {
 			if err := mint(*erc20Addr, big.NewInt(bridgeAmount*2), acc, relayer); err != nil {
-				errChan <- err
-
-				return
+				return err
 			}
 		}
 
-		errChan <- nil
+		return nil
 	}
 
-	go deployAndMint(internalChainTxRelayer, &internalERC20Addr)
-	go deployAndMint(externalChainTxRelayer, &externalERC20Addr)
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	g, _ := errgroup.WithContext(timeoutCtx)
 
-	counter := 0
+	g.Go(func() error {
+		return deployAndMint(internalChainTxRelayer, &internalERC20Addr)
+	})
 
-loop:
-	for {
-		select {
-		case err := <-errChan:
-			require.NoError(t, err)
+	g.Go(func() error {
+		return deployAndMint(externalChainTxRelayer, &externalERC20Addr)
+	})
 
-			if counter++; counter == 2 {
-				break loop
-			}
-		case <-time.After(5 * time.Minute):
-			t.Fatal("timeout")
-
-			return
-		}
+	if err := g.Wait(); err != nil {
+		t.Fatalf("failed to deploy and mint ERC20: %v", err)
 	}
+
+	cancel()
 
 	t.Logf("Deployed ERC20 contracts & minted tokens")
 
-	runTest := func(erc20Addr, predicateAddr types.Address, rpcAddr string) {
+	runTest := func(erc20Addr, predicateAddr types.Address, rpcAddr string) error {
 		// deposit erc20
 		for i := range transfersCount {
 			if err := bridge.Deposit(
@@ -216,110 +210,90 @@ loop:
 				"",
 				false,
 			); err != nil {
-				errChan <- err
-
-				return
+				return err
 			}
 		}
-		errChan <- nil
+
+		return nil
 	}
 
-	go runTest(internalERC20Addr, bridgeCfg.InternalMintableERC20PredicateAddr, internalJSONRPCAddr)
-	go runTest(externalERC20Addr, bridgeCfg.ExternalERC20PredicateAddr, externalJSONRPCAddr)
+	// nolint:lostcancel
+	timeoutCtx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
+	g, _ = errgroup.WithContext(timeoutCtx)
 
-	counter = 0
+	g.Go(func() error {
+		return runTest(internalERC20Addr, bridgeCfg.InternalMintableERC20PredicateAddr, internalJSONRPCAddr)
+	})
 
-loop2:
-	for {
-		select {
-		case err := <-errChan:
-			require.NoError(t, err)
+	g.Go(func() error {
+		return runTest(externalERC20Addr, bridgeCfg.ExternalERC20PredicateAddr, externalJSONRPCAddr)
+	})
 
-			if counter++; counter == 2 {
-				break loop2
-			}
-
-		case <-time.After(5 * time.Minute):
-			t.Fatal("timeout")
-		}
+	if err := g.Wait(); err != nil {
+		t.Fatalf("failed to deposit ERC20: %v", err)
 	}
+
+	cancel()
 
 	t.Logf("Deposited ERC20 tokens")
 
-	// wait to reach threshold block
 	{
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
+		wg := sync.WaitGroup{}
+		wg.Add(validatorsCount)
 
-		timeout := time.After(5 * time.Minute)
+		// stop validators
+		for i := range validatorsCount {
+			go func(validatorNum int) {
+				defer wg.Done()
 
-		currentBlock, err := internalEndpoint.BlockNumber()
-		require.NoError(t, err)
+				t.Logf("Stopping validator %d", validatorNum)
 
-		t.Logf("Current start block: %d", currentBlock)
+				cluster.Servers[validatorNum].Stop()
+			}(i)
+		}
 
-		thresholdBlock := currentBlock + threshold
+		wg.Wait()
 
-	thresholdLoop:
-		for {
-			select {
-			case <-ticker.C:
-				block, err := internalEndpoint.BlockNumber()
-				require.NoError(t, err)
+		// wait to reach threshold block
+		block := waitForBlocksOnExternal(t, threshold, externalEndpoint, 3*time.Minute)
 
-				if block >= thresholdBlock {
-					t.Logf("Reached threshold block: %d", block)
+		t.Logf("Reached threshold block %d", block)
 
-					break thresholdLoop
-				}
-			case <-timeout:
-				t.Fatal("timeout")
-			}
+		wg.Add(validatorsCount)
+
+		// start validators
+		for i := range validatorsCount {
+			go func(validatorNum int) {
+				defer wg.Done()
+
+				t.Logf("Starting validator %d", validatorNum)
+
+				cluster.Servers[validatorNum].Start()
+			}(i)
 		}
 	}
 
-	wg := sync.WaitGroup{}
-	wg.Add(validatorsCount)
-
-	for i := range validatorsCount {
-		go func(validatorNum int) {
-			defer wg.Done()
-
-			t.Logf("Stopping validator %d", validatorNum)
-
-			cluster.Servers[validatorNum].Stop()
-			defer cluster.Servers[validatorNum].Start()
-
-			time.Sleep(5 * time.Second)
-		}(i)
-	}
-
-	wg.Wait()
-
-	// start relayer again
+	// start relayer
 	relayer.Start()
 
-	t.Logf("Restarted validators")
+	t.Logf("Restarted validators & relayer")
 
-	go runTest(internalERC20Addr, bridgeCfg.InternalMintableERC20PredicateAddr, internalJSONRPCAddr)
-	go runTest(externalERC20Addr, bridgeCfg.ExternalERC20PredicateAddr, externalJSONRPCAddr)
+	timeoutCtx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
+	g, _ = errgroup.WithContext(timeoutCtx)
 
-	counter = 0
+	g.Go(func() error {
+		return runTest(internalERC20Addr, bridgeCfg.InternalMintableERC20PredicateAddr, internalJSONRPCAddr)
+	})
 
-loop3:
-	for {
-		select {
-		case err := <-errChan:
-			require.NoError(t, err)
+	g.Go(func() error {
+		return runTest(externalERC20Addr, bridgeCfg.ExternalERC20PredicateAddr, externalJSONRPCAddr)
+	})
 
-			if counter++; counter == 2 {
-				break loop3
-			}
-
-		case <-time.After(5 * time.Minute):
-			t.Fatal("timeout")
-		}
+	if err := g.Wait(); err != nil {
+		t.Fatalf("failed to deposit ERC20 after validators restart: %v", err)
 	}
+
+	cancel()
 
 	t.Logf("Deposited ERC20 tokens after validators restart")
 
