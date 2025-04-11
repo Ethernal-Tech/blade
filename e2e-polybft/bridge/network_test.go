@@ -238,7 +238,7 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 
 	{
 		// wait for batch to be created
-		cluster.WaitUntil(3*time.Minute, 2*time.Second, func() bool {
+		require.NoError(t, cluster.WaitUntil(3*time.Minute, 2*time.Second, func() bool {
 			latest, err := internalEndpoint.BlockNumber()
 			require.NoError(t, err)
 
@@ -250,7 +250,7 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 			}
 
 			return true
-		})
+		}))
 
 		wg := sync.WaitGroup{}
 		wg.Add(validatorsCount)
