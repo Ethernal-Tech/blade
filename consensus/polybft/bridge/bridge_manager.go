@@ -1118,9 +1118,11 @@ func (b *bridgeEventManager) ProcessLog(
 				sid.Uint64(),
 				did.Uint64()))
 
-		err = b.state.insertUnexecutedBatch(b.externalChainID, baseHash, event.ID, dbTx)
-		if err != nil {
-			b.logger.Error("could not insert unexecuted batch", "err", err)
+		if sid.Uint64() == b.internalChainID {
+			err = b.state.insertUnexecutedBatch(b.externalChainID, baseHash, event.ID, dbTx)
+			if err != nil {
+				b.logger.Error("could not insert unexecuted batch", "err", err)
+			}
 		}
 
 	default:
