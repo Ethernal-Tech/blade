@@ -9,6 +9,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	systemstate "github.com/0xPolygon/polygon-edge/consensus/polybft/system_state"
 	"github.com/0xPolygon/polygon-edge/helper/common"
+	"github.com/0xPolygon/polygon-edge/types"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -21,6 +22,8 @@ var (
 	messageVotesBucket = []byte("votes")
 	// bucket to store epochs and all its nested buckets (message votes and message pool events)
 	epochsBucket = []byte("epochs")
+
+	unexecutedBatches = []byte("unexecuted")
 
 	ordinaryMessages = []byte("ordinary")
 	rollbackMessages = []byte("rollback")
@@ -67,7 +70,12 @@ func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, externalChainsIDs []uint6
 	store := &BridgeManagerStore{db: db, chainIDs: externalChainsIDs, internalChainID: internalChainID}
 
 	initFn := func(tx *bolt.Tx) error {
-		var bridgeMessageBucket, bridgeBatchesBucket, epochBucket *bolt.Bucket
+		var (
+			bridgeMessageBucket     *bolt.Bucket
+			bridgeBatchesBucket     *bolt.Bucket
+			epochBucket             *bolt.Bucket
+			unexecutedBatchesBucket *bolt.Bucket
+		)
 
 		if bridgeMessageBucket, err = tx.CreateBucketIfNotExists(bridgeMessageEventsBucket); err != nil {
 			return fmt.Errorf("failed to create bucket=%s: %w", string(bridgeMessageEventsBucket), err)
@@ -79,6 +87,10 @@ func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, externalChainsIDs []uint6
 
 		if epochBucket, err = tx.CreateBucketIfNotExists(epochsBucket); err != nil {
 			return fmt.Errorf("failed to create bucket=%s: %w", string(epochsBucket), err)
+		}
+
+		if unexecutedBatchesBucket, err = tx.CreateBucketIfNotExists(unexecutedBatches); err != nil {
+			return fmt.Errorf("failed to create bucket=%s: %w", string(unexecutedBatches), err)
 		}
 
 		// because we have multiple chains that can generate same events
@@ -125,6 +137,10 @@ func newBridgeManagerStore(db *bolt.DB, dbTx *bolt.Tx, externalChainsIDs []uint6
 			bridgeMessageChainIDBucket, err := createBucketsAndReturnBridgeMessageBucket(chainIDBytes)
 			if err != nil {
 				return err
+			}
+
+			if _, err = unexecutedBatchesBucket.CreateBucketIfNotExists(chainIDBytes); err != nil {
+				return fmt.Errorf("failed to create bucket for unexecuted batches: %w", err)
 			}
 
 			var buckets [2]*bolt.Bucket
@@ -200,7 +216,7 @@ func (bms *BridgeManagerStore) insertBridgeMessageEvent(event *contractsapi.Brid
 
 func (bms *BridgeManagerStore) removeBridgeMessageEvent(messageID, sourceChainID, destinationChainID *big.Int,
 	isRollback bool, dbTx *bolt.Tx) error {
-	insertFn := func(tx *bolt.Tx) error {
+	removeFn := func(tx *bolt.Tx) error {
 		id := common.EncodeUint64ToBytes(messageID.Uint64())
 
 		bucket := tx.Bucket(bridgeMessageEventsBucket).
@@ -215,10 +231,10 @@ func (bms *BridgeManagerStore) removeBridgeMessageEvent(messageID, sourceChainID
 	}
 
 	if dbTx == nil {
-		return bms.db.Update(insertFn)
+		return bms.db.Update(removeFn)
 	}
 
-	return insertFn(dbTx)
+	return removeFn(dbTx)
 }
 
 func (bms *BridgeManagerStore) getBridgeMessageEvent(messageID, sourceChainID, destinationChainID *big.Int,
@@ -333,6 +349,78 @@ func (bms *BridgeManagerStore) isBridgeMessageExecuted(message *contractsapi.Bri
 	}
 
 	return executed
+}
+
+func (bms *BridgeManagerStore) getUnexecutedBatches(
+	externalChainID uint64,
+	dbTx *bolt.Tx) ([]uint64, error) {
+	var ids []uint64
+
+	getFn := func(tx *bolt.Tx) error {
+		id := common.EncodeUint64ToBytes(externalChainID)
+
+		err := tx.Bucket(unexecutedBatches).Bucket(id).ForEach(func(k, v []byte) error {
+			var id uint64
+
+			if err := json.Unmarshal(v, &id); err != nil {
+				ids = nil
+
+				return err
+			}
+
+			ids = append(ids, id)
+
+			return nil
+		})
+
+		return err
+	}
+
+	if dbTx == nil {
+		return ids, bms.db.View(getFn)
+	} else {
+		return ids, getFn(dbTx)
+	}
+}
+
+func (bms *BridgeManagerStore) insertUnexecutedBatch(
+	externalChainID uint64,
+	baseHash types.Hash,
+	batchID *big.Int,
+	dbTx *bolt.Tx) error {
+	insertFn := func(tx *bolt.Tx) error {
+		raw, err := json.Marshal(batchID)
+		if err != nil {
+			return err
+		}
+
+		return tx.Bucket(unexecutedBatches).
+			Bucket(common.EncodeUint64ToBytes(externalChainID)).
+			Put(baseHash.Bytes(), raw)
+	}
+
+	if dbTx == nil {
+		return bms.db.Update(insertFn)
+	}
+
+	return insertFn(dbTx)
+}
+
+func (bms *BridgeManagerStore) removeUnexecutedBatch(
+	externalChainID uint64,
+	baseHash types.Hash,
+	dbTx *bolt.Tx) error {
+	removeFn := func(tx *bolt.Tx) error {
+		return tx.Bucket(unexecutedBatches).
+			Bucket(common.EncodeUint64ToBytes(externalChainID)).
+			Delete(baseHash.Bytes())
+	}
+
+	if dbTx == nil {
+		return bms.db.Update(removeFn)
+	}
+
+	return removeFn(dbTx)
 }
 
 func (bms *BridgeManagerStore) insertBridgeMessageResultEvent(result *contractsapi.BridgeMessageResultEvent,

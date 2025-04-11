@@ -121,7 +121,7 @@ func NewBridge(runtime Runtime,
 			topic:             bridgeTopic,
 			key:               runtimeConfig.Key,
 			maxNumberOfEvents: maxNumberOfBatchEvents,
-		}, runtime, relayer.Client(), externalChainID, internalChainID, blockchain)
+		}, runtime, relayer.Client(), externalChainID, internalChainID, blockchain, dbTx)
 		bridge.bridgeManagers[externalChainID] = bridgeManager
 
 		if err := bridgeManager.Start(runtimeConfig); err != nil {

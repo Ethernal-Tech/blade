@@ -26,7 +26,6 @@ import (
 	systemstate "github.com/0xPolygon/polygon-edge/consensus/polybft/system_state"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/validator"
 	"github.com/0xPolygon/polygon-edge/helper/common"
-	"github.com/0xPolygon/polygon-edge/jsonrpc"
 	"github.com/0xPolygon/polygon-edge/types"
 )
 
@@ -68,7 +67,7 @@ func newTestState(t *testing.T) *BridgeManagerStore {
 	return store
 }
 
-func newTestBridgeManager(t *testing.T, key *validator.TestValidator, runtime Runtime, jsonClient JSONRPCClient, blockchain blockchain.Blockchain) *bridgeEventManager {
+func newTestBridgeManager(t *testing.T, key *validator.TestValidator, runtime Runtime, tipProvider ChainTipProvider, blockchain blockchain.Blockchain) *bridgeEventManager {
 	t.Helper()
 
 	state := newTestState(t)
@@ -84,11 +83,11 @@ func newTestBridgeManager(t *testing.T, key *validator.TestValidator, runtime Ru
 			topic:             topic,
 			key:               key.Key(),
 			maxNumberOfEvents: maxNumberOfBatchEvents,
-		}, runtime, jsonClient, 1, 100, blockchain)
+		}, runtime, nil, 1, 100, blockchain, nil)
 
 	s.nextEventIDE2I = 1
 	s.nextEventIDI2E = 1
-	s.externalConfirmationDepth = big.NewInt(5)
+	s.externalTipProvider = tipProvider
 
 	return s
 }
@@ -395,6 +394,157 @@ func TestBridgeEventManager_RemoveProcessedEvents(t *testing.T) {
 	stateSyncEventsAfter, err := s.state.list(s.internalChainID)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(stateSyncEventsAfter))
+}
+
+func Test_restore_Unexecuted_and_Retry_Batches(t *testing.T) {
+	vals := validator.NewTestValidators(t, 5)
+
+	// The purpose of this test is to verify the correctness of restoring the unexecuted/retry
+	// list/maps. The test involves two batches, where one has exceeded its threshold while the
+	// other has not. When the restoreUnexecutedBatches method is called, both batches should
+	// be restored (i.e. added to the unexecuted list). Later, when the handleRetry method is
+	// invoked, the batch with the expired threshold should be moved to the retry maps.
+
+	bc := &blockchain.BlockchainMock{}
+	ss := &systemstate.SystemStateMock{}
+	tp := &mockChainTipProvider{}
+
+	msg1 := &contractsapi.BridgeMessage{
+		ID:                 big.NewInt(1),
+		SourceChainID:      big.NewInt(100),
+		DestinationChainID: big.NewInt(1),
+	}
+
+	msg2 := &contractsapi.BridgeMessage{
+		ID:                 big.NewInt(2),
+		SourceChainID:      big.NewInt(100),
+		DestinationChainID: big.NewInt(1),
+	}
+
+	msg3 := &contractsapi.BridgeMessage{
+		ID:                 big.NewInt(3),
+		SourceChainID:      big.NewInt(100),
+		DestinationChainID: big.NewInt(1),
+	}
+
+	bmb1 := &contractsapi.BridgeMessageBatch{
+		Messages:           []*contractsapi.BridgeMessage{msg1, msg2},
+		SourceChainID:      big.NewInt(100),
+		DestinationChainID: big.NewInt(1),
+		Threshold:          big.NewInt(100),
+		CommitCounter:      big.NewInt(1),
+	}
+
+	bmb2 := &contractsapi.BridgeMessageBatch{
+		Messages:           []*contractsapi.BridgeMessage{msg3},
+		SourceChainID:      big.NewInt(100),
+		DestinationChainID: big.NewInt(1),
+		Threshold:          big.NewInt(150),
+		CommitCounter:      big.NewInt(1),
+	}
+
+	bc.On("GetStateProviderForBlock", mock.Anything).Return(nil)
+	bc.On("CurrentHeader", mock.Anything).Return(&types.Header{})
+	bc.On("GetSystemState", mock.Anything).Return(ss)
+	ss.On("GetBridgeBatchByNumber", big.NewInt(20)).Return(
+		&contractsapi.SignedBridgeMessageBatch{Batch: bmb1})
+	ss.On("GetBridgeBatchByNumber", big.NewInt(30)).Return(
+		&contractsapi.SignedBridgeMessageBatch{Batch: bmb2})
+	ss.On("GetBatchCommitCounter", mock.Anything).Return(big.NewInt(2))
+	tp.On("GetLastProcessedBlock", mock.Anything).Return(uint64(120))
+
+	bm := newTestBridgeManager(t,
+		vals.GetValidator("0"),
+		&mockRuntime{isActiveValidator: false},
+		tp,
+		bc,
+	)
+
+	pbb1 := PendingBridgeBatch{
+		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
+			Messages:           []*contractsapi.BridgeMessage{msg1, msg2},
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+			Threshold:          big.NewInt(0),
+			CommitCounter:      big.NewInt(0),
+		},
+	}
+
+	baseHash1, err := pbb1.Hash()
+	require.NoError(t, err)
+
+	pbb1.BridgeMessageBatch = bmb1
+
+	fullHash1, err := pbb1.Hash()
+	require.NoError(t, err)
+
+	err = bm.state.insertUnexecutedBatch(1, baseHash1, big.NewInt(20), nil)
+	require.NoError(t, err)
+
+	require.Nil(t, bm.unexecutedBatches)
+
+	pbb2 := PendingBridgeBatch{
+		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
+			Messages:           []*contractsapi.BridgeMessage{msg3},
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+			Threshold:          big.NewInt(0),
+			CommitCounter:      big.NewInt(0),
+		},
+	}
+
+	baseHash2, err := pbb2.Hash()
+	require.NoError(t, err)
+
+	pbb2.BridgeMessageBatch = bmb2
+
+	fullHash2, err := pbb2.Hash()
+	require.NoError(t, err)
+
+	err = bm.state.insertUnexecutedBatch(1, baseHash2, big.NewInt(30), nil)
+	require.NoError(t, err)
+
+	require.Nil(t, bm.unexecutedBatches)
+
+	bm.restoreUnexecutedBatches(nil)
+
+	require.EqualValues(t, 2, len(bm.unexecutedBatches))
+	require.EqualValues(t, 0, len(bm.retryBatches))
+	require.EqualValues(t, 0, len(bm.pendingRetryBatches))
+
+	presentHash1, err := bm.unexecutedBatches[0].Hash()
+	require.NoError(t, err)
+
+	presentHash2, err := bm.unexecutedBatches[1].Hash()
+	require.NoError(t, err)
+
+	presentHashes := []types.Hash{presentHash1, presentHash2}
+
+	require.Contains(t, presentHashes, fullHash1)
+	require.Contains(t, presentHashes, fullHash2)
+
+	bm.handleRetry(ss, nil)
+
+	require.EqualValues(t, 1, len(bm.unexecutedBatches))
+	require.EqualValues(t, 1, len(bm.retryBatches))
+	require.EqualValues(t, 1, len(bm.pendingRetryBatches))
+
+	presentHash, err := bm.unexecutedBatches[0].Hash()
+	require.NoError(t, err)
+
+	require.EqualValues(t, fullHash2, presentHash)
+
+	_, ok := bm.retryBatches[baseHash1]
+	require.True(t, ok)
+
+	_, ok = bm.pendingRetryBatches[baseHash1]
+	require.True(t, ok)
+
+	_, ok = bm.retryBatches[baseHash2]
+	require.False(t, ok)
+
+	_, ok = bm.pendingRetryBatches[baseHash2]
+	require.False(t, ok)
 }
 
 func Test_handleBridgeMessageEvent(t *testing.T) {
@@ -2231,18 +2381,14 @@ func Test_handleRetry(t *testing.T) {
 
 	// Expected: the batch should not go into retry, as its threshold has not yet "expired".
 	t.Run("1", func(t *testing.T) {
-		client := &mockJSONRPCClient{}
+		tipProvider := &mockChainTipProvider{}
 
-		client.On("GetBlockByNumber", mock.Anything).Return(&types.Block{
-			Header: &types.Header{
-				Number: 100,
-			},
-		})
+		tipProvider.On("GetLastProcessedBlock", mock.Anything).Return(uint64(100), nil)
 
 		bm := newTestBridgeManager(t,
 			vals.GetValidator("0"),
 			&mockRuntime{isActiveValidator: false},
-			client,
+			tipProvider,
 			nil,
 		)
 
@@ -2263,23 +2409,18 @@ func Test_handleRetry(t *testing.T) {
 	})
 
 	// This test illustrates a scenario where the batch being checked has its threshold set at
-	// block 120, while the current block on the external chain is at 128.
+	// block 120, while the current block on the external chain is at 121.
 
-	// Expected: the batch should go into retry, as its threshold has "expired" (120 + 5 + 2 is
-	// smaller than 128).
+	// Expected: the batch should go into retry, as its threshold has "expired" (120 < 121).
 	t.Run("2", func(t *testing.T) {
-		client := &mockJSONRPCClient{}
+		tipProvider := &mockChainTipProvider{}
 
-		client.On("GetBlockByNumber", mock.Anything).Return(&types.Block{
-			Header: &types.Header{
-				Number: 128,
-			},
-		})
+		tipProvider.On("GetLastProcessedBlock", mock.Anything).Return(uint64(121), nil)
 
 		bm := newTestBridgeManager(t,
 			vals.GetValidator("0"),
 			&mockRuntime{isActiveValidator: false},
-			client,
+			tipProvider,
 			nil,
 		)
 
@@ -2513,14 +2654,14 @@ func (m *mockRuntime) IsActiveValidator() bool {
 	return m.isActiveValidator
 }
 
-type mockJSONRPCClient struct {
+type mockChainTipProvider struct {
 	mock.Mock
 }
 
-func (m *mockJSONRPCClient) GetBlockByNumber(num jsonrpc.BlockNumber, full bool) (*types.Block, error) {
-	block, _ := m.Called(num)[0].(*types.Block)
+func (m *mockChainTipProvider) GetLastProcessedBlock() (uint64, error) {
+	blockNumber, _ := m.Called()[0].(uint64)
 
-	return block, nil
+	return blockNumber, nil
 }
 
 var _ BridgeManager = (*mockBridgeManager)(nil)

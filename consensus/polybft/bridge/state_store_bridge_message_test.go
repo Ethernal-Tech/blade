@@ -858,6 +858,87 @@ func Test_getBridgeMessages(t *testing.T) {
 	})
 }
 
+func Test_getUnexecutedBatches(t *testing.T) {
+	s := newTestState(t)
+
+	b1 := PendingBridgeBatch{
+		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
+			Messages:           []*contractsapi.BridgeMessage{},
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+			Threshold:          big.NewInt(0),
+			CommitCounter:      big.NewInt(0),
+		},
+	}
+
+	h1, err := b1.Hash()
+	require.NoError(t, err)
+
+	b2 := PendingBridgeBatch{
+		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
+			Messages:           []*contractsapi.BridgeMessage{},
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(1),
+			Threshold:          big.NewInt(0),
+			CommitCounter:      big.NewInt(0),
+		},
+	}
+
+	h2, err := b2.Hash()
+	require.NoError(t, err)
+
+	b3 := PendingBridgeBatch{
+		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
+			Messages:           []*contractsapi.BridgeMessage{},
+			SourceChainID:      big.NewInt(100),
+			DestinationChainID: big.NewInt(2),
+			Threshold:          big.NewInt(1),
+			CommitCounter:      big.NewInt(400),
+		},
+	}
+
+	h3, err := b3.Hash()
+	require.NoError(t, err)
+
+	err = s.insertUnexecutedBatch(1, h1, big.NewInt(12), nil)
+	require.NoError(t, err)
+
+	ids, err := s.getUnexecutedBatches(1, nil)
+
+	require.NoError(t, err)
+	require.EqualValues(t, 1, len(ids))
+	require.EqualValues(t, 12, ids[0])
+
+	err = s.insertUnexecutedBatch(1, h2, big.NewInt(24), nil)
+	require.NoError(t, err)
+
+	ids, err = s.getUnexecutedBatches(1, nil)
+
+	require.NoError(t, err)
+	require.EqualValues(t, 1, len(ids))
+	require.EqualValues(t, 24, ids[0])
+
+	err = s.insertUnexecutedBatch(1, h3, big.NewInt(35), nil)
+	require.NoError(t, err)
+
+	ids, err = s.getUnexecutedBatches(1, nil)
+
+	require.NoError(t, err)
+	require.EqualValues(t, 2, len(ids))
+	require.EqualValues(t, 35, ids[0])
+	require.EqualValues(t, 24, ids[1])
+
+	err = s.removeUnexecutedBatch(1, h2, nil)
+
+	require.NoError(t, err)
+
+	ids, err = s.getUnexecutedBatches(1, nil)
+
+	require.NoError(t, err)
+	require.EqualValues(t, 1, len(ids))
+	require.EqualValues(t, 35, ids[0])
+}
+
 func insertTestBridgeBatches(t *testing.T, state *BridgeManagerStore, numberOfBatches uint64) {
 	t.Helper()
 
