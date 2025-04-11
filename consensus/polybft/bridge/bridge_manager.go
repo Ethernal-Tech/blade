@@ -741,15 +741,9 @@ func (b *bridgeEventManager) handleRetry(
 	// the current (i).
 	for i := 0; i < len(b.unexecutedBatches); {
 		// For each batch in the list, we check whether the number of the last processed block
-		// on the external chain is greater than (equals to) the batch threshold. If so, batch
-		// is ready for retry.
-		//
-		// Note: for a batch to be considered invalid on the external chain (external Gateway),
-		// the current chain block number must be greater than the batch threshold. However, as
-		// `blockNumber` represents the last PROCESSED block, we can use `>=` instead of `>` (as
-		// on the external Gateway SC). This is because if the threshold block has already been
-		// processed and the batch still remains in the list, it is ready for the retry.
-		if blockNumber >= b.unexecutedBatches[i].Threshold.Uint64() {
+		// on the external chain is greater than the batch threshold. If so, batch is ready for
+		// retry.
+		if blockNumber > b.unexecutedBatches[i].Threshold.Uint64() {
 			retryBatch := *b.unexecutedBatches[i]
 			retryBatch.Threshold = big.NewInt(0)
 			retryBatch.CommitCounter = big.NewInt(0)
