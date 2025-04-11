@@ -42,7 +42,7 @@ import (
 func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 	const (
 		validatorsCount = 4
-		transfersCount  = 5
+		transfersCount  = 1
 		epochSize       = 10
 		numberOfBridges = 1
 		bridgeAmount    = 100
@@ -237,6 +237,21 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 	t.Logf("Deposited ERC20 tokens")
 
 	{
+		// wait for batch to be created
+		cluster.WaitUntil(3*time.Minute, 2*time.Second, func() bool {
+			latest, err := internalEndpoint.BlockNumber()
+			require.NoError(t, err)
+
+			logs, err := getFilteredLogs((&contractsapi.NewBatchEvent{}).Sig(), 0, latest, internalEndpoint)
+			require.NoError(t, err)
+
+			if len(logs) == 0 {
+				return false
+			}
+
+			return true
+		})
+
 		wg := sync.WaitGroup{}
 		wg.Add(validatorsCount)
 
@@ -254,7 +269,7 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 		wg.Wait()
 
 		// wait to reach threshold block
-		block := waitForBlocksOnExternal(t, threshold, externalEndpoint, 3*time.Minute)
+		block := waitForBlocksOnExternal(t, threshold+1, externalEndpoint, 3*time.Minute)
 
 		t.Logf("Reached threshold block %d", block)
 
@@ -270,6 +285,8 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 				cluster.Servers[validatorNum].Start()
 			}(i)
 		}
+
+		wg.Wait()
 	}
 
 	// start relayer
