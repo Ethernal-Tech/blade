@@ -217,7 +217,6 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 		return nil
 	}
 
-	// nolint:lostcancel
 	timeoutCtx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
 	g, _ = errgroup.WithContext(timeoutCtx)
 
