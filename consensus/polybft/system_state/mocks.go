@@ -34,7 +34,7 @@ func (m *SystemStateMock) GetNextCommittedIndex(chainID uint64, chainType ChainT
 
 func (m *SystemStateMock) GetBridgeBatchByNumber(numberOfBatch *big.Int) (
 	*contractsapi.SignedBridgeMessageBatch, error) {
-	args := m.Called()
+	args := m.Called(numberOfBatch)
 	if len(args) == 1 {
 		batch, _ := args.Get(0).(*contractsapi.SignedBridgeMessageBatch)
 

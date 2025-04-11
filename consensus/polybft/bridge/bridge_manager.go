@@ -59,6 +59,10 @@ type JSONRPCClient interface {
 	GetBlockByNumber(jsonrpc.BlockNumber, bool) (*types.Block, error)
 }
 
+type ChainTipProvider interface {
+	GetLastProcessedBlock() (uint64, error)
+}
+
 // BridgeManager is an interface that defines functions for bridge workflow
 type BridgeManager interface {
 	state.EventSubscriber
@@ -132,9 +136,9 @@ type bridgeEventManager struct {
 	internalChainID         uint64
 	blockchain              polychain.Blockchain
 
-	runtime                   Runtime
-	tracker                   *tracker.EventTracker
-	externalConfirmationDepth *big.Int
+	runtime             Runtime
+	tracker             *tracker.EventTracker
+	externalTipProvider ChainTipProvider
 }
 
 // newBridgeManager creates a new instance of bridge event manager
@@ -144,8 +148,8 @@ func newBridgeManager(
 	config *bridgeEventManagerConfig,
 	runtime Runtime,
 	externalClient JSONRPCClient,
-	externalChainID, internalChainID uint64, blockchain polychain.Blockchain) *bridgeEventManager {
-	return &bridgeEventManager{
+	externalChainID, internalChainID uint64, blockchain polychain.Blockchain, dbTx *bolt.Tx) *bridgeEventManager {
+	bm := &bridgeEventManager{
 		logger:              logger,
 		state:               state,
 		config:              config,
@@ -156,6 +160,46 @@ func newBridgeManager(
 		externalChainID:     externalChainID,
 		internalChainID:     internalChainID,
 		blockchain:          blockchain,
+	}
+
+	bm.restoreUnexecutedBatches(dbTx)
+
+	return bm
+}
+
+// restoreUnexecutedBatches restores unexecuted batches (and indirectly retry batches).
+func (b *bridgeEventManager) restoreUnexecutedBatches(dbTx *bolt.Tx) {
+	ids, err := b.state.getUnexecutedBatches(b.externalChainID, dbTx)
+	if err != nil {
+		b.logger.Error("could not get unexecuted batches", "err", err)
+
+		return
+	}
+
+	if len(ids) == 0 {
+		return
+	}
+
+	provider, err := b.blockchain.GetStateProviderForBlock(b.blockchain.CurrentHeader())
+	if err != nil {
+		b.logger.Error("could not get state provider", "err", err)
+
+		return
+	}
+
+	ss := b.blockchain.GetSystemState(provider)
+	for _, ID := range ids {
+		batch, err := ss.GetBridgeBatchByNumber(big.NewInt(int64(ID)))
+		if err != nil {
+			b.logger.Error("could not get bridge batch", "err", err)
+
+			continue
+		}
+
+		// Since the batch has already been voted on, the specific epoch doesn't matter.
+		b.unexecutedBatches = append(b.unexecutedBatches, &PendingBridgeBatch{
+			BridgeMessageBatch: batch.Batch,
+		})
 	}
 }
 
@@ -171,7 +215,6 @@ func (b *bridgeEventManager) Start(runtimeConfig *config.Runtime) error {
 	}
 
 	b.tracker = tracker
-	b.externalConfirmationDepth = big.NewInt(int64(runtimeConfig.EventTracker.NumBlockConfirmations))
 
 	return nil
 }
@@ -192,6 +235,8 @@ func (b *bridgeEventManager) initTracker(runtimeCfg *config.Runtime) (*tracker.E
 	if err != nil {
 		return nil, err
 	}
+
+	b.externalTipProvider = store
 
 	eventTracker, err := tracker.NewEventTracker(
 		&tracker.EventTrackerConfig{
@@ -679,15 +724,13 @@ func (b *bridgeEventManager) buildBridgeBatch(
 func (b *bridgeEventManager) handleRetry(
 	sysState systemstate.SystemState,
 	dbTx *bolt.Tx) {
-	block, err := b.externalClient.GetBlockByNumber(jsonrpc.BlockNumber(ethgo.Latest), false)
+	blockNumber, err := b.externalTipProvider.GetLastProcessedBlock()
 	if err != nil {
 		// Log the error, but won't return because it might be just a temporary problem.
 		b.logger.Error("could not poll the block from the external chain", "err", err)
 
 		return
 	}
-
-	blockNumber := big.NewInt(int64(block.Header.Number))
 
 	b.lock.Lock()
 
@@ -697,15 +740,16 @@ func (b *bridgeEventManager) handleRetry(
 	// is successfully created, as the unexecuted list shrinks by one, making the next batch (i+1)
 	// the current (i).
 	for i := 0; i < len(b.unexecutedBatches); {
-		rt := big.NewInt(0).Add(b.unexecutedBatches[i].Threshold, b.externalConfirmationDepth)
-
-		// We add a random small number (salt) for extra security. This is not required.
-		rt.Add(rt, big.NewInt(2))
-
-		// For each batch from the unexecuted list, we check whether the number of the current
-		// block on the external chain is greater than (equal to) the batch threshold (including
-		// salt and potential reorganization). If so, batch is ready for retry.
-		if blockNumber.Cmp(rt) >= 0 {
+		// For each batch in the list, we check whether the number of the last processed block
+		// on the external chain is greater than (equals to) the batch threshold. If so, batch
+		// is ready for retry.
+		//
+		// Note: for a batch to be considered invalid on the external chain (external Gateway),
+		// the current chain block number must be greater than the batch threshold. However, as
+		// `blockNumber` represents the last PROCESSED block, we can use `>=` instead of `>` (as
+		// on the external Gateway SC). This is because if the threshold block has already been
+		// processed and the batch still remains in the list, it is ready for the retry.
+		if blockNumber >= b.unexecutedBatches[i].Threshold.Uint64() {
 			retryBatch := *b.unexecutedBatches[i]
 			retryBatch.Threshold = big.NewInt(0)
 			retryBatch.CommitCounter = big.NewInt(0)
@@ -758,7 +802,7 @@ func (b *bridgeEventManager) handleRetry(
 
 	// Creating a new retry candidate for each batch that is ready for the retry.
 	for hash := range b.retryBatches {
-		err = b.buildRetryBridgeBatch(hash, blockNumber.Uint64(), dbTx)
+		err = b.buildRetryBridgeBatch(hash, blockNumber, dbTx)
 		if err != nil {
 			b.logger.Error("could not create retry bridge batch", "err", err)
 		}
@@ -1074,6 +1118,11 @@ func (b *bridgeEventManager) ProcessLog(
 				sid.Uint64(),
 				did.Uint64()))
 
+		err = b.state.insertUnexecutedBatch(b.externalChainID, baseHash, event.ID, dbTx)
+		if err != nil {
+			b.logger.Error("could not insert unexecuted batch", "err", err)
+		}
+
 	default:
 		b.logger.Error("unknown bridge event")
 
@@ -1276,6 +1325,18 @@ func (b *bridgeEventManager) AddLog(
 				continue
 			}
 
+			b.unexecutedBatches[i].Threshold = big.NewInt(0)
+			b.unexecutedBatches[i].CommitCounter = big.NewInt(0)
+
+			baseHash, err := b.unexecutedBatches[i].Hash()
+			if err != nil {
+				b.logger.Error("could not calculate a base hash for the bridge batch", "err", err)
+
+				i++
+
+				continue
+			}
+
 			b.logger.Info(
 				fmt.Sprintf("Batch (0x%s, %d -> %d)"+
 					"has been successfully removed from the unexecuted list",
@@ -1284,6 +1345,11 @@ func (b *bridgeEventManager) AddLog(
 					b.unexecutedBatches[i].DestinationChainID.Uint64()))
 
 			b.unexecutedBatches = append(b.unexecutedBatches[:i], b.unexecutedBatches[i+1:]...)
+
+			err = b.state.removeUnexecutedBatch(b.externalChainID, baseHash, dbTx)
+			if err != nil {
+				b.logger.Error("could not insert unexecuted batch", "err", err)
+			}
 		}
 
 	default:
