@@ -210,6 +210,10 @@ func (p *PerfContractRunner) Run(ctx context.Context) error {
 		return err
 	}
 
+	if err := p.tearDown(); err != nil {
+		return err
+	}
+
 	return p.printNodeInfos(nodeInfos)
 }
 

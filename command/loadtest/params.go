@@ -33,6 +33,8 @@ const (
 	receiversNumFlag = "receivers-num"
 
 	blockNumberDeadbandFlag = "block-num-deadband"
+
+	tearDownFlag = "tear-down"
 )
 
 var (
@@ -75,6 +77,8 @@ type loadTestParams struct {
 	receiversNum int
 
 	blockNumberDeadband uint64
+
+	tearDown bool
 }
 
 func (ltp *loadTestParams) validateFlags() error {

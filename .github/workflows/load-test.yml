@@ -231,7 +231,7 @@ jobs:
       - name: Start Load Test
         id: load_test_results
         run: |
-          ./blade load-test --jsonrpc "http://${{ needs.check_network.outputs.rpc_url }}" --mnemonic "${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}" --name "results" --type ${{ inputs.type }} ${{ inputs.dynamic == true && '--dynamic' || '' }} --vus ${{ inputs.vus }} --txs-per-user ${{ inputs.txs_per_user }} --batch-size ${{ inputs.batch_size }} --txpool-timeout ${{ inputs.txpool_timeout }} ${{ inputs.wait_txpool == true && '--wait-txpool' || '' }} --receipts-timeout ${{ inputs.receipts_timeout }} --to-json
+          ./blade load-test --jsonrpc "http://${{ needs.check_network.outputs.rpc_url }}" --mnemonic "${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}" --name "results" --type ${{ inputs.type }} ${{ inputs.dynamic == true && '--dynamic' || '' }} --vus ${{ inputs.vus }} --txs-per-user ${{ inputs.txs_per_user }} --batch-size ${{ inputs.batch_size }} --txpool-timeout ${{ inputs.txpool_timeout }} ${{ inputs.wait_txpool == true && '--wait-txpool' || '' }} --receipts-timeout ${{ inputs.receipts_timeout }} --to-json ${{ inputs.environment == 'testnet' && '--tear-down' || ''}}
           echo "total_time=$(cat results_${{ inputs.type }}.json | jq -r '.totalTime')" >> $GITHUB_OUTPUT
           echo "total_txs=$(cat results_${{ inputs.type }}.json | jq -r '.totalTxs')" >> $GITHUB_OUTPUT
           echo "total_blocks=$(cat results_${{ inputs.type }}.json | jq -r '.totalBlocks')" >> $GITHUB_OUTPUT

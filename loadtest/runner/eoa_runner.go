@@ -99,6 +99,10 @@ func (e *EOARunner) Run(ctx context.Context) error {
 		return err
 	}
 
+	if err := e.tearDown(); err != nil {
+		return err
+	}
+
 	return e.printNodeInfos(nodeInfos)
 }
 
