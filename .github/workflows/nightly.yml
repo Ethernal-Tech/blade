@@ -3,7 +3,7 @@ name: Nightly Build
 on: # yamllint disable-line rule:truthy
   schedule:
     # * is a special character in YAML so you have to quote this string
-    - cron: '0 0 * * *'
+    - cron: "0 0 * * *"
   workflow_dispatch:
 
 jobs:
@@ -88,7 +88,8 @@ jobs:
   load_test_erc20:
     name: Load Test ERC20
     uses: ./.github/workflows/load-test.yml
-    needs: [deploy_network, availability_tests, sanity_check_tests, load_test_eoa]
+    needs:
+      [deploy_network, availability_tests, sanity_check_tests, load_test_eoa]
     with:
       environment: nightly
       type: ERC20
@@ -112,7 +113,14 @@ jobs:
   load_test_erc721:
     name: Load Test ERC721
     uses: ./.github/workflows/load-test.yml
-    needs: [deploy_network, availability_tests, sanity_check_tests, load_test_eoa, load_test_erc20]
+    needs:
+      [
+        deploy_network,
+        availability_tests,
+        sanity_check_tests,
+        load_test_eoa,
+        load_test_erc20,
+      ]
     with:
       environment: nightly
       type: ERC721
@@ -133,10 +141,43 @@ jobs:
       AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
       PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  load_test_erc1155:
+    name: Load Test ERC1155
+    uses: ./.github/workflows/load-test.yml
+    needs:
+      [deploy_network, availability_tests, sanity_check_tests, load_test_eoa]
+    with:
+      environment: nightly
+      type: ERC1155
+      dynamic: true
+      vus: "100"
+      txs_per_user: "10000"
+      txpool_timeout: "50m0s"
+      wait_txpool: true
+      receipts_timeout: "2m0s"
+      batch_size: "10000"
+      notification: false
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
+      AWS_LOADTESTRUNNER_AMI_ID: ${{ secrets.AWS_LOADTESTRUNNER_AMI_ID }}
+      AWS_LOADTESTRUNNER_SUBNET_ID: ${{ secrets.AWS_LOADTESTRUNNER_SUBNET_ID }}
+      AWS_LOADTESTRUNNER_SG_ID: ${{ secrets.AWS_LOADTESTRUNNER_SG_ID }}
+      AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
+      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   load_test_mixed:
     name: Load Test MIXED
     uses: ./.github/workflows/load-test.yml
-    needs: [deploy_network, availability_tests, sanity_check_tests, load_test_eoa, load_test_erc20, load_test_erc721]
+    needs:
+      [
+        deploy_network,
+        availability_tests,
+        sanity_check_tests,
+        load_test_eoa,
+        load_test_erc20,
+        load_test_erc721,
+      ]
     with:
       environment: nightly
       type: MIXED
@@ -160,7 +201,16 @@ jobs:
   destroy_network:
     name: Destroy Network
     uses: ./.github/workflows/destroy-network.yml
-    needs: [deploy_network, availability_tests, sanity_check_tests, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed]
+    needs:
+      [
+        deploy_network,
+        availability_tests,
+        sanity_check_tests,
+        load_test_eoa,
+        load_test_erc20,
+        load_test_erc721,
+        load_test_mixed,
+      ]
     if: always()
     with:
       environment: nightly
@@ -173,7 +223,18 @@ jobs:
   notification_nightly:
     name: Nightly Notification
     uses: ./.github/workflows/notification-nightly.yml
-    needs: [ci, deploy_network, availability_tests, sanity_check_tests, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed, destroy_network]
+    needs:
+      [
+        ci,
+        deploy_network,
+        availability_tests,
+        sanity_check_tests,
+        load_test_eoa,
+        load_test_erc20,
+        load_test_erc721,
+        load_test_mixed,
+        destroy_network,
+      ]
     if: success() || failure()
     with:
       environment: nightly
@@ -282,7 +343,13 @@ jobs:
   notification_load_test_erc721:
     name: Load Test ERC721 Notification
     uses: ./.github/workflows/notification-load-test.yml
-    needs: [load_test_erc721, notification_nightly, notification_load_test_eoa, notification_load_test_erc20]
+    needs:
+      [
+        load_test_erc721,
+        notification_nightly,
+        notification_load_test_eoa,
+        notification_load_test_erc20,
+      ]
     if: (always() && needs.load_test_erc721.outputs.load_test_output == 'true')
     with:
       environment: nightly
@@ -311,7 +378,14 @@ jobs:
   notification_load_test_mixed:
     name: Load Test MIXED Notification
     uses: ./.github/workflows/notification-load-test.yml
-    needs: [load_test_mixed, notification_nightly, notification_load_test_eoa, notification_load_test_erc20, notification_load_test_erc721]
+    needs:
+      [
+        load_test_mixed,
+        notification_nightly,
+        notification_load_test_eoa,
+        notification_load_test_erc20,
+        notification_load_test_erc721,
+      ]
     if: (always() && needs.load_test_mixed.outputs.load_test_output == 'true')
     with:
       environment: nightly
@@ -335,5 +409,42 @@ jobs:
       txpool_pending: ${{ needs.load_test_mixed.outputs.txpool_pending }}
       txpool_queued: ${{ needs.load_test_mixed.outputs.txpool_queued }}
       results_artifact_id: ${{ needs.load_test_mixed.outputs.results_artifact_id }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  notification_load_test_erc1155:
+    name: Load Test ERC1155 Notification
+    uses: ./.github/workflows/notification-load-test.yml
+    needs:
+      [
+        load_test_erc1155,
+        notification_nightly,
+        notification_load_test_eoa,
+        notification_load_test_erc20,
+        notification_load_test_erc721,
+        notification_load_test_mixed,
+      ]
+    if: (always() && needs.load_test_erc1155.outputs.load_test_output == 'true')
+    with:
+      environment: nightly
+      type: ERC1155
+      dynamic: true
+      vus: "100"
+      txs_per_user: "10000"
+      txpool_timeout: "50m0s"
+      wait_txpool: true
+      receipts_timeout: "2m0s"
+      batch_size: "10000"
+      total_time: ${{ needs.load_test_erc1155.outputs.total_time }}
+      total_txs: ${{ needs.load_test_erc1155.outputs.total_txs }}
+      total_blocks: ${{ needs.load_test_erc1155.outputs.total_blocks }}
+      avg_txs_per_second: ${{ needs.load_test_erc1155.outputs.avg_txs_per_second }}
+      max_txs_per_second: ${{ needs.load_test_erc1155.outputs.max_txs_per_second }}
+      total_gas_used: ${{ needs.load_test_erc1155.outputs.total_gas_used }}
+      avg_gas_per_tx: ${{ needs.load_test_erc1155.outputs.avg_gas_per_tx }}
+      avg_gas_utilization: ${{ needs.load_test_erc1155.outputs.avg_gas_utilization }}
+      max_gas_utilization: ${{ needs.load_test_erc1155.outputs.max_gas_utilization }}
+      txpool_pending: ${{ needs.load_test_erc1155.outputs.txpool_pending }}
+      txpool_queued: ${{ needs.load_test_erc1155.outputs.txpool_queued }}
+      results_artifact_id: ${{ needs.load_test_erc1155.outputs.results_artifact_id }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
