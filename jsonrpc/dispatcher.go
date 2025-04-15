@@ -391,15 +391,8 @@ func (d *Dispatcher) Handle(reqBody []byte) ([]byte, error) {
 	responses := make([]Response, 0)
 
 	for _, req := range requests {
-		var response, err = d.handleReq(req)
-		if err != nil {
-			errorResponse := NewRPCResponse(req.ID, "2.0", response, err)
-			responses = append(responses, errorResponse)
-
-			continue
-		}
-
-		resp := NewRPCResponse(req.ID, "2.0", response, nil)
+		response, err := d.handleReq(req)
+		resp := NewRPCResponse(req.ID, "2.0", response, err)
 		responses = append(responses, resp)
 	}
 
