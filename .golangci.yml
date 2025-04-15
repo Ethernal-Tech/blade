@@ -64,6 +64,9 @@ issues:
     - path: erc1155_runner\.go
       linters:
         - dupl
+    - path: erc20_runner\.go
+      linters:
+        - dupl
   include:
     - EXC0012 # Exported (.+) should have comment( \(or a comment on this block\))? or be unexported
     - EXC0013 # Package comment should be of the form "(.+)...
