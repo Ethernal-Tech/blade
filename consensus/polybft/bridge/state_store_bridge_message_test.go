@@ -2,7 +2,6 @@ package bridge
 
 import (
 	"bytes"
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -87,50 +86,6 @@ func TestState_getBridgeEventsForBridgeBatch(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, maxNumberOfBatchEvents, len(messages))
 	})
-}
-
-func TestState_getBridgeBatchForBridgeEvents(t *testing.T) {
-	const (
-		numOfBridgeBatches = 10
-	)
-
-	state := newTestState(t)
-
-	insertTestBridgeBatches(t, state, numOfBridgeBatches)
-
-	var cases = []struct {
-		bridgeMessageID uint64
-		hasBatch        bool
-	}{
-		{1, true},
-		{10, true},
-		{11, true},
-		{7, true},
-		{999, false},
-		{121, false},
-		{99, true},
-		{101, true},
-		{111, false},
-		{75, true},
-		{5, true},
-		{102, true},
-		{211, false},
-		{21, true},
-		{30, true},
-		{81, true},
-		{90, true},
-	}
-
-	for _, c := range cases {
-		signedBridgeBatch, err := state.getBridgeBatchForBridgeEvents(c.bridgeMessageID, 1)
-
-		if c.hasBatch {
-			require.NoError(t, err, fmt.Sprintf("bridge event %v", c.bridgeMessageID))
-			require.Equal(t, c.hasBatch, signedBridgeBatch.ContainsBridgeMessage(c.bridgeMessageID))
-		} else {
-			require.ErrorIs(t, errNoBridgeBatchForBridgeEvent, err)
-		}
-	}
 }
 
 func TestState_GetNestedBucketInEpoch(t *testing.T) {
@@ -937,13 +892,4 @@ func Test_getUnexecutedBatches(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 1, len(ids))
 	require.EqualValues(t, 35, ids[0])
-}
-
-func insertTestBridgeBatches(t *testing.T, state *BridgeManagerStore, numberOfBatches uint64) {
-	t.Helper()
-
-	for i := uint64(0); i <= numberOfBatches; i++ {
-		signedBridgeBatch := CreateTestBridgeBatchMessage(t, 10, 10*i)
-		require.NoError(t, state.insertBridgeBatchMessage(signedBridgeBatch, nil))
-	}
 }

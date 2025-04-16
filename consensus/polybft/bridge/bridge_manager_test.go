@@ -59,7 +59,7 @@ func newTestState(t *testing.T) *BridgeManagerStore {
 		chainIds = append(chainIds, i)
 	}
 
-	store, err := newBridgeManagerStore(db, nil, chainIds, 100)
+	store, err := newBridgeManagerStore(db, chainIds, 100, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2688,10 +2688,6 @@ func (*mockBridgeManager) PostBlock(req *oracle.PostBlockRequest) error {
 
 // PostEpoch implements BridgeManager.
 func (mbm *mockBridgeManager) PostEpoch(req *oracle.PostEpochRequest) error {
-	if err := mbm.state.insertEpoch(req.NewEpochID, req.DBTx, mbm.chainID); err != nil {
-		return err
-	}
-
 	return nil
 }
 
