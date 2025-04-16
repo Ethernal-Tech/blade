@@ -141,31 +141,6 @@ jobs:
       AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
       PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-  load_test_erc1155:
-    name: Load Test ERC1155
-    uses: ./.github/workflows/load-test.yml
-    needs:
-      [deploy_network, availability_tests, sanity_check_tests, load_test_eoa]
-    with:
-      environment: nightly
-      type: ERC1155
-      dynamic: true
-      vus: "100"
-      txs_per_user: "10000"
-      txpool_timeout: "50m0s"
-      wait_txpool: true
-      receipts_timeout: "2m0s"
-      batch_size: "10000"
-      notification: false
-    secrets:
-      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
-      AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
-      AWS_LOADTESTRUNNER_AMI_ID: ${{ secrets.AWS_LOADTESTRUNNER_AMI_ID }}
-      AWS_LOADTESTRUNNER_SUBNET_ID: ${{ secrets.AWS_LOADTESTRUNNER_SUBNET_ID }}
-      AWS_LOADTESTRUNNER_SG_ID: ${{ secrets.AWS_LOADTESTRUNNER_SG_ID }}
-      AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
-      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   load_test_mixed:
     name: Load Test MIXED
     uses: ./.github/workflows/load-test.yml
@@ -198,6 +173,39 @@ jobs:
       AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
       PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  load_test_erc1155:
+    name: Load Test ERC1155
+    uses: ./.github/workflows/load-test.yml
+    needs:
+      [
+        deploy_network,
+        availability_tests,
+        sanity_check_tests,
+        load_test_eoa,
+        load_test_erc20,
+        load_test_erc721,
+        load_test_mixed,
+      ]
+    with:
+      environment: nightly
+      type: ERC1155
+      dynamic: true
+      vus: "100"
+      txs_per_user: "10000"
+      txpool_timeout: "50m0s"
+      wait_txpool: true
+      receipts_timeout: "2m0s"
+      batch_size: "10000"
+      notification: false
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
+      AWS_LOADTESTRUNNER_AMI_ID: ${{ secrets.AWS_LOADTESTRUNNER_AMI_ID }}
+      AWS_LOADTESTRUNNER_SUBNET_ID: ${{ secrets.AWS_LOADTESTRUNNER_SUBNET_ID }}
+      AWS_LOADTESTRUNNER_SG_ID: ${{ secrets.AWS_LOADTESTRUNNER_SG_ID }}
+      AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
+      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   destroy_network:
     name: Destroy Network
     uses: ./.github/workflows/destroy-network.yml
@@ -210,6 +218,7 @@ jobs:
         load_test_erc20,
         load_test_erc721,
         load_test_mixed,
+        load_test_erc1155,
       ]
     if: always()
     with:
@@ -233,6 +242,7 @@ jobs:
         load_test_erc20,
         load_test_erc721,
         load_test_mixed,
+        load_test_erc1155,
         destroy_network,
       ]
     if: success() || failure()
