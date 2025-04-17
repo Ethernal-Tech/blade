@@ -229,7 +229,6 @@ func TestE2E_Bridge_ValidatorSync(t *testing.T) {
 //  5. Compares restarted validator with another active validator to ensure they are in sync and have identical state data.
 //
 // This test validates that validators can correctly resynchronize after being offline
-
 func TestE2E_Bridge_ValidatorSyncExecuted(t *testing.T) {
 	const (
 		transfersCount        = 5
@@ -452,7 +451,6 @@ func TestE2E_Bridge_ValidatorSyncExecuted(t *testing.T) {
 // 4. Starts the validator.
 // 5. Waits for the validator to synchronize.
 // 6. Ensures the validator syncs back correctly after restarting.
-
 func TestE2E_Bridge_ValidatorSyncRollback_E2I(t *testing.T) {
 	const (
 		transfersCount        = 5
@@ -598,7 +596,6 @@ func TestE2E_Bridge_ValidatorSyncRollback_E2I(t *testing.T) {
 // 4. Starts the validator.
 // 5. Waits for the validator to synchronize.
 // 6. Ensures the validator syncs back correctly after restarting.
-
 func TestE2E_Bridge_ValidatorSyncRollback_I2E(t *testing.T) {
 	const (
 		transfersCount   = uint64(5)
@@ -736,7 +733,6 @@ func TestE2E_Bridge_ValidatorSyncRollback_I2E(t *testing.T) {
 // 4. Starts the validator.
 // 5. Waits for the validator to synchronize.
 // 6. Ensures the validator syncs back correctly after restarting.
-
 func TestE2E_Bridge_ValidatorSyncRollbackExecuted_E2I(t *testing.T) {
 	const (
 		transfersCount        = 5
@@ -923,7 +919,6 @@ func TestE2E_Bridge_ValidatorSyncRollbackExecuted_E2I(t *testing.T) {
 // 4. Starts the validator.
 // 5. Waits for the validator to synchronize.
 // 6. Ensures the validator syncs back correctly after restarting
-
 func TestE2E_Bridge_ValidatorSyncRollbackExecuted_I2E(t *testing.T) {
 	const (
 		transfersCount   = uint64(5)

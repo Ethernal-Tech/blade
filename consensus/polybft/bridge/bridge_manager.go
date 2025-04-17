@@ -329,7 +329,7 @@ func (b *bridgeEventManager) saveVote(vote *BridgeBatchVote) error {
 
 	b.logger.Info(
 		"New vote for bridge batch saved",
-		"batch hash", hex.EncodeToString(vote.Hash),
+		"batch hash", fmt.Sprintf("0x%v", hex.EncodeToString(vote.Hash)),
 		"sender", vote.Sender,
 		"total number of votes for the batch", len(b.votes[types.Hash(vote.Hash)]),
 	)
