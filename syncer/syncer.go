@@ -47,14 +47,15 @@ func NewSyncer(
 	logger hclog.Logger,
 	network Network,
 	blockchain Blockchain,
+	txPool TxPool,
 	blockTimeout time.Duration,
 ) Syncer {
 	return &syncer{
 		logger:          logger.Named(syncerName),
 		blockchain:      blockchain,
 		syncProgression: progress.NewProgressionWrapper(progress.ChainSyncBulk),
-		syncPeerService: NewSyncPeerService(network, blockchain),
-		syncPeerClient:  NewSyncPeerClient(logger, network, blockchain),
+		syncPeerService: NewSyncPeerService(network, blockchain, txPool),
+		syncPeerClient:  NewSyncPeerClient(logger, network, blockchain, txPool),
 		blockTimeout:    blockTimeout,
 		newStatusCh:     make(chan struct{}),
 		peerMap:         new(PeerMap),

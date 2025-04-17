@@ -65,3 +65,15 @@ func (m *lookupMap) local() []*types.Transaction {
 
 	return txs
 }
+
+func (m *lookupMap) allTxs() []*types.Transaction {
+	m.RLock()
+	defer m.RUnlock()
+
+	txs := make([]*types.Transaction, len(m.all))
+	for _, tx := range m.all {
+		txs = append(txs, tx)
+	}
+
+	return txs
+}

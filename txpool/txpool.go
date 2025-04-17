@@ -1267,3 +1267,8 @@ func toHash(txs ...*types.Transaction) (hashes []types.Hash) {
 
 	return
 }
+
+// GetAllTxs returns pool transactions from lookup map
+func (p *TxPool) GetAllTxs() []*types.Transaction {
+	return p.index.allTxs()
+}

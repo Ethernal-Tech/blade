@@ -471,6 +471,7 @@ func (p *Polybft) Initialize() error {
 		p.config.Logger.Named("syncer"),
 		p.config.Network,
 		p.config.Blockchain,
+		p.config.TxPool,
 		time.Duration(p.config.BlockTime)*3*time.Second,
 	)
 

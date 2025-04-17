@@ -20,12 +20,14 @@ type syncPeerService struct {
 
 	blockchain Blockchain       // reference to the blockchain module
 	network    Network          // reference to the network module
+	txPool     TxPool           // reference to the txpool module
 	stream     *grpc.GrpcStream // reference to the grpc stream
 }
 
 func NewSyncPeerService(
 	network Network,
 	blockchain Blockchain,
+	txPool TxPool,
 ) SyncPeerService {
 	return &syncPeerService{
 		blockchain: blockchain,
@@ -89,6 +91,35 @@ func (s *syncPeerService) GetStatus(
 	return &proto.SyncPeerStatus{
 		Number: number,
 	}, nil
+}
+
+func (s *syncPeerService) GetTxPool(req *empty.Empty, stream proto.SyncPeer_GetTxPoolServer) error {
+	allTxs := s.txPool.GetAllTxs()
+
+	// max batch size is 10k
+	for i := range len(allTxs) / 10000 {
+		start := i * 10000
+		end := start + 10000
+
+		if end > len(allTxs) {
+			end = len(allTxs)
+		}
+
+		if err := sendTxPoolBatch(allTxs[start:end], stream); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func sendTxPoolBatch(txs types.Transactions, stream proto.SyncPeer_GetTxPoolServer) error {
+	txPool := &proto.Transactions{
+		Txs: txs.MarshalRLPTo(nil),
+	}
+
+	metrics.SetGauge([]string{syncerMetrics, "egress_bytes"}, float32(len(txPool.Txs)))
+	return stream.Send(txPool)
 }
 
 // toProtoBlock converts type.Block -> proto.Block

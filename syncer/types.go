@@ -59,6 +59,11 @@ type Network interface {
 	CloseProtocolStream(protocol string, peerID peer.ID) error
 }
 
+type TxPool interface {
+	GetAllTxs() []*types.Transaction
+	AddTx(tx *types.Transaction) error
+}
+
 type Syncer interface {
 	// Start starts syncer processes
 	Start() error
