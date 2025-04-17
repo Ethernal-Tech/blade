@@ -267,7 +267,7 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 			logs, err := getFilteredLogs((&contractsapi.NewBatchEvent{}).Sig(), 0, latest, internalEndpoint)
 			require.NoError(t, err)
 
-			if len(logs) < 2 {
+			if len(logs) < 4 {
 				return false
 			}
 
