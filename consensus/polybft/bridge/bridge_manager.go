@@ -321,16 +321,17 @@ func (b *bridgeEventManager) saveVote(vote *BridgeBatchVote) error {
 		return fmt.Errorf("error verifying vote signature: %w", err)
 	}
 
-	if b.votes[types.Hash(vote.Hash[:])] == nil {
-		b.votes[types.Hash(vote.Hash[:])] = make(map[string][]byte)
+	if b.votes[types.Hash(vote.Hash)] == nil {
+		b.votes[types.Hash(vote.Hash)] = make(map[string][]byte)
 	}
-	b.votes[types.Hash(vote.Hash[:])][vote.Sender] = vote.Signature
+
+	b.votes[types.Hash(vote.Hash)][vote.Sender] = vote.Signature
 
 	b.logger.Info(
 		"New vote for bridge batch saved",
 		"batch hash", hex.EncodeToString(vote.Hash),
 		"sender", vote.Sender,
-		"total number of votes for the batch", len(b.votes[types.Hash(vote.Hash[:])]),
+		"total number of votes for the batch", len(b.votes[types.Hash(vote.Hash)]),
 	)
 
 	return nil
@@ -343,6 +344,7 @@ func (b *bridgeEventManager) verifyVoteSignature(
 	vote *BridgeBatchVote) error {
 	signerAddr := types.StringToAddress(vote.Sender)
 	validator := valSet.Accounts().GetValidatorMetadata(signerAddr)
+
 	if validator == nil {
 		return fmt.Errorf("unable to resolve validator %s", signerAddr)
 	}
@@ -554,7 +556,7 @@ func (b *bridgeEventManager) PostBlock(req *oracle.PostBlockRequest) error {
 				"err", err)
 		}
 
-		b.handleRetry(sysState, req.DBTx)
+		b.handleRetry(sysState)
 	}
 
 	return nil
@@ -658,6 +660,7 @@ func (b *bridgeEventManager) buildBridgeBatch(
 	if b.votes[fullHash] == nil {
 		b.votes[fullHash] = make(map[string][]byte)
 	}
+
 	b.votes[fullHash][sig.Sender] = sig.Signature
 	b.lock.Unlock()
 
@@ -706,8 +709,7 @@ func (b *bridgeEventManager) buildBridgeBatch(
 // handleRetry handles the complete logic related to checking whether a batch is ready for retry,
 // as well as building and broadcasting retry candidates.
 func (b *bridgeEventManager) handleRetry(
-	sysState systemstate.SystemState,
-	dbTx *bolt.Tx) {
+	sysState systemstate.SystemState) {
 	blockNumber, err := b.externalTipProvider.GetLastProcessedBlock()
 	if err != nil {
 		// Log the error, but won't return because it might be just a temporary problem.
@@ -780,7 +782,7 @@ func (b *bridgeEventManager) handleRetry(
 
 	// Creating a new retry candidate for each batch that is ready for the retry.
 	for hash := range b.retryBatches {
-		err = b.buildRetryBridgeBatch(hash, blockNumber, dbTx)
+		err = b.buildRetryBridgeBatch(hash, blockNumber)
 		if err != nil {
 			b.logger.Error("could not create retry bridge batch", "err", err)
 		}
@@ -790,8 +792,7 @@ func (b *bridgeEventManager) handleRetry(
 // buildRetryBridgeBatch builds, signs, and multicasts a retry version of the batch.
 func (b *bridgeEventManager) buildRetryBridgeBatch(
 	baseHash types.Hash,
-	blockNumber uint64,
-	dbTx *bolt.Tx) error {
+	blockNumber uint64) error {
 	//
 	// Bulding a retry batch is actually based just on taking a retry template for the given
 	// batch and calculating a new threshold.
@@ -827,6 +828,7 @@ func (b *bridgeEventManager) buildRetryBridgeBatch(
 	if b.votes[hash] == nil {
 		b.votes[hash] = make(map[string][]byte)
 	}
+
 	b.votes[hash][b.config.key.String()] = signature
 	b.lock.Unlock()
 

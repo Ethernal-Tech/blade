@@ -81,27 +81,29 @@ var (
 	unexecutedBatches = []byte("unexecuted")
 )
 
-// BridgeBatchVoteConsensusData encapsulates sender identifier and its signature
+// BridgeBatchVoteConsensusData encapsulates sender identifier and its signature.
 type BridgeBatchVoteConsensusData struct {
-	// Signer of the vote
+	// Signer of the vote.
 	Sender string
-	// Signature of the message
+	// Signature of the message.
 	Signature []byte
 }
 
-// BridgeBatchVote represents the payload which is gossiped across the network
+// BridgeBatchVote represents the payload which is gossiped across the network.
 type BridgeBatchVote struct {
 	*BridgeBatchVoteConsensusData
-	// Hash is encoded data
+	// Hash represents the full hash of the bridge batch. This is the subject of the signing.
 	Hash []byte
-	// Number of epoch
+	// EpochNumber denotes the epoch in which the vote was produced.
 	EpochNumber uint64
-	// SourceChainID from bridge batch
+	// SourceChainID represents the ID of the originating chain.
 	SourceChainID uint64
-	// DestinationChainID from bridge batch
+	// DestinationChainID represents the ID of the destination chain.
 	DestinationChainID uint64
 }
 
+// BridgeManagerStore is a wrapper around boltDB that provides all the necessary methods for the
+// bridging "cold" storage logic.
 type BridgeManagerStore struct {
 	db               *bolt.DB
 	externalChainIDs []uint64
@@ -267,8 +269,9 @@ func (bms *BridgeManagerStore) beginDBTransaction(isWriteTx bool) (*bolt.Tx, err
 	return bms.db.Begin(isWriteTx)
 }
 
-// insertBridgeMessageEvent inserts a new bridge message event to state event bucket in db
-func (bms *BridgeManagerStore) insertBridgeMessageEvent(event *contractsapi.BridgeMsgEvent, isRollback bool,
+func (bms *BridgeManagerStore) insertBridgeMessageEvent(
+	event *contractsapi.BridgeMsgEvent,
+	isRollback bool,
 	dbTx *bolt.Tx) error {
 	insertFn := func(tx *bolt.Tx) error {
 		raw, err := json.Marshal(event)
@@ -281,10 +284,12 @@ func (bms *BridgeManagerStore) insertBridgeMessageEvent(event *contractsapi.Brid
 			Bucket(common.EncodeUint64ToBytes(event.DestinationChainID.Uint64()))
 
 		if isRollback {
-			return bucket.Bucket(rollbackMessages).Put(common.EncodeUint64ToBytes(event.ID.Uint64()), raw)
+			return bucket.Bucket(rollbackMessages).
+				Put(common.EncodeUint64ToBytes(event.ID.Uint64()), raw)
 		}
 
-		return bucket.Bucket(ordinaryMessages).Put(common.EncodeUint64ToBytes(event.ID.Uint64()), raw)
+		return bucket.Bucket(ordinaryMessages).
+			Put(common.EncodeUint64ToBytes(event.ID.Uint64()), raw)
 	}
 
 	if dbTx == nil {
@@ -294,8 +299,12 @@ func (bms *BridgeManagerStore) insertBridgeMessageEvent(event *contractsapi.Brid
 	return insertFn(dbTx)
 }
 
-func (bms *BridgeManagerStore) removeBridgeMessageEvent(messageID, sourceChainID, destinationChainID *big.Int,
-	isRollback bool, dbTx *bolt.Tx) error {
+func (bms *BridgeManagerStore) removeBridgeMessageEvent(
+	messageID,
+	sourceChainID,
+	destinationChainID *big.Int,
+	isRollback bool,
+	dbTx *bolt.Tx) error {
 	removeFn := func(tx *bolt.Tx) error {
 		id := common.EncodeUint64ToBytes(messageID.Uint64())
 
@@ -317,8 +326,12 @@ func (bms *BridgeManagerStore) removeBridgeMessageEvent(messageID, sourceChainID
 	return removeFn(dbTx)
 }
 
-func (bms *BridgeManagerStore) getBridgeMessageEvent(messageID, sourceChainID, destinationChainID *big.Int,
-	isRollback bool, dbTx *bolt.Tx) (*contractsapi.BridgeMsgEvent, error) {
+func (bms *BridgeManagerStore) getBridgeMessageEvent(
+	messageID,
+	sourceChainID,
+	destinationChainID *big.Int,
+	isRollback bool,
+	dbTx *bolt.Tx) (*contractsapi.BridgeMsgEvent, error) {
 	var message *contractsapi.BridgeMsgEvent
 
 	getFn := func(tx *bolt.Tx) error {
@@ -362,7 +375,9 @@ func (bms *BridgeManagerStore) getBridgeMessageEvent(messageID, sourceChainID, d
 	return message, nil
 }
 
-func (bms *BridgeManagerStore) isBridgeMessageKnown(message *contractsapi.BridgeMessage, dbTx *bolt.Tx) bool {
+func (bms *BridgeManagerStore) isBridgeMessageKnown(
+	message *contractsapi.BridgeMessage,
+	dbTx *bolt.Tx) bool {
 	var known bool
 
 	getFn := func(tx *bolt.Tx) error {
@@ -396,7 +411,9 @@ func (bms *BridgeManagerStore) isBridgeMessageKnown(message *contractsapi.Bridge
 	return known
 }
 
-func (bms *BridgeManagerStore) isBridgeMessageExecuted(message *contractsapi.BridgeMessage, dbTx *bolt.Tx) bool {
+func (bms *BridgeManagerStore) isBridgeMessageExecuted(
+	message *contractsapi.BridgeMessage,
+	dbTx *bolt.Tx) bool {
 	var executed bool
 
 	getFn := func(tx *bolt.Tx) error {
@@ -503,7 +520,8 @@ func (bms *BridgeManagerStore) removeUnexecutedBatch(
 	return removeFn(dbTx)
 }
 
-func (bms *BridgeManagerStore) insertBridgeMessageResultEvent(result *contractsapi.BridgeMessageResultEvent,
+func (bms *BridgeManagerStore) insertBridgeMessageResultEvent(
+	result *contractsapi.BridgeMessageResultEvent,
 	dbTx *bolt.Tx) error {
 	insertFn := func(tx *bolt.Tx) error {
 		raw, err := json.Marshal(result)
@@ -517,10 +535,12 @@ func (bms *BridgeManagerStore) insertBridgeMessageResultEvent(result *contractsa
 			Bucket(executedMessages)
 
 		if result.IsRollback {
-			return bucket.Bucket(rollbackMessages).Put(common.EncodeUint64ToBytes(result.ID.Uint64()), raw)
+			return bucket.Bucket(rollbackMessages).
+				Put(common.EncodeUint64ToBytes(result.ID.Uint64()), raw)
 		}
 
-		return bucket.Bucket(ordinaryMessages).Put(common.EncodeUint64ToBytes(result.ID.Uint64()), raw)
+		return bucket.Bucket(ordinaryMessages).
+			Put(common.EncodeUint64ToBytes(result.ID.Uint64()), raw)
 	}
 
 	if dbTx == nil {
@@ -530,7 +550,8 @@ func (bms *BridgeManagerStore) insertBridgeMessageResultEvent(result *contractsa
 	return insertFn(dbTx)
 }
 
-func (bms *BridgeManagerStore) getBridgeMessageResult(message *contractsapi.BridgeMessage,
+func (bms *BridgeManagerStore) getBridgeMessageResult(
+	message *contractsapi.BridgeMessage,
 	dbTx *bolt.Tx) (*contractsapi.BridgeMessageResultEvent, error) {
 	var result *contractsapi.BridgeMessageResultEvent
 
