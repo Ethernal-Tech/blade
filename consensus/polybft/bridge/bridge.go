@@ -96,7 +96,7 @@ func NewBridge(runtime Runtime,
 		chainIDs = append(chainIDs, chainID)
 	}
 
-	store, err := newBridgeManagerStore(state.DB(), dbTx, chainIDs, internalChainID)
+	store, err := newBridgeManagerStore(state.DB(), chainIDs, internalChainID, dbTx)
 	if err != nil {
 		return nil, fmt.Errorf("error creating bridge manager store, err: %w", err)
 	}
@@ -156,15 +156,6 @@ func (b *bridge) PostBlock(req *oracle.PostBlockRequest) error {
 // PostEpoch is a function executed on epoch ending / start of new epoch
 // and calls PostEpoch in each bridge manager
 func (b *bridge) PostEpoch(req *oracle.PostEpochRequest) error {
-	if err := b.state.cleanEpochsFromDB(req.DBTx); err != nil {
-		// we just log this, as it is not critical
-		b.logger.Error("error cleaning epochs from db", "err", err)
-	}
-
-	if err := b.state.insertEpoch(req.NewEpochID, req.DBTx, b.internalChainID); err != nil {
-		return fmt.Errorf("error inserting epoch to internal, err: %w", err)
-	}
-
 	for chainID, bridgeManager := range b.bridgeManagers {
 		if err := bridgeManager.PostEpoch(req); err != nil {
 			return fmt.Errorf("erorr bridge post epoch, chainID: %d, err: %w", chainID, err)

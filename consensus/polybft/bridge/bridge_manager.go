@@ -135,6 +135,7 @@ type bridgeEventManager struct {
 	externalChainID         uint64
 	internalChainID         uint64
 	blockchain              polychain.Blockchain
+	votes                   map[types.Hash]map[string][]byte
 
 	runtime             Runtime
 	tracker             *tracker.EventTracker
@@ -160,6 +161,7 @@ func newBridgeManager(
 		externalChainID:     externalChainID,
 		internalChainID:     internalChainID,
 		blockchain:          blockchain,
+		votes:               make(map[types.Hash]map[string][]byte),
 	}
 
 	bm.restoreUnexecutedBatches(dbTx)
@@ -290,82 +292,71 @@ func (b *bridgeEventManager) initTransport() error {
 	})
 }
 
-// saveVote saves the gotten vote to the boltDB for later quorum check and signature aggregation.
+// saveVotes checks the correctness of the vote, and if everything is fine, saves it.
 func (b *bridgeEventManager) saveVote(vote *BridgeBatchVote) error {
-	b.lock.RLock()
-	epoch := b.epoch
-	valSet := b.validatorSet
-	b.lock.RUnlock()
+	b.lock.Lock()
+	defer b.lock.Unlock()
 
-	if valSet == nil || vote.EpochNumber < epoch || vote.EpochNumber > epoch+1 {
-		// Epoch metadata is undefined or received a vote for the irrelevant epoch.
+	// Check if the validator set for the current epoch is known. If not, we cannot process the
+	// newly arrived vote.
+	if b.validatorSet == nil {
 		return nil
 	}
 
-	if !b.isRelevantChainID(vote.SourceChainID) || !b.isRelevantChainID(vote.DestinationChainID) {
-		// Vote is for irrelevant chain, skip it.
+	// We are only interested in votes from the epoch we are currently in.
+	if vote.EpochNumber != b.epoch {
 		return nil
 	}
 
-	if vote.EpochNumber == epoch+1 {
-		if err := b.state.insertEpoch(epoch+1, nil, vote.SourceChainID); err != nil {
-			return fmt.Errorf("error saving msg vote from a future epoch: %d. Error: %w", epoch+1, err)
-		}
+	// If the vote arrives for the bridge path (internal chain <-> external chain) that is not
+	// managed by this bridge manager, it should be immediately discarded (it will be processed
+	// by the appropriate manager).
+	if b.externalChainID != vote.SourceChainID &&
+		b.externalChainID != vote.DestinationChainID {
+		return nil
 	}
 
-	if err := b.verifyVoteSignature(valSet,
-		types.StringToAddress(vote.Sender), vote.Signature, vote.Hash); err != nil {
+	// Check if the signature is valid and if the signer is a validator in the current epoch.
+	if err := b.verifyVoteSignature(b.validatorSet, vote); err != nil {
 		return fmt.Errorf("error verifying vote signature: %w", err)
 	}
 
-	msgVote := &BridgeBatchVoteConsensusData{
-		Sender:    vote.Sender,
-		Signature: vote.Signature,
+	if b.votes[types.Hash(vote.Hash)] == nil {
+		b.votes[types.Hash(vote.Hash)] = make(map[string][]byte)
 	}
 
-	numSignatures, err := b.state.insertConsensusData(
-		vote.EpochNumber,
-		vote.Hash,
-		msgVote,
-		nil,
-		vote.SourceChainID)
-	if err != nil {
-		return fmt.Errorf("error inserting message vote: %w", err)
-	}
+	b.votes[types.Hash(vote.Hash)][vote.Sender] = vote.Signature
 
 	b.logger.Info(
-		"deliver message",
-		"hash", hex.EncodeToString(vote.Hash),
+		"New vote for bridge batch saved",
+		"batch hash", fmt.Sprintf("0x%v", hex.EncodeToString(vote.Hash)),
 		"sender", vote.Sender,
-		"signatures", numSignatures,
+		"total number of votes for the batch", len(b.votes[types.Hash(vote.Hash)]),
 	)
 
 	return nil
-}
-
-// isRelevantChainID checks whether internal or external chain id corresponds to the given chain ID.
-func (b *bridgeEventManager) isRelevantChainID(chainID uint64) bool {
-	return b.internalChainID == chainID || b.externalChainID == chainID
 }
 
 // verifyVoteSignature verifies signature of the message against the public key of the signer and
 // checks if the signer is a validator.
 func (b *bridgeEventManager) verifyVoteSignature(
 	valSet validator.ValidatorSet,
-	signerAddr types.Address,
-	signature []byte,
-	hash []byte) error {
+	vote *BridgeBatchVote) error {
+	signerAddr := types.StringToAddress(vote.Sender)
 	validator := valSet.Accounts().GetValidatorMetadata(signerAddr)
+
 	if validator == nil {
 		return fmt.Errorf("unable to resolve validator %s", signerAddr)
 	}
 
-	unmarshaledSignature, err := bls.UnmarshalSignature(signature)
+	unmarshaledSignature, err := bls.UnmarshalSignature(vote.Signature)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal signature from signer %s, %w", signerAddr.String(), err)
+		return fmt.Errorf("failed to unmarshal signature from signer %s, %w",
+			signerAddr.String(),
+			err)
 	}
 
-	if !unmarshaledSignature.Verify(validator.BlsKey, hash, signer.DomainBridge) {
+	if !unmarshaledSignature.Verify(validator.BlsKey, vote.Hash, signer.DomainBridge) {
 		return fmt.Errorf("incorrect signature from %s", signerAddr)
 	}
 
@@ -453,10 +444,11 @@ func (b *bridgeEventManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSign
 func (b *bridgeEventManager) getAggSignatureForBridgeBatch(
 	blockNumber uint64,
 	pendingBridgeBatch *PendingBridgeBatch) (polytypes.Signature, error) {
-	validatorSet := b.validatorSet
+	b.lock.Lock()
+	defer b.lock.Unlock()
 
-	validatorAddrToIndex := make(map[string]int, validatorSet.Len())
-	validatorsMetadata := validatorSet.Accounts()
+	validatorAddrToIndex := make(map[string]int, b.validatorSet.Len())
+	validatorsMetadata := b.validatorSet.Accounts()
 
 	for i, validator := range validatorsMetadata {
 		validatorAddrToIndex[validator.Address.String()] = i
@@ -467,13 +459,13 @@ func (b *bridgeEventManager) getAggSignatureForBridgeBatch(
 		return polytypes.Signature{}, err
 	}
 
-	// Get all the votes from the database for batch.
-	votes, err := b.state.getMessageVotes(
-		pendingBridgeBatch.Epoch,
-		bridgeBatchHash.Bytes(),
-		pendingBridgeBatch.BridgeMessageBatch.SourceChainID.Uint64())
-	if err != nil {
-		return polytypes.Signature{}, err
+	votes := []*BridgeBatchVoteConsensusData{}
+
+	for sender, signature := range b.votes[bridgeBatchHash] {
+		votes = append(votes, &BridgeBatchVoteConsensusData{
+			Sender:    sender,
+			Signature: signature,
+		})
 	}
 
 	var (
@@ -500,7 +492,7 @@ func (b *bridgeEventManager) getAggSignatureForBridgeBatch(
 		signers[types.StringToAddress(vote.Sender)] = struct{}{}
 	}
 
-	if !validatorSet.HasQuorum(blockNumber, signers) {
+	if !b.validatorSet.HasQuorum(blockNumber, signers) {
 		return polytypes.Signature{}, errQuorumNotReached
 	}
 
@@ -520,16 +512,6 @@ func (b *bridgeEventManager) getAggSignatureForBridgeBatch(
 // PostEpoch notifies the bridge event manager that an epoch has changed, so that it can discard
 // any previous epoch bridge batch, and build a new one (since validator set changed)
 func (b *bridgeEventManager) PostEpoch(req *oracle.PostEpochRequest) error {
-	if err := b.state.insertEpoch(req.NewEpochID, req.DBTx, b.externalChainID); err != nil {
-		return fmt.Errorf("an error occurred while inserting new epoch in db, chainID: %d. Reason: %w",
-			b.externalChainID, err)
-	}
-
-	if err := b.state.insertEpoch(req.NewEpochID, req.DBTx, b.internalChainID); err != nil {
-		return fmt.Errorf("an error occurred while inserting new epoch in db, chainID: %d. Reason: %w",
-			b.internalChainID, err)
-	}
-
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
@@ -537,6 +519,7 @@ func (b *bridgeEventManager) PostEpoch(req *oracle.PostEpochRequest) error {
 	b.pendingBridgeBatchesI2E = nil
 	b.validatorSet = req.ValidatorSet
 	b.epoch = req.NewEpochID
+	b.votes = make(map[types.Hash]map[string][]byte)
 
 	return nil
 }
@@ -573,7 +556,7 @@ func (b *bridgeEventManager) PostBlock(req *oracle.PostBlockRequest) error {
 				"err", err)
 		}
 
-		b.handleRetry(sysState, req.DBTx)
+		b.handleRetry(sysState)
 	}
 
 	return nil
@@ -673,9 +656,13 @@ func (b *bridgeEventManager) buildBridgeBatch(
 		Signature: signature,
 	}
 
-	if _, err = b.state.insertConsensusData(epoch, hashBytes, sig, dbTx, sourceChainID); err != nil {
-		return fmt.Errorf("could not insert signature for bridge batch. Error: %w", err)
+	b.lock.Lock()
+	if b.votes[fullHash] == nil {
+		b.votes[fullHash] = make(map[string][]byte)
 	}
+
+	b.votes[fullHash][sig.Sender] = sig.Signature
+	b.lock.Unlock()
 
 	b.multicast(&BridgeBatchVote{
 		Hash: hashBytes,
@@ -722,8 +709,7 @@ func (b *bridgeEventManager) buildBridgeBatch(
 // handleRetry handles the complete logic related to checking whether a batch is ready for retry,
 // as well as building and broadcasting retry candidates.
 func (b *bridgeEventManager) handleRetry(
-	sysState systemstate.SystemState,
-	dbTx *bolt.Tx) {
+	sysState systemstate.SystemState) {
 	blockNumber, err := b.externalTipProvider.GetLastProcessedBlock()
 	if err != nil {
 		// Log the error, but won't return because it might be just a temporary problem.
@@ -796,7 +782,7 @@ func (b *bridgeEventManager) handleRetry(
 
 	// Creating a new retry candidate for each batch that is ready for the retry.
 	for hash := range b.retryBatches {
-		err = b.buildRetryBridgeBatch(hash, blockNumber, dbTx)
+		err = b.buildRetryBridgeBatch(hash, blockNumber)
 		if err != nil {
 			b.logger.Error("could not create retry bridge batch", "err", err)
 		}
@@ -806,8 +792,7 @@ func (b *bridgeEventManager) handleRetry(
 // buildRetryBridgeBatch builds, signs, and multicasts a retry version of the batch.
 func (b *bridgeEventManager) buildRetryBridgeBatch(
 	baseHash types.Hash,
-	blockNumber uint64,
-	dbTx *bolt.Tx) error {
+	blockNumber uint64) error {
 	//
 	// Bulding a retry batch is actually based just on taking a retry template for the given
 	// batch and calculating a new threshold.
@@ -839,14 +824,13 @@ func (b *bridgeEventManager) buildRetryBridgeBatch(
 		return fmt.Errorf("could not create a signature for retry bridge batch. Error: %w", err)
 	}
 
-	sig := &BridgeBatchVoteConsensusData{
-		Sender:    b.config.key.String(),
-		Signature: signature,
+	b.lock.Lock()
+	if b.votes[hash] == nil {
+		b.votes[hash] = make(map[string][]byte)
 	}
 
-	if _, err = b.state.insertConsensusData(b.epoch, hashBytes, sig, dbTx, b.internalChainID); err != nil {
-		return fmt.Errorf("could not insert signature for retry bridge batch. Error: %w", err)
-	}
+	b.votes[hash][b.config.key.String()] = signature
+	b.lock.Unlock()
 
 	b.multicast(&BridgeBatchVote{
 		Hash: hashBytes,
@@ -1247,7 +1231,7 @@ func (b *bridgeEventManager) AddLog(
 
 	// It's important to first start (open) the bolt DB write transaction and only then lock the
 	// mutex. Otherwise, there is a possibility of a deadlock occurring.
-	dbTx, err := b.state.BeginDBTransaction(true)
+	dbTx, err := b.state.beginDBTransaction(true)
 	if err != nil {
 		return err
 	}

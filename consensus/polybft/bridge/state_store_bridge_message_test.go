@@ -1,188 +1,135 @@
 package bridge
 
 import (
-	"bytes"
-	"fmt"
 	"math/big"
 	"testing"
 
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	systemstate "github.com/0xPolygon/polygon-edge/consensus/polybft/system_state"
-	"github.com/0xPolygon/polygon-edge/types"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"go.etcd.io/bbolt"
 )
 
-func TestState_InsertEvent(t *testing.T) {
-	t.Parallel()
+func Test_BridgeMessageResult(t *testing.T) {
+	s := newTestState(t)
 
-	state := newTestState(t)
-	event := &contractsapi.BridgeMsgEvent{
-		ID:                 big.NewInt(1),
-		Sender:             types.Address{},
-		Receiver:           types.Address{},
-		Data:               []byte{},
+	// This test checks the correctness of the following BridgeManagerStore methods:
+	// 1. (*BridgeManagerStore).insertBridgeMessageResultEvent
+	// 2. (*BridgeManagerStore).getBridgeMessageResult
+	// 3. (*BridgeManagerStore).isBridgeMessageExecuted
+
+	ordinaryMessage := &contractsapi.BridgeMessage{
+		ID:                 big.NewInt(20),
 		SourceChainID:      big.NewInt(100),
 		DestinationChainID: big.NewInt(1),
+		IsRollback:         false,
 	}
 
-	err := state.insertBridgeMessageEvent(event, false, nil)
-	assert.NoError(t, err)
+	rollbackMessage := &contractsapi.BridgeMessage{
+		ID:                 big.NewInt(80),
+		SourceChainID:      big.NewInt(100),
+		DestinationChainID: big.NewInt(1),
+		IsRollback:         true,
+	}
 
-	events, err := state.list(100)
-	assert.NoError(t, err)
-	assert.Len(t, events, 1)
+	ordinaryResult := &contractsapi.BridgeMessageResultEvent{
+		ID:                 big.NewInt(20),
+		SourceChainID:      big.NewInt(100),
+		DestinationChainID: big.NewInt(1),
+		IsRollback:         false,
+	}
+
+	rollbackResult := &contractsapi.BridgeMessageResultEvent{
+		ID:                 big.NewInt(80),
+		SourceChainID:      big.NewInt(100),
+		DestinationChainID: big.NewInt(1),
+		IsRollback:         true,
+	}
+
+	require.NoError(t, s.insertBridgeMessageResultEvent(ordinaryResult, nil))
+	require.NoError(t, s.insertBridgeMessageResultEvent(rollbackResult, nil))
+
+	res, err := s.getBridgeMessageResult(ordinaryMessage, nil)
+	require.NoError(t, err)
+	require.EqualValues(t, big.NewInt(20), res.ID)
+	require.False(t, res.IsRollback)
+	require.True(t, s.isBridgeMessageExecuted(ordinaryMessage, nil))
+
+	res, err = s.getBridgeMessageResult(rollbackMessage, nil)
+	require.NoError(t, err)
+	require.EqualValues(t, big.NewInt(80), res.ID)
+	require.True(t, res.IsRollback)
+	require.True(t, s.isBridgeMessageExecuted(rollbackMessage, nil))
+
+	require.False(t, s.isBridgeMessageExecuted(&contractsapi.BridgeMessage{
+		ID:                 big.NewInt(1),
+		SourceChainID:      big.NewInt(100),
+		DestinationChainID: big.NewInt(1),
+		IsRollback:         true,
+	}, nil))
+
+	require.False(t, s.isBridgeMessageExecuted(&contractsapi.BridgeMessage{
+		ID:                 big.NewInt(1),
+		SourceChainID:      big.NewInt(100),
+		DestinationChainID: big.NewInt(1),
+		IsRollback:         false,
+	}, nil))
 }
 
-func TestState_Insert_And_Get_MessageVotes(t *testing.T) {
-	t.Parallel()
+func Test_BridgeMessageEvent(t *testing.T) {
+	s := newTestState(t)
 
-	state := newTestState(t)
-	epoch := uint64(1)
-	assert.NoError(t, state.insertEpoch(epoch, nil, 0))
+	// This test checks the correctness of the following BridgeManagerStore methods:
+	// 1. (*BridgeManagerStore).insertBridgeMessageEvent
+	// 2. (*BridgeManagerStore).getBridgeMessageEvent
+	// 3. (*BridgeManagerStore).removeBridgeMessageEvent
+	// 4. (*BridgeManagerStore).isBridgeMessageKnown
 
-	hash := []byte{1, 2}
-	_, err := state.insertConsensusData(1, hash, &BridgeBatchVoteConsensusData{
-		Sender:    "NODE_1",
-		Signature: []byte{1, 2},
-	}, nil, 0)
+	sid := big.NewInt(100)
+	did := big.NewInt(1)
 
-	assert.NoError(t, err)
-
-	votes, err := state.getMessageVotes(epoch, hash, 0)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(votes))
-	assert.Equal(t, "NODE_1", votes[0].Sender)
-	assert.True(t, bytes.Equal([]byte{1, 2}, votes[0].Signature))
-}
-
-func TestState_getBridgeEventsForBridgeBatch(t *testing.T) {
-	t.Parallel()
-
-	state := newTestState(t)
-
-	for i := 1; i <= maxNumberOfBatchEvents; i++ {
-		assert.NoError(t, state.insertBridgeMessageEvent(&contractsapi.BridgeMsgEvent{
-			ID:                 big.NewInt(int64(i)),
-			Data:               []byte{1, 2},
-			SourceChainID:      big.NewInt(100),
-			DestinationChainID: big.NewInt(1),
-		}, false, nil))
+	ordinaryEvent := &contractsapi.BridgeMsgEvent{
+		ID:                 big.NewInt(20),
+		SourceChainID:      sid,
+		DestinationChainID: did,
 	}
 
-	t.Run("Return all - forced. Enough messages", func(t *testing.T) {
-		t.Parallel()
-
-		messages, _, err := state.getBridgeMessages(1, maxNumberOfBatchEvents, 100, 1, nil, nil)
-		require.NoError(t, err)
-		require.Equal(t, maxNumberOfBatchEvents, len(messages))
-	})
-
-	t.Run("Return all - forced. Not enough messages", func(t *testing.T) {
-		t.Parallel()
-
-		messages, _, err := state.getBridgeMessages(1, 30, 100, 1, nil, nil)
-		require.NoError(t, err)
-		require.Equal(t, maxNumberOfBatchEvents, len(messages))
-	})
-}
-
-func TestState_getBridgeBatchForBridgeEvents(t *testing.T) {
-	const (
-		numOfBridgeBatches = 10
-	)
-
-	state := newTestState(t)
-
-	insertTestBridgeBatches(t, state, numOfBridgeBatches)
-
-	var cases = []struct {
-		bridgeMessageID uint64
-		hasBatch        bool
-	}{
-		{1, true},
-		{10, true},
-		{11, true},
-		{7, true},
-		{999, false},
-		{121, false},
-		{99, true},
-		{101, true},
-		{111, false},
-		{75, true},
-		{5, true},
-		{102, true},
-		{211, false},
-		{21, true},
-		{30, true},
-		{81, true},
-		{90, true},
+	rollbackEvent := &contractsapi.BridgeMsgEvent{
+		ID:                 big.NewInt(80),
+		SourceChainID:      sid,
+		DestinationChainID: did,
 	}
 
-	for _, c := range cases {
-		signedBridgeBatch, err := state.getBridgeBatchForBridgeEvents(c.bridgeMessageID, 1)
-
-		if c.hasBatch {
-			require.NoError(t, err, fmt.Sprintf("bridge event %v", c.bridgeMessageID))
-			require.Equal(t, c.hasBatch, signedBridgeBatch.ContainsBridgeMessage(c.bridgeMessageID))
-		} else {
-			require.ErrorIs(t, errNoBridgeBatchForBridgeEvent, err)
-		}
-	}
-}
-
-func TestState_GetNestedBucketInEpoch(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name        string
-		epochNumber uint64
-		bucketName  []byte
-		errMsg      string
-	}{
-		{
-			name:        "Not existing inner bucket",
-			epochNumber: 3,
-			bucketName:  []byte("Foo"),
-			errMsg:      "could not find Foo bucket for epoch: 3",
-		},
-		{
-			name:        "Happy path",
-			epochNumber: 5,
-			bucketName:  messageVotesBucket,
-			errMsg:      "",
-		},
+	ordinaryMessage := &contractsapi.BridgeMessage{
+		ID:                 big.NewInt(20),
+		SourceChainID:      sid,
+		DestinationChainID: did,
+		IsRollback:         false,
 	}
 
-	for _, c := range cases {
-		c := c
-		t.Run(c.name, func(t *testing.T) {
-			t.Parallel()
-
-			var (
-				nestedBucket *bbolt.Bucket
-				err          error
-			)
-
-			s := newTestState(t)
-			require.NoError(t, s.insertEpoch(c.epochNumber, nil, 0))
-
-			err = s.db.View(func(tx *bbolt.Tx) error {
-				nestedBucket, err = getNestedBucketInEpoch(tx, c.epochNumber, c.bucketName, 0)
-
-				return err
-			})
-			if c.errMsg != "" {
-				require.ErrorContains(t, err, c.errMsg)
-				require.Nil(t, nestedBucket)
-			} else {
-				require.NoError(t, err)
-				require.NotNil(t, nestedBucket)
-			}
-		})
+	rollbackMessage := &contractsapi.BridgeMessage{
+		ID:                 big.NewInt(80),
+		SourceChainID:      sid,
+		DestinationChainID: did,
+		IsRollback:         true,
 	}
+
+	require.NoError(t, s.insertBridgeMessageEvent(ordinaryEvent, false, nil))
+	require.NoError(t, s.insertBridgeMessageEvent(rollbackEvent, true, nil))
+
+	res, err := s.getBridgeMessageEvent(big.NewInt(20), sid, did, false, nil)
+	require.NoError(t, err)
+	require.EqualValues(t, big.NewInt(20), res.ID)
+	require.True(t, s.isBridgeMessageKnown(ordinaryMessage, nil))
+	require.NoError(t, s.removeBridgeMessageEvent(big.NewInt(20), sid, did, false, nil))
+	require.False(t, s.isBridgeMessageKnown(ordinaryMessage, nil))
+
+	res, err = s.getBridgeMessageEvent(big.NewInt(80), sid, did, true, nil)
+	require.NoError(t, err)
+	require.EqualValues(t, big.NewInt(80), res.ID)
+	require.True(t, s.isBridgeMessageKnown(rollbackMessage, nil))
+	require.NoError(t, s.removeBridgeMessageEvent(big.NewInt(80), sid, did, true, nil))
+	require.False(t, s.isBridgeMessageKnown(rollbackMessage, nil))
 }
 
 func Test_getBridgeMessages(t *testing.T) {
@@ -858,8 +805,13 @@ func Test_getBridgeMessages(t *testing.T) {
 	})
 }
 
-func Test_getUnexecutedBatches(t *testing.T) {
+func Test_UnexecutedBatches(t *testing.T) {
 	s := newTestState(t)
+
+	// This test checks the correctness of the following BridgeManagerStore methods:
+	// 1. (*BridgeManagerStore).insertUnexecutedBatch
+	// 2. (*BridgeManagerStore).getUnexecutedBatches
+	// 3. (*BridgeManagerStore).removeUnexecutedBatch
 
 	b1 := PendingBridgeBatch{
 		BridgeMessageBatch: &contractsapi.BridgeMessageBatch{
@@ -937,13 +889,4 @@ func Test_getUnexecutedBatches(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 1, len(ids))
 	require.EqualValues(t, 35, ids[0])
-}
-
-func insertTestBridgeBatches(t *testing.T, state *BridgeManagerStore, numberOfBatches uint64) {
-	t.Helper()
-
-	for i := uint64(0); i <= numberOfBatches; i++ {
-		signedBridgeBatch := CreateTestBridgeBatchMessage(t, 10, 10*i)
-		require.NoError(t, state.insertBridgeBatchMessage(signedBridgeBatch, nil))
-	}
 }

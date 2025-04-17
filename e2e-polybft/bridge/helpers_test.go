@@ -299,8 +299,8 @@ func compareBucketsFromDBs(t *testing.T, db1, db2 *bbolt.DB, sourceChainID, dest
 	// Open read transactions for both databases
 	require.NoError(t, db1.View(func(tx1 *bbolt.Tx) error {
 		require.NoError(t, db2.View(func(tx2 *bbolt.Tx) error {
-			bridgeMessageBucket1 := tx1.Bucket([]byte("bridgeMessageEvents"))
-			bridgeMessageBucket2 := tx2.Bucket([]byte("bridgeMessageEvents"))
+			bridgeMessageBucket1 := tx1.Bucket([]byte("bridgeMessages"))
+			bridgeMessageBucket2 := tx2.Bucket([]byte("bridgeMessages"))
 
 			if bridgeMessageBucket1 == nil || bridgeMessageBucket2 == nil {
 				return fmt.Errorf("bridge message events bucket does not exist")

@@ -59,7 +59,7 @@ func newTestState(t *testing.T) *BridgeManagerStore {
 		chainIds = append(chainIds, i)
 	}
 
-	store, err := newBridgeManagerStore(db, nil, chainIds, 100)
+	store, err := newBridgeManagerStore(db, chainIds, 100, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,11 +67,15 @@ func newTestState(t *testing.T) *BridgeManagerStore {
 	return store
 }
 
-func newTestBridgeManager(t *testing.T, key *validator.TestValidator, runtime Runtime, tipProvider ChainTipProvider, blockchain blockchain.Blockchain) *bridgeEventManager {
+func newTestBridgeManager(
+	t *testing.T,
+	key *validator.TestValidator,
+	runtime Runtime,
+	tipProvider ChainTipProvider,
+	blockchain blockchain.Blockchain) *bridgeEventManager {
 	t.Helper()
 
 	state := newTestState(t)
-	require.NoError(t, state.insertEpoch(0, nil, 1))
 
 	topic := &mockTopic{}
 
@@ -153,144 +157,193 @@ func TestBridgeEventManager_PostEpoch_BuildBridgeBatch(t *testing.T) {
 	})
 }
 
-func TestBridgeEventManager_MessagePool(t *testing.T) {
-	t.Parallel()
-
+//nolint:tparallel
+func Test_saveVote(t *testing.T) {
 	vals := validator.NewTestValidators(t, 5)
 
 	blockchain := new(blockchain.BlockchainMock)
 	blockchain.On("CurrentHeader").Return(&types.Header{Number: 10})
 
-	t.Run("Old epoch", func(t *testing.T) {
+	// This test illustrates a scenario where votes from epochs different from the current epoch
+	// arrive in the system.
+	//
+	// Expected: the votes should be rejected, i.e., the vote count should remain 0.
+	t.Run("1", func(t *testing.T) {
 		t.Parallel()
 
-		s := newTestBridgeManager(t, vals.GetValidator("0"), &mockRuntime{isActiveValidator: true}, nil, nil)
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			nil,
+			nil)
 
-		s.epoch = 1
+		bm.validatorSet = vals.ToValidatorSet()
+
+		bm.epoch = 2
 		msg := &BridgeBatchVote{
-			EpochNumber: 0,
+			EpochNumber: 3,
 		}
 
-		err := s.saveVote(msg)
+		err := bm.saveVote(msg)
+
 		require.NoError(t, err)
+
+		bm.epoch = 2
+		msg = &BridgeBatchVote{
+			EpochNumber: 1,
+		}
+
+		err = bm.saveVote(msg)
+
+		require.NoError(t, err)
+
+		require.Len(t, bm.votes, 0)
 	})
 
-	t.Run("Sender is not a validator", func(t *testing.T) {
+	// This test illustrates a scenario where a vote arrives from a non-validator.
+	//
+	// Expected: the vote should be rejected, i.e., the vote count should remain 0.
+	t.Run("2", func(t *testing.T) {
 		t.Parallel()
 
-		s := newTestBridgeManager(t, vals.GetValidator("0"), &mockRuntime{isActiveValidator: true}, nil, nil)
-		s.validatorSet = vals.ToValidatorSet()
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			nil,
+			nil)
 
-		badVal := validator.NewTestValidator(t, "a", 0)
-		msg, err := newMockMsg().sign(badVal, signer.DomainBridge)
+		bm.validatorSet = vals.ToValidatorSet()
+
+		badValidator := validator.NewTestValidator(t, "a", 0)
+		msg, err := newMockMsg().sign(badValidator, signer.DomainBridge)
 		require.NoError(t, err)
 
 		msg.SourceChainID = 1
-		msg.DestinationChainID = 100
 
-		require.Error(t, s.saveVote(msg))
+		require.Error(t, bm.saveVote(msg))
 	})
 
-	t.Run("Invalid epoch", func(t *testing.T) {
+	// This test illustrates a scenario where a vote is sent by a validator, but the signature
+	// is invalid.
+	//
+	// Expected: the vote should be rejected, i.e., the vote count should remain 0.
+	t.Run("3", func(t *testing.T) {
 		t.Parallel()
 
-		s := newTestBridgeManager(t, vals.GetValidator("0"), &mockRuntime{isActiveValidator: true}, nil, nil)
-		s.validatorSet = vals.ToValidatorSet()
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			nil,
+			nil)
 
-		val := newMockMsg()
-		msg, err := val.sign(vals.GetValidator("0"), signer.DomainBridge)
+		bm.validatorSet = vals.ToValidatorSet()
+
+		// Case 1: Validator signs the message in behalf of another validator.
+		msg1 := newMockMsg()
+		sigMsg1, err := msg1.sign(vals.GetValidator("0"), signer.DomainBridge)
 		require.NoError(t, err)
 
-		// invalid epoch +2
-		msg.EpochNumber = 2
+		sigMsg1.SourceChainID = 1
 
-		require.NoError(t, s.saveVote(msg))
+		sigMsg1.Sender = vals.GetValidator("1").Address().String()
+		require.Error(t, bm.saveVote(sigMsg1))
 
-		// no votes for the current epoch
-		votes, err := s.state.getMessageVotes(0, msg.Hash, 1)
+		// Case 2: Non-validator signs the message in behalf of a validator.
+		msg2 := validator.NewTestValidator(t, "a", 0)
+		sigMsg2, err := newMockMsg().sign(msg2, signer.DomainBridge)
 		require.NoError(t, err)
-		require.Len(t, votes, 0)
 
-		// returns an error for the invalid epoch
-		_, err = s.state.getMessageVotes(1, msg.Hash, 1)
-		require.Error(t, err)
+		sigMsg2.SourceChainID = 1
+
+		sigMsg2.Sender = vals.GetValidator("1").Address().String()
+		require.Error(t, bm.saveVote(sigMsg2))
 	})
 
-	t.Run("Sender and signature mismatch", func(t *testing.T) {
+	// This test illustrates a scenario where two (or more) votes for the same batch arrive from
+	// the same validator.
+	//
+	// Expected: the vote should be stored only once.
+	t.Run("4", func(t *testing.T) {
 		t.Parallel()
 
-		s := newTestBridgeManager(t, vals.GetValidator("0"), &mockRuntime{isActiveValidator: true}, nil, nil)
-		s.validatorSet = vals.ToValidatorSet()
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			nil,
+			nil)
 
-		// validator signs the msg in behalf of another validator
-		val := newMockMsg()
-		msg, err := val.sign(vals.GetValidator("0"), signer.DomainBridge)
-		require.NoError(t, err)
-
-		msg.SourceChainID = 1
-		msg.DestinationChainID = 100
-
-		msg.Sender = vals.GetValidator("1").Address().String()
-		require.Error(t, s.saveVote(msg))
-
-		// non validator signs the msg in behalf of a validator
-		badVal := validator.NewTestValidator(t, "a", 0)
-		msg, err = newMockMsg().sign(badVal, signer.DomainBridge)
-		require.NoError(t, err)
-
-		msg.SourceChainID = 1
-		msg.DestinationChainID = 100
-
-		msg.Sender = vals.GetValidator("1").Address().String()
-		require.Error(t, s.saveVote(msg))
-	})
-
-	t.Run("Sender votes", func(t *testing.T) {
-		t.Parallel()
-
-		s := newTestBridgeManager(t, vals.GetValidator("0"), &mockRuntime{isActiveValidator: true}, nil, nil)
-		s.validatorSet = vals.ToValidatorSet()
+		bm.validatorSet = vals.ToValidatorSet()
 
 		msg := newMockMsg()
 		val1signed, err := msg.sign(vals.GetValidator("1"), signer.DomainBridge)
 		require.NoError(t, err)
 
 		val1signed.SourceChainID = 1
-		val1signed.DestinationChainID = 100
 
 		val2signed, err := msg.sign(vals.GetValidator("2"), signer.DomainBridge)
 		require.NoError(t, err)
 
 		val2signed.SourceChainID = 1
-		val2signed.DestinationChainID = 100
 
-		// vote with validator 1
-		require.NoError(t, s.saveVote(val1signed))
+		require.NoError(t, bm.saveVote(val1signed))
+		require.NoError(t, bm.saveVote(val1signed))
+		require.NoError(t, bm.saveVote(val1signed))
 
-		votes, err := s.state.getMessageVotes(0, msg.hash, 1)
-		require.NoError(t, err)
-		require.Len(t, votes, 1)
+		require.Len(t, bm.votes[types.Hash(val1signed.Hash)], 1)
 
-		// vote with validator 1 again (the votes do not increase)
-		require.NoError(t, s.saveVote(val1signed))
-		votes, _ = s.state.getMessageVotes(0, msg.hash, 1)
-		require.Len(t, votes, 1)
+		require.NoError(t, bm.saveVote(val2signed))
+		require.NoError(t, bm.saveVote(val2signed))
 
-		// vote with validator 2
-		require.NoError(t, s.saveVote(val2signed))
-		votes, _ = s.state.getMessageVotes(0, msg.hash, 1)
-		require.Len(t, votes, 2)
+		require.Len(t, bm.votes[types.Hash(val1signed.Hash)], 2)
+	})
+
+	// This test illustrates a scenario where a vote arrives for a bridge path that the given
+	// bridge manager is not responsible for.
+	//
+	// Expected: the vote should be rejected.
+	t.Run("5", func(t *testing.T) {
+		t.Parallel()
+
+		bm := newTestBridgeManager(t,
+			vals.GetValidator("0"),
+			&mockRuntime{isActiveValidator: true},
+			nil,
+			nil)
+
+		bm.validatorSet = vals.ToValidatorSet()
+
+		msg := &BridgeBatchVote{
+			SourceChainID:      20,
+			DestinationChainID: 30,
+		}
+
+		require.NoError(t, bm.saveVote(msg))
+
+		require.Len(t, bm.votes, 0)
 	})
 }
 
-func TestBridgeEventManager_BuildBridgeBatch(t *testing.T) {
+func Test_BridgeBatch(t *testing.T) {
 	vals := validator.NewTestValidators(t, 5)
 
-	s := newTestBridgeManager(t, vals.GetValidator("0"), &mockRuntime{isActiveValidator: true}, nil, nil)
-	s.validatorSet = vals.ToValidatorSet()
+	// This test illustrates the quorum-based behavior of the BridgeBatch function.
+	//
+	// 1. Initially, there are no batches in the pending list, so BridgeBatch returns nothing.
+	// 2. A batch is added to the pending list, and two validators (0 and 1) vote for it.
+	// 3. Since there is no quorum, BridgeBatch still returns nothing.
+	// 4. Two more validators (2 and 3) vote for the batch.
+	// 5. With quorum now reached, BridgeBatch returns the given batch.
 
-	// batches are empty
-	batches, err := s.BridgeBatch(1)
+	bm := newTestBridgeManager(t,
+		vals.GetValidator("0"),
+		&mockRuntime{isActiveValidator: true},
+		nil,
+		nil)
+
+	bm.validatorSet = vals.ToValidatorSet()
+
+	// Step 1.
+	batches, err := bm.BridgeBatch(1)
 	require.NoError(t, err)
 	require.Len(t, batches, 0)
 
@@ -309,17 +362,17 @@ func TestBridgeEventManager_BuildBridgeBatch(t *testing.T) {
 		CommitCounter:      big.NewInt(1),
 	}
 
-	s.pendingBridgeBatchesE2I = []*PendingBridgeBatch{
+	// Step 2.
+	bm.pendingBridgeBatchesE2I = []*PendingBridgeBatch{
 		{&bridgeMessageBatch, 0},
 	}
 
-	hash, err := s.pendingBridgeBatchesE2I[0].Hash()
+	hash, err := bm.pendingBridgeBatchesE2I[0].Hash()
 	require.NoError(t, err)
 
 	msg := newMockMsg().WithHash(hash.Bytes())
 
-	// validators 0 and 1 vote for the proposal, there is not enough
-	// voting power for the proposal
+	// Step 3.
 	signedMsg1, err := msg.sign(vals.GetValidator("0"), signer.DomainBridge)
 	require.NoError(t, err)
 
@@ -332,15 +385,16 @@ func TestBridgeEventManager_BuildBridgeBatch(t *testing.T) {
 	signedMsg2.SourceChainID = 1
 	signedMsg2.DestinationChainID = 100
 
-	require.NoError(t, s.saveVote(signedMsg1))
-	require.NoError(t, s.saveVote(signedMsg2))
+	require.NoError(t, bm.saveVote(signedMsg1))
+	require.NoError(t, bm.saveVote(signedMsg2))
 
-	batches, err = s.BridgeBatch(0)
-	require.NoError(t, err) // there is no error if quorum is not met, since its a valid case
+	batches, err = bm.BridgeBatch(1)
+
+	// There is no error if quorum is not met, since it's a valid case.
+	require.NoError(t, err)
 	require.Len(t, batches, 0)
 
-	// validator 2 and 3 vote for the proposal, there is enough voting power now
-
+	// Step 4.
 	signedMsg1, err = msg.sign(vals.GetValidator("2"), signer.DomainBridge)
 	require.NoError(t, err)
 
@@ -353,47 +407,14 @@ func TestBridgeEventManager_BuildBridgeBatch(t *testing.T) {
 	signedMsg2.SourceChainID = 1
 	signedMsg2.DestinationChainID = 100
 
-	require.NoError(t, s.saveVote(signedMsg1))
-	require.NoError(t, s.saveVote(signedMsg2))
+	require.NoError(t, bm.saveVote(signedMsg1))
+	require.NoError(t, bm.saveVote(signedMsg2))
 
-	batches, err = s.BridgeBatch(1)
+	// Step 5.
+	batches, err = bm.BridgeBatch(1)
 	require.NoError(t, err)
 	require.NotNil(t, batches)
-}
-
-func TestBridgeEventManager_RemoveProcessedEvents(t *testing.T) {
-	const bridgeMessageEventsCount = 5
-
-	sysState := new(systemstate.SystemStateMock)
-	sysState.On("GetNextCommittedIndex").Return(uint64(1000))
-
-	blockchain := new(blockchain.BlockchainMock)
-	blockchain.On("GetStateProviderForBlock", mock.Anything).Return(nil)
-	blockchain.On("GetSystemState", mock.Anything).Return(sysState)
-	blockchain.On("CurrentHeader", mock.Anything).Return(&types.Header{Number: 10})
-
-	vals := validator.NewTestValidators(t, 5)
-
-	s := newTestBridgeManager(t, vals.GetValidator("0"), &mockRuntime{isActiveValidator: true}, nil, blockchain)
-	bridgeMessageEvents := generateBridgeMessageEvents(t, bridgeMessageEventsCount, 1)
-
-	for _, event := range bridgeMessageEvents {
-		require.NoError(t, s.state.insertBridgeMessageEvent(event, false, nil))
-	}
-
-	bridgeMessageEventsBefore, err := s.state.list(s.internalChainID)
-	require.NoError(t, err)
-	require.Equal(t, bridgeMessageEventsCount, len(bridgeMessageEventsBefore))
-
-	for _, event := range bridgeMessageEvents {
-		eventLog := createTestLogForBridgeMessageResultEvent(t, event.ID.Uint64())
-		require.NoError(t, s.ProcessLog(&types.Header{Number: 10}, eventLog, nil))
-	}
-
-	// all bridge message events and their proofs should be removed from the store
-	stateSyncEventsAfter, err := s.state.list(s.internalChainID)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(stateSyncEventsAfter))
+	require.Len(t, batches, 1)
 }
 
 func Test_restore_Unexecuted_and_Retry_Batches(t *testing.T) {
@@ -523,7 +544,7 @@ func Test_restore_Unexecuted_and_Retry_Batches(t *testing.T) {
 	require.Contains(t, presentHashes, fullHash1)
 	require.Contains(t, presentHashes, fullHash2)
 
-	bm.handleRetry(ss, nil)
+	bm.handleRetry(ss)
 
 	require.EqualValues(t, 1, len(bm.unexecutedBatches))
 	require.EqualValues(t, 1, len(bm.retryBatches))
@@ -2403,7 +2424,7 @@ func Test_handleRetry(t *testing.T) {
 
 		require.NoError(t, err)
 
-		bm.handleRetry(ss, nil)
+		bm.handleRetry(ss)
 
 		checkFn(bm, 1, 2, false)
 	})
@@ -2435,157 +2456,10 @@ func Test_handleRetry(t *testing.T) {
 
 		require.NoError(t, err)
 
-		bm.handleRetry(ss, nil)
+		bm.handleRetry(ss)
 
 		checkFn(bm, 2, 1, true)
 	})
-}
-
-func TestBridgeEventManager_AddLog_BuildBridgeBatches(t *testing.T) {
-	t.Parallel()
-
-	vals := validator.NewTestValidators(t, 5)
-
-	t.Run("Node is a validator", func(t *testing.T) {
-		t.Skip()
-		t.Parallel()
-
-		blockchain := new(blockchain.BlockchainMock)
-
-		blockchain.On("CurrentHeader").Return(&types.Header{Number: 10})
-		s := newTestBridgeManager(t, vals.GetValidator("0"), &mockRuntime{isActiveValidator: true}, nil, blockchain)
-
-		postBlockRequest := &oracle.PostBlockRequest{
-			FullBlock: &types.FullBlock{
-				Block: &types.Block{
-					Header: &types.Header{Number: 0}}}}
-
-		bridgeMsg := &contractsapi.BridgeMsgEvent{ID: bigZero, SourceChainID: big.NewInt(1), DestinationChainID: bigZero}
-		bridgeMsgData, err := bridgeMsg.Encode()
-		require.NoError(t, err)
-
-		// log with the bridge message topic but incorrect content
-		require.Error(t, s.AddLog(big.NewInt(1), &ethgo.Log{Topics: []ethgo.Hash{bridgeMessageEventSig}, Data: bridgeMsgData}))
-		bridgeEvents, err := s.state.list(100)
-
-		require.NoError(t, err)
-		require.Len(t, bridgeEvents, 0)
-
-		// correct event log
-		data, err := abi.MustNewType("tuple(uint256 a, uint256 b, string c)").Encode([]string{"1", "100", "data"})
-		require.NoError(t, err)
-
-		goodLog := &ethgo.Log{
-			Topics: []ethgo.Hash{
-				bridgeMessageEventSig,
-				ethgo.BytesToHash([]byte{0x1}), // bridge message index 1
-				ethgo.ZeroHash,
-				ethgo.ZeroHash,
-			},
-			Data: data,
-		}
-
-		require.NoError(t, s.AddLog(big.NewInt(1), goodLog))
-
-		require.NoError(t, s.PostBlock(postBlockRequest))
-
-		length := len(s.pendingBridgeBatchesE2I[0].Messages)
-
-		bridgeMessages, _, err := s.state.getBridgeMessages(1, 1, 1, 100, nil, nil)
-		require.NoError(t, err)
-		require.Len(t, bridgeMessages, 1)
-		require.Len(t, s.pendingBridgeBatchesE2I, 1)
-		require.Equal(t, uint64(1), s.pendingBridgeBatchesE2I[0].Messages[0].ID.Uint64())
-		require.Equal(t, uint64(1), s.pendingBridgeBatchesE2I[0].Messages[length-1].ID.Uint64())
-
-		// add one more log to have a minimum batch
-		goodLog2 := goodLog.Copy()
-		goodLog2.Topics[1] = ethgo.BytesToHash([]byte{0x2}) // bridgeMsg event index 1
-		require.NoError(t, s.AddLog(big.NewInt(1), goodLog2))
-
-		require.NoError(t, s.PostBlock(postBlockRequest))
-
-		length = len(s.pendingBridgeBatchesE2I[1].Messages)
-
-		require.Len(t, s.pendingBridgeBatchesE2I, 2)
-		require.Equal(t, uint64(1), s.pendingBridgeBatchesE2I[1].Messages[0].ID.Uint64())
-		require.Equal(t, uint64(2), s.pendingBridgeBatchesE2I[1].Messages[length-1].ID.Uint64())
-
-		// add two more logs to have larger batch
-		goodLog3 := goodLog.Copy()
-		goodLog3.Topics[1] = ethgo.BytesToHash([]byte{0x3}) // bridgeMsg event index 2
-		require.NoError(t, s.AddLog(big.NewInt(1), goodLog3))
-
-		require.NoError(t, s.PostBlock(postBlockRequest))
-
-		goodLog4 := goodLog.Copy()
-		goodLog4.Topics[1] = ethgo.BytesToHash([]byte{0x4}) // bridgeMsg event index 3
-		require.NoError(t, s.AddLog(big.NewInt(1), goodLog4))
-
-		require.NoError(t, s.PostBlock(postBlockRequest))
-
-		length = len(s.pendingBridgeBatchesE2I[3].Messages)
-
-		require.Len(t, s.pendingBridgeBatchesE2I, 4)
-		require.Equal(t, uint64(1), s.pendingBridgeBatchesE2I[3].Messages[0].ID.Uint64())
-		require.Equal(t, uint64(4), s.pendingBridgeBatchesE2I[3].Messages[length-1].ID.Uint64())
-	})
-
-	t.Run("Node is not a validator", func(t *testing.T) {
-		t.Parallel()
-
-		sysState := new(systemstate.SystemStateMock)
-		sysState.On("GetNextCommittedIndex").Return(uint64(1000))
-
-		blockchain := new(blockchain.BlockchainMock)
-		blockchain.On("GetStateProviderForBlock", mock.Anything).Return(nil)
-		blockchain.On("GetSystemState", mock.Anything).Return(sysState)
-		blockchain.On("CurrentHeader", mock.Anything).Return(&types.Header{Number: 10})
-
-		s := newTestBridgeManager(t, vals.GetValidator("0"), &mockRuntime{isActiveValidator: false}, nil, blockchain)
-
-		// correct event log
-		data, err := abi.MustNewType("tuple(uint256 a, uint256 b, string c)").Encode([]string{"1", "100", "data"})
-		require.NoError(t, err)
-
-		var bridgeMessageEvent contractsapi.BridgeMsgEvent
-
-		goodLog := &ethgo.Log{
-			Topics: []ethgo.Hash{
-				bridgeMessageEvent.Sig(),
-				ethgo.BytesToHash([]byte{0x1}), // bridge message index 0
-				ethgo.ZeroHash,
-				ethgo.ZeroHash,
-			},
-			Data: data,
-		}
-
-		require.NoError(t, s.AddLog(big.NewInt(1), goodLog))
-
-		// node should have inserted given bridgeMsg event, but it shouldn't build any batch
-		bridgeMessages, _, err := s.state.getBridgeMessages(1, 1, 1, 100, nil, nil)
-		require.NoError(t, err)
-		require.Len(t, bridgeMessages, 1)
-		require.Equal(t, uint64(1), bridgeMessages[0].ID.Uint64())
-		require.Len(t, s.pendingBridgeBatchesE2I, 0)
-	})
-}
-
-func createTestLogForBridgeMessageResultEvent(t *testing.T, bridgeMessageEventID uint64) *ethgo.Log {
-	t.Helper()
-
-	data, err := abi.MustNewType("tuple(uint256 a, uint256 b, bool c, bytes d)").Encode(
-		[]interface{}{big.NewInt(1), big.NewInt(100), false, []byte("")})
-	require.NoError(t, err)
-
-	return &ethgo.Log{
-		Topics: []ethgo.Hash{
-			bridgeMessageResultEventSig,
-			ethgo.BytesToHash(common.EncodeUint64ToBytes(bridgeMessageEventID)),
-			ethgo.BytesToHash(common.EncodeUint64ToBytes(1)),
-		},
-		Data: data,
-	}
 }
 
 type mockTopic struct {
@@ -2688,10 +2562,6 @@ func (*mockBridgeManager) PostBlock(req *oracle.PostBlockRequest) error {
 
 // PostEpoch implements BridgeManager.
 func (mbm *mockBridgeManager) PostEpoch(req *oracle.PostEpochRequest) error {
-	if err := mbm.state.insertEpoch(req.NewEpochID, req.DBTx, mbm.chainID); err != nil {
-		return err
-	}
-
 	return nil
 }
 

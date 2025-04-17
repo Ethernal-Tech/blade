@@ -118,9 +118,20 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 	deployerKey, err := bridgeHelper.DecodePrivateKey("")
 	require.NoError(t, err)
 
-	// stop relayer until
-	relayer := cluster.BridgeRelayers[0]
-	relayer.Stop()
+	stopRelayerFn := func(startID, endID uint64) {
+		// Minimal time needed for sleep before stopping is sprint time + relayer period = 15s
+		require.NoError(t, cluster.WaitUntil(20*time.Second, 2*time.Second, func() bool {
+			for i := startID; i <= endID; i++ {
+				if !isEventProcessed(t, bridgeCfg.ExternalGatewayAddr, externalChainTxRelayer, i, false) {
+					return false
+				}
+			}
+
+			return true
+		}))
+
+		cluster.BridgeRelayers[0].Stop()
+	}
 
 	var internalERC20Addr, externalERC20Addr types.Address
 
@@ -168,7 +179,7 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 
 		// mint erc20
 		for _, acc := range accountAddrs {
-			if err := mint(*erc20Addr, big.NewInt(bridgeAmount*2), acc, relayer); err != nil {
+			if err := mint(*erc20Addr, big.NewInt(bridgeAmount*3), acc, relayer); err != nil {
 				return err
 			}
 		}
@@ -217,22 +228,33 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 		return nil
 	}
 
-	timeoutCtx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
-	g, _ = errgroup.WithContext(timeoutCtx)
+	depositBothSides := func() {
+		// first deposit
+		timeoutCtx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
+		g, _ = errgroup.WithContext(timeoutCtx)
 
-	g.Go(func() error {
-		return runTest(internalERC20Addr, bridgeCfg.InternalMintableERC20PredicateAddr, internalJSONRPCAddr)
-	})
+		g.Go(func() error {
+			return runTest(internalERC20Addr, bridgeCfg.InternalMintableERC20PredicateAddr, internalJSONRPCAddr)
+		})
 
-	g.Go(func() error {
-		return runTest(externalERC20Addr, bridgeCfg.ExternalERC20PredicateAddr, externalJSONRPCAddr)
-	})
+		g.Go(func() error {
+			return runTest(externalERC20Addr, bridgeCfg.ExternalERC20PredicateAddr, externalJSONRPCAddr)
+		})
 
-	if err := g.Wait(); err != nil {
-		t.Fatalf("failed to deposit ERC20: %v", err)
+		if err := g.Wait(); err != nil {
+			t.Fatalf("failed to deposit ERC20: %v", err)
+		}
+
+		cancel()
 	}
 
-	cancel()
+	depositBothSides()
+
+	stopRelayerFn(1, 2)
+
+	t.Logf("Deposited first & stopped relayer")
+
+	depositBothSides()
 
 	t.Logf("Deposited ERC20 tokens")
 
@@ -245,7 +267,7 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 			logs, err := getFilteredLogs((&contractsapi.NewBatchEvent{}).Sig(), 0, latest, internalEndpoint)
 			require.NoError(t, err)
 
-			if len(logs) == 0 {
+			if len(logs) < 4 {
 				return false
 			}
 
@@ -290,31 +312,16 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 	}
 
 	// start relayer
-	relayer.Start()
+	cluster.BridgeRelayers[0].Start()
 
 	t.Logf("Restarted validators & relayer")
 
-	timeoutCtx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
-	g, _ = errgroup.WithContext(timeoutCtx)
-
-	g.Go(func() error {
-		return runTest(internalERC20Addr, bridgeCfg.InternalMintableERC20PredicateAddr, internalJSONRPCAddr)
-	})
-
-	g.Go(func() error {
-		return runTest(externalERC20Addr, bridgeCfg.ExternalERC20PredicateAddr, externalJSONRPCAddr)
-	})
-
-	if err := g.Wait(); err != nil {
-		t.Fatalf("failed to deposit ERC20 after validators restart: %v", err)
-	}
-
-	cancel()
+	depositBothSides()
 
 	t.Logf("Deposited ERC20 tokens after validators restart")
 
 	require.NoError(t, cluster.WaitUntil(3*time.Minute, 2*time.Second, func() bool {
-		for i := uint64(1); i <= 2*transfersCount+1; i++ {
+		for i := uint64(1); i <= 3*transfersCount+1; i++ {
 			if !isEventProcessed(t, bridgeCfg.InternalGatewayAddr, internalChainTxRelayer, i, false) {
 				return false
 			}
@@ -334,7 +341,7 @@ func TestE2E_Bridge_NetworkFailureAndRestart(t *testing.T) {
 	externalChildToken := getChildToken(t, contractsapi.RootERC20Predicate.Abi,
 		bridgeCfg.ExternalERC20PredicateAddr, externalERC20Addr, externalChainTxRelayer)
 
-	expectedBalance := big.NewInt(bridgeAmount * 2)
+	expectedBalance := big.NewInt(bridgeAmount * 3)
 
 	for _, acc := range accountAddrs {
 		balance1 := erc20BalanceOf(t, acc, internalChildToken, externalChainTxRelayer)
