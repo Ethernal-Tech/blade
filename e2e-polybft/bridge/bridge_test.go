@@ -2223,7 +2223,7 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 				}
 
 				if counter++; counter == 2 {
-					t.Logf("Test passed")
+					t.Log("Test passed")
 
 					return
 				}
