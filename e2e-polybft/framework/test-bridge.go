@@ -138,7 +138,7 @@ func (t *TestBridge) Deposit(token bridgeCommon.TokenType, rootTokenAddr, rootPr
 			"--amounts", amounts,
 			"--sender-key", senderKey,
 			"--minter-key", minterKey,
-			"--json-rpc", jsonRPCAddr)
+			"--jsonrpc", jsonRPCAddr)
 
 		if internalChainMintable {
 			args = append(args, "--internal-chain-mintable")
@@ -158,7 +158,7 @@ func (t *TestBridge) Deposit(token bridgeCommon.TokenType, rootTokenAddr, rootPr
 			"--token-ids", tokenIDs,
 			"--sender-key", senderKey,
 			"--minter-key", minterKey,
-			"--json-rpc", jsonRPCAddr)
+			"--jsonrpc", jsonRPCAddr)
 
 		if internalChainMintable {
 			args = append(args, "--internal-chain-mintable")
@@ -183,7 +183,7 @@ func (t *TestBridge) Deposit(token bridgeCommon.TokenType, rootTokenAddr, rootPr
 			"--token-ids", tokenIDs,
 			"--sender-key", senderKey,
 			"--minter-key", minterKey,
-			"--json-rpc", jsonRPCAddr)
+			"--jsonrpc", jsonRPCAddr)
 
 		if internalChainMintable {
 			args = append(args, "--internal-chain-mintable")
@@ -222,7 +222,7 @@ func (t *TestBridge) Mint(tokenType bridgeCommon.TokenType, token types.Address,
 		"--token", token.String(),
 		"--addresses", addresses,
 		"--private-key", minterKey,
-		"--json-rpc", jsonRPCAddr)
+		"--jsonrpc", jsonRPCAddr)
 
 	if amounts != "" {
 		args = append(args, "--amounts", amounts)
@@ -273,7 +273,7 @@ func (t *TestBridge) Withdraw(token bridgeCommon.TokenType,
 			"--sender-key", senderKey,
 			"--receivers", receivers,
 			"--amounts", amounts,
-			"--json-rpc", jsonRPCAddr)
+			"--jsonrpc", jsonRPCAddr)
 
 		if internalChainMintable {
 			args = append(args, "--internal-chain-mintable")
@@ -292,7 +292,7 @@ func (t *TestBridge) Withdraw(token bridgeCommon.TokenType,
 			"--sender-key", senderKey,
 			"--receivers", receivers,
 			"--token-ids", tokenIDs,
-			"--json-rpc", jsonRPCAddr)
+			"--jsonrpc", jsonRPCAddr)
 
 		if internalChainMintable {
 			args = append(args, "--internal-chain-mintable")
@@ -316,7 +316,7 @@ func (t *TestBridge) Withdraw(token bridgeCommon.TokenType,
 			"--receivers", receivers,
 			"--amounts", amounts,
 			"--token-ids", tokenIDs,
-			"--json-rpc", jsonRPCAddr)
+			"--jsonrpc", jsonRPCAddr)
 
 		if internalChainMintable {
 			args = append(args, "--internal-chain-mintable")
@@ -405,7 +405,7 @@ func (t *TestBridge) fundAddressesOnExternal(polybftConfig polycfg.PolyBFT) erro
 
 	// non-validator addresses don't need to mint stake token,
 	// they only need to be funded with root token
-	args := []string{"bridge", "fund", "--json-rpc", t.JSONRPCAddr()}
+	args := []string{"bridge", "fund", "--jsonrpc", t.JSONRPCAddr()}
 
 	for _, premineRaw := range t.clusterConfig.Premine {
 		premineInfo, err := cmdHelper.ParsePremineInfo(premineRaw)
@@ -429,7 +429,7 @@ func (t *TestBridge) fundRelayerAddressOnExternal(relayerAddress types.Address) 
 
 	args = append(args, "--addresses", relayerAddress.String())
 	args = append(args, "--amounts", command.DefaultPremineBalance.String()) // this is more than enough tokens
-	args = append(args, "--json-rpc", t.JSONRPCAddr())
+	args = append(args, "--jsonrpc", t.JSONRPCAddr())
 
 	if err := t.cmdRun(args...); err != nil {
 		return fmt.Errorf("failed to fund non-validator addresses on external: %w", err)
@@ -481,7 +481,7 @@ func (t *TestBridge) mintNativeRootToken(validatorAddresses []types.Address, tok
 	// to validators and other provided addresses
 	args := []string{
 		"mint-erc20",
-		"--json-rpc", t.JSONRPCAddr(),
+		"--jsonrpc", t.JSONRPCAddr(),
 		"--token", polybftConfig.Bridge[tokenConfig.ChainID].ExternalNativeERC20Addr.String(),
 	}
 
@@ -532,7 +532,7 @@ func (t *TestBridge) premineNativeRootToken(genesisPath string, tokenConfig *pol
 		args := []string{
 			"bridge",
 			"premine",
-			"--json-rpc", t.JSONRPCAddr(),
+			"--jsonrpc", t.JSONRPCAddr(),
 			"--premine-amount", premineAmount.String(),
 			"--stake-amount", stakedAmount.String(),
 			"--erc20-token", bridgeConfig.ExternalNativeERC20Addr.String(),
@@ -624,7 +624,7 @@ func (t *TestBridge) finalizeGenesis(genesisPath string, tokenConfig *polycfg.To
 	args := []string{
 		"bridge",
 		"finalize-bridge",
-		"--json-rpc", t.JSONRPCAddr(),
+		"--jsonrpc", t.JSONRPCAddr(),
 		"--private-key", bridgeHelper.TestAccountPrivKey,
 		"--genesis", genesisPath,
 	}
