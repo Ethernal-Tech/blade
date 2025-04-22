@@ -11,7 +11,7 @@ on: # yamllint disable-line rule:truthy
       type:
         description: The type of load test to run
         type: choice
-        options: [EOA, ERC20, ERC721, MIXED, PERF-CONTRACT]
+        options: [EOA, ERC20, ERC721, ERC1155, MIXED, PERF-CONTRACT]
       dynamic:
         description: Indicates whether the load test should generate dynamic transactions
         type: boolean
