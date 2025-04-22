@@ -2205,6 +2205,7 @@ func (b *BridgeMsgEvent) ParseLog(log *ethgo.Log) (bool, error) {
 func (b *BridgeMsgEvent) Decode(input []byte) error {
 	return Gateway.Abi.Events["BridgeMsg"].Inputs.DecodeStruct(input, &b)
 }
+
 type TestPerformanceConstructorFn struct {
 	QuorumCnt                          *big.Int `abi:"_quorumCnt"`
 	CheckBatchID                       bool     `abi:"_checkBatchID"`
