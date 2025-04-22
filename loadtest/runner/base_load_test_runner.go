@@ -152,7 +152,7 @@ func (r *BaseLoadTestRunner) tearDown() error {
 					return err
 				}
 
-				refundAmount := balance.Sub(balance, big.NewInt(1e16))
+				refundAmount := balance.Sub(balance, ethgo.Ether(1))
 
 				feeData, err := getFeeData(r.clients.getClient(), false)
 				if err != nil {
