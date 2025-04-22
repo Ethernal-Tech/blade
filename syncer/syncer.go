@@ -303,3 +303,9 @@ func updateMetrics(fullBlock *types.FullBlock) {
 	metrics.SetGauge([]string{syncerMetrics, "receipts_num"}, float32(len(fullBlock.Receipts)))
 	metrics.SetGauge([]string{syncerMetrics, "blocks_num"}, 1)
 }
+
+func (s *syncer) SyncTxPool() error {
+	bestPeerId := s.peerMap.BestPeer(nil).ID
+
+	return s.syncPeerClient.SyncTxPool(bestPeerId)
+}

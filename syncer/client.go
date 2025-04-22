@@ -290,10 +290,6 @@ func (m *syncPeerClient) startPeerEventProcess() {
 	}
 }
 
-func (m *syncPeerClient) startTxPoolSync() {
-
-}
-
 // CloseStream closes stream
 func (m *syncPeerClient) CloseStream(peerID peer.ID) error {
 	return m.network.CloseProtocolStream(syncerProto, peerID)
@@ -354,17 +350,17 @@ func (m *syncPeerClient) GetBlocks(
 	return blockCh, nil
 }
 
-func (m *syncPeerClient) GetTxPool(
+func (m *syncPeerClient) SyncTxPool(
 	peerID peer.ID,
-) (<-chan *types.Transaction, error) {
+) error {
 	client, err := m.newSyncPeerClient(peerID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create sync peer client: %w", err)
+		return fmt.Errorf("failed to create sync peer client: %w", err)
 	}
 
 	stream, err := client.GetTxPool(context.Background(), &emptypb.Empty{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to open GetTxPool stream: %w", err)
+		return fmt.Errorf("failed to open GetTxPool stream: %w", err)
 	}
 
 	txsCh, errorCh := fromTransactionStreamToChannel(stream)
@@ -373,20 +369,21 @@ func (m *syncPeerClient) GetTxPool(
 		select {
 		case txs, ok := <-txsCh:
 			if !ok {
-				break
+				return nil
 			}
 
-			go m.addTxsToPool(txs)
-
+			if err := m.addTxsToPool(*txs); err != nil {
+				m.logger.Error("failed to add txs to pool", "err", err)
+			}
 		case err := <-errorCh:
-			return nil, fmt.Errorf("failed to get txs from gRPC stream: %w", err)
+			return fmt.Errorf("failed to get txs from gRPC stream: %w", err)
 		}
 	}
 }
 
-func (m *syncPeerClient) addTxsToPool(txs *[]*types.Transaction) error {
-	for _, tx := range *txs {
-		if err := m.txPool.AddTx(tx); err != nil {
+func (m *syncPeerClient) addTxsToPool(txs []*types.Transaction) error {
+	for _, tx := range txs {
+		if err := m.txPool.AddTxSync(tx); err != nil {
 			return fmt.Errorf("failed to add tx to pool: %w", err)
 		}
 	}

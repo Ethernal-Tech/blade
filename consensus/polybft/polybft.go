@@ -903,3 +903,7 @@ func getBurnContractAddress(config *chain.Chain, polyBFTConfig PolyBFTConfig) (t
 
 	return types.ZeroAddress, false
 }
+
+func (p *Polybft) GetSyncer() syncer.Syncer {
+	return p.syncer
+}

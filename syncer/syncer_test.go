@@ -93,6 +93,7 @@ type mockSyncPeerClient struct {
 	getPeerStatusHandler                  func(peer.ID) (*NoForkPeer, error)
 	getConnectedPeerStatusesHandler       func() []*NoForkPeer
 	getBlocksHandler                      func(peer.ID, uint64, time.Duration) (<-chan *types.Block, error)
+	getSyncTxPoolHandler                  func(peer.ID) error
 	getPeerStatusUpdateChHandler          func() <-chan *NoForkPeer
 	getPeerConnectionUpdateEventChHandler func() <-chan *event.PeerEvent
 }
@@ -121,6 +122,10 @@ func (m *mockSyncPeerClient) GetBlocks(
 	timeoutPerBlock time.Duration,
 ) (<-chan *types.Block, error) {
 	return m.getBlocksHandler(id, start, timeoutPerBlock)
+}
+
+func (m *mockSyncPeerClient) SyncTxPool(id peer.ID) error {
+	return m.getSyncTxPoolHandler(id)
 }
 
 func (m *mockSyncPeerClient) GetPeerStatusUpdateCh() <-chan *NoForkPeer {
@@ -656,6 +661,146 @@ func TestSync(t *testing.T) {
 			assert.Equal(t, test.progressionStart, progression.startingBlock)
 			assert.Equal(t, test.progressionHighest, progression.highestBlock)
 			assert.ErrorIs(t, err, test.err)
+		})
+	}
+}
+
+func createMockTransactions(num int) []*types.Transaction {
+	txs := make([]*types.Transaction, num)
+	for i := 0; i < num; i++ {
+		txs[i] = &types.Transaction{
+			Inner: &types.LegacyTx{
+				BaseTx: &types.BaseTx{
+					Nonce: uint64(i + 1),
+					Gas:   21000,
+					To:    &types.Address{},
+				},
+				GasPrice: big.NewInt(1000000000),
+			},
+		}
+	}
+
+	return txs
+}
+
+func transactionsToCh(txs []*types.Transaction) <-chan *types.Transactions {
+	ch := make(chan *types.Transactions)
+
+	go func() {
+		// batch transactions size 5
+		for i := range len(txs) / 5 {
+			start := i * 5
+			end := (i + 1) * 5
+			if end > len(txs) {
+				end = len(txs)
+			}
+
+			transactions := types.Transactions(txs[start:end])
+			ch <- &transactions
+
+			time.Sleep(100 * time.Millisecond)
+		}
+
+		close(ch)
+	}()
+
+	return ch
+}
+
+type mockTxPool struct {
+	transactions []*types.Transaction
+}
+
+func (m *mockTxPool) AddTxs(txs *types.Transactions) {
+	transactions := []*types.Transaction(*txs)
+	for _, tx := range transactions {
+		m.transactions = append(m.transactions, tx)
+	}
+}
+
+func (m *mockTxPool) CompareTxPool(txs *types.Transactions) bool {
+	transactions := types.Transactions(m.transactions)
+
+	incomingRLP := txs.MarshalRLPTo(nil)
+	localRLP := transactions.MarshalRLPTo(nil)
+
+	return string(incomingRLP) == string(localRLP)
+}
+
+func txsToTransactions(txs []*types.Transaction) *types.Transactions {
+	transactions := types.Transactions(txs)
+	return &transactions
+}
+
+func TestSyncTx(t *testing.T) {
+	t.Parallel()
+
+	transactions := createMockTransactions(20)
+
+	tests := []struct {
+		name string
+
+		peerTxCh map[peer.ID]<-chan *types.Transactions
+
+		txPool *mockTxPool
+
+		txs *types.Transactions
+	}{
+		{
+			name: "should sync transactions successfully - batches",
+			peerTxCh: map[peer.ID]<-chan *types.Transactions{
+				peer.ID("A"): transactionsToCh(transactions),
+			},
+			txPool: &mockTxPool{},
+			txs:    (*types.Transactions)(&transactions),
+		},
+		{
+			name: "should sync transaction successfully - no batches",
+			peerTxCh: map[peer.ID]<-chan *types.Transactions{
+				peer.ID("A"): transactionsToCh(transactions[:5]),
+			},
+			txPool: &mockTxPool{},
+			txs:    txsToTransactions(transactions[:5]),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			var (
+				syncer = NewTestSyncer(nil, nil, 0,
+					&mockSyncPeerClient{
+						getSyncTxPoolHandler: func(i peer.ID) error {
+							txCh := test.peerTxCh[i]
+
+							for {
+								select {
+								case txs, ok := <-txCh:
+									if !ok {
+										return nil
+									}
+
+									test.txPool.AddTxs(txs)
+								}
+							}
+						},
+					},
+					nil)
+			)
+
+			syncer.peerMap.Put(&NoForkPeer{ID: peer.ID("A")})
+
+			errCh := make(chan error, 1)
+
+			go func() {
+				errCh <- syncer.SyncTxPool()
+			}()
+
+			err := <-errCh
+
+			assert.NoError(t, err)
+			assert.True(t, test.txPool.CompareTxPool(test.txs))
 		})
 	}
 }

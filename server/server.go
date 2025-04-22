@@ -43,6 +43,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/state/runtime"
 	"github.com/0xPolygon/polygon-edge/state/runtime/addresslist"
 	"github.com/0xPolygon/polygon-edge/state/runtime/tracer"
+	"github.com/0xPolygon/polygon-edge/syncer"
 	"github.com/0xPolygon/polygon-edge/txpool"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/0xPolygon/polygon-edge/validate"
@@ -439,7 +440,15 @@ func NewServer(config *Config) (*Server, error) {
 
 	// start txpool
 	m.txpool.SetBaseFee(m.blockchain.Header())
-	m.txpool.Start()
+	var syncer syncer.Syncer
+
+	if ConsensusType(engineName) == PolyBFTConsensus {
+		consensus := m.consensus.(*consensusPolyBFT.Polybft)
+
+		syncer = consensus.GetSyncer()
+	}
+
+	m.txpool.Start(syncer)
 
 	// setup and start jsonrpc server
 	if err := m.setupJSONRPC(); err != nil {
