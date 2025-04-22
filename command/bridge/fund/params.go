@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	jsonRPCFlag        = "jsonrpc"
+	jsonRPCFlag        = "json-rpc"
 	mintStakeTokenFlag = "mint"
 )
 
