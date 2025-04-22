@@ -138,7 +138,7 @@ func (t *TestBridge) Deposit(token bridgeCommon.TokenType, rootTokenAddr, rootPr
 			"--amounts", amounts,
 			"--sender-key", senderKey,
 			"--minter-key", minterKey,
-			"--jsonrpc", jsonRPCAddr)
+			"--json-rpc", jsonRPCAddr)
 
 		if internalChainMintable {
 			args = append(args, "--internal-chain-mintable")
@@ -158,7 +158,7 @@ func (t *TestBridge) Deposit(token bridgeCommon.TokenType, rootTokenAddr, rootPr
 			"--token-ids", tokenIDs,
 			"--sender-key", senderKey,
 			"--minter-key", minterKey,
-			"--jsonrpc", jsonRPCAddr)
+			"--json-rpc", jsonRPCAddr)
 
 		if internalChainMintable {
 			args = append(args, "--internal-chain-mintable")
@@ -183,7 +183,7 @@ func (t *TestBridge) Deposit(token bridgeCommon.TokenType, rootTokenAddr, rootPr
 			"--token-ids", tokenIDs,
 			"--sender-key", senderKey,
 			"--minter-key", minterKey,
-			"--jsonrpc", jsonRPCAddr)
+			"--json-rpc", jsonRPCAddr)
 
 		if internalChainMintable {
 			args = append(args, "--internal-chain-mintable")
@@ -222,7 +222,7 @@ func (t *TestBridge) Mint(tokenType bridgeCommon.TokenType, token types.Address,
 		"--token", token.String(),
 		"--addresses", addresses,
 		"--private-key", minterKey,
-		"--jsonrpc", jsonRPCAddr)
+		"--json-rpc", jsonRPCAddr)
 
 	if amounts != "" {
 		args = append(args, "--amounts", amounts)
@@ -273,7 +273,7 @@ func (t *TestBridge) Withdraw(token bridgeCommon.TokenType,
 			"--sender-key", senderKey,
 			"--receivers", receivers,
 			"--amounts", amounts,
-			"--jsonrpc", jsonRPCAddr)
+			"--json-rpc", jsonRPCAddr)
 
 		if internalChainMintable {
 			args = append(args, "--internal-chain-mintable")
@@ -292,7 +292,7 @@ func (t *TestBridge) Withdraw(token bridgeCommon.TokenType,
 			"--sender-key", senderKey,
 			"--receivers", receivers,
 			"--token-ids", tokenIDs,
-			"--jsonrpc", jsonRPCAddr)
+			"--json-rpc", jsonRPCAddr)
 
 		if internalChainMintable {
 			args = append(args, "--internal-chain-mintable")
@@ -316,7 +316,7 @@ func (t *TestBridge) Withdraw(token bridgeCommon.TokenType,
 			"--receivers", receivers,
 			"--amounts", amounts,
 			"--token-ids", tokenIDs,
-			"--jsonrpc", jsonRPCAddr)
+			"--json-rpc", jsonRPCAddr)
 
 		if internalChainMintable {
 			args = append(args, "--internal-chain-mintable")
@@ -481,7 +481,7 @@ func (t *TestBridge) mintNativeRootToken(validatorAddresses []types.Address, tok
 	// to validators and other provided addresses
 	args := []string{
 		"mint-erc20",
-		"--jsonrpc", t.JSONRPCAddr(),
+		"--json-rpc", t.JSONRPCAddr(),
 		"--token", polybftConfig.Bridge[tokenConfig.ChainID].ExternalNativeERC20Addr.String(),
 	}
 
@@ -532,7 +532,7 @@ func (t *TestBridge) premineNativeRootToken(genesisPath string, tokenConfig *pol
 		args := []string{
 			"bridge",
 			"premine",
-			"--jsonrpc", t.JSONRPCAddr(),
+			"--json-rpc", t.JSONRPCAddr(),
 			"--premine-amount", premineAmount.String(),
 			"--stake-amount", stakedAmount.String(),
 			"--erc20-token", bridgeConfig.ExternalNativeERC20Addr.String(),
@@ -624,7 +624,7 @@ func (t *TestBridge) finalizeGenesis(genesisPath string, tokenConfig *polycfg.To
 	args := []string{
 		"bridge",
 		"finalize-bridge",
-		"--jsonrpc", t.JSONRPCAddr(),
+		"--json-rpc", t.JSONRPCAddr(),
 		"--private-key", bridgeHelper.TestAccountPrivKey,
 		"--genesis", genesisPath,
 	}
