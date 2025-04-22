@@ -108,7 +108,7 @@ func (t *Topic) readLoop(sub *pubsub.Subscription, handler func(obj interface{},
 		}
 
 		go func() {
-			t.logger.Debug("gossip message", "size", common.ToMB(msg.Data))
+			t.logger.Trace("gossip message", "size", common.ToMB(msg.Data))
 
 			obj := t.createObj()
 			if err := proto.Unmarshal(msg.Data, obj); err != nil {

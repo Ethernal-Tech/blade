@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 
@@ -33,8 +34,12 @@ func NewEOARunner(cfg LoadTestConfig) (*EOARunner, error) {
 // 5. Waits for transaction receipts.
 // 6. Calculates the transactions per second (TPS) based on block information and transaction statistics.
 // Returns an error if any of the steps fail.
-func (e *EOARunner) Run() error {
+func (e *EOARunner) Run(ctx context.Context) error {
 	fmt.Println("Running EOA load test", e.cfg.LoadTestName)
+
+	// print state db metrics before and after test
+	e.printStateDBMetrics()
+	defer e.printStateDBMetrics()
 
 	if err := e.createVUs(); err != nil {
 		return err
@@ -44,8 +49,19 @@ func (e *EOARunner) Run() error {
 		return err
 	}
 
+	cancelableCtx, cancel := context.WithCancel(ctx)
+	defer func() {
+		cancel()
+
+		e.resultsCollector.PrintResults()
+	}()
+
+	go e.resultsCollector.CollectResults(ctx)
+	go e.readState(cancelableCtx)
+	go e.readTxPool(cancelableCtx)
+
 	if !e.cfg.WaitForTxPoolToEmpty {
-		go e.waitForReceiptsParallel()
+		go e.waitForReceiptsParallel(ctx)
 		go e.calculateResultsParallel()
 
 		_, err := e.sendTransactions(e.createEOATransaction)
@@ -53,7 +69,16 @@ func (e *EOARunner) Run() error {
 			return err
 		}
 
-		return <-e.done
+		if err := <-e.done; err != nil {
+			return err
+		}
+
+		nodeInfos, err := e.queryLatestBlocks()
+		if err != nil {
+			return err
+		}
+
+		return e.printNodeInfos(nodeInfos)
 	}
 
 	txHashes, err := e.sendTransactions(e.createEOATransaction)
@@ -65,31 +90,44 @@ func (e *EOARunner) Run() error {
 		return err
 	}
 
-	return e.calculateResults(e.waitForReceipts(txHashes))
+	if err := e.calculateResults(e.waitForReceipts(txHashes)); err != nil {
+		return err
+	}
+
+	nodeInfos, err := e.queryLatestBlocks()
+	if err != nil {
+		return err
+	}
+
+	if err := e.tearDown(); err != nil {
+		return err
+	}
+
+	return e.printNodeInfos(nodeInfos)
 }
 
 // createEOATransaction creates an EOA transaction
 func (e *EOARunner) createEOATransaction(account *account, feeData *feeData,
-	chainID *big.Int) *types.Transaction {
+	chainID *big.Int) (*types.Transaction, error) {
 	if e.cfg.DynamicTxs {
 		return types.NewTx(types.NewDynamicFeeTx(
 			types.WithNonce(account.nonce),
-			types.WithTo(&receiverAddr),
+			types.WithTo(e.receivers.getReceiverForSender(account.index)),
 			types.WithValue(ethgo.Gwei(1)),
 			types.WithGas(21000),
 			types.WithFrom(account.key.Address()),
 			types.WithGasFeeCap(feeData.gasFeeCap),
 			types.WithGasTipCap(feeData.gasTipCap),
 			types.WithChainID(chainID),
-		))
+		)), nil
 	}
 
 	return types.NewTx(types.NewLegacyTx(
 		types.WithNonce(account.nonce),
-		types.WithTo(&receiverAddr),
+		types.WithTo(e.receivers.getReceiverForSender(account.index)),
 		types.WithValue(ethgo.Gwei(1)),
 		types.WithGas(21000),
 		types.WithGasPrice(feeData.gasPrice),
 		types.WithFrom(account.key.Address()),
-	))
+	)), nil
 }

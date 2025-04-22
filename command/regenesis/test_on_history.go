@@ -12,7 +12,6 @@ import (
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/spf13/cobra"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 	ldbstorage "github.com/syndtr/goleveldb/leveldb/storage"
 )
 
@@ -21,6 +20,7 @@ var (
 	chainPath string
 	toBlock   uint64
 	fromBlock uint64
+	dbEngine  string
 )
 
 /*
@@ -36,18 +36,20 @@ func HistoryTestCmd() *cobra.Command {
 	historyTestCMD.Flags().StringVar(&chainPath, "chaindb", "", "path to chain db")
 	historyTestCMD.Flags().Uint64Var(&toBlock, "to", 0, "upper bound of regenesis test(default is head)")
 	historyTestCMD.Flags().Uint64Var(&fromBlock, "from", 0, "lower bound of regenesis test(default is 0)")
+	historyTestCMD.Flags().StringVar(&dbEngine, "dbengine", "pebble", "possible values:'pebble'(default) and 'leveldb'")
 
 	historyTestCMD.Run = func(cmd *cobra.Command, args []string) {
 		outputter := command.InitializeOutputter(historyTestCMD)
 		defer outputter.WriteOutput()
 
-		trieDB, err := leveldb.OpenFile(triePath, &opt.Options{ReadOnly: true})
+		trieStorage, err := openStorage(triePath, dbEngine, true)
 		if err != nil {
 			outputter.SetError(err)
 
 			return
 		}
 
+		// to do, open chaindb as a pebble or leveldb
 		st, err := leveldb2.NewLevelDBStorage(chainPath, hclog.NewNullLogger())
 		if err != nil {
 			outputter.SetError(err)
@@ -115,7 +117,7 @@ func HistoryTestCmd() *cobra.Command {
 			tmpStorage := itrie.NewKV(tmpDB)
 			tt := time.Now().UTC()
 
-			err = itrie.CopyTrie(header.StateRoot.Bytes(), itrie.NewKV(trieDB), tmpStorage, []byte{}, false)
+			err = itrie.CopyTrie(header.StateRoot.Bytes(), trieStorage, tmpStorage, []byte{}, false)
 			if err != nil {
 				outputter.SetError(fmt.Errorf("copy trie for block %v returned error %w", i, err))
 

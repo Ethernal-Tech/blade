@@ -12,6 +12,7 @@ type regenesisParams struct {
 	TrieDBPath         string
 	SnapshotTrieDBPath string
 	TrieRoot           string
+	DBEngine           string
 }
 
 func GetCommand() *cobra.Command {

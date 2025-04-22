@@ -11,7 +11,7 @@ var basicParams = &initParams{}
 func GetCommand() *cobra.Command {
 	secretsInitCmd := &cobra.Command{
 		Use: "init",
-		Short: "Initializes private keys for the Polygon Edge (Validator + Networking) " +
+		Short: "Initializes private keys for Blade (Validator + Networking) " +
 			"to the specified Secrets Manager",
 		PreRunE: runPreRun,
 		Run:     runCommand,

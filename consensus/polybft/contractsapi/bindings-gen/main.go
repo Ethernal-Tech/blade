@@ -395,6 +395,18 @@ func main() {
 				"BridgeMsg",
 			},
 		},
+		{
+			"TestPerformance",
+			gensc.TestPerformance,
+			true,
+			[]string{
+				"getConfirmedBatches",
+				"getHashesCount",
+				"getLastBatchID",
+				"submitSignedBatch",
+			},
+			[]string{},
+		},
 	}
 
 	generatedData := &generatedData{}

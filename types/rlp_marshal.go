@@ -14,9 +14,9 @@ type RLPMarshaler interface {
 
 type marshalRLPFunc func(ar *fastrlp.Arena) *fastrlp.Value
 
-func MarshalRLPTo(obj marshalRLPFunc, dst []byte) []byte {
+func MarshalRLPTo(marshalHandler marshalRLPFunc, dst []byte) []byte {
 	ar := fastrlp.DefaultArenaPool.Get()
-	dst = obj(ar).MarshalTo(dst)
+	dst = marshalHandler(ar).MarshalTo(dst)
 	fastrlp.DefaultArenaPool.Put(ar)
 
 	return dst

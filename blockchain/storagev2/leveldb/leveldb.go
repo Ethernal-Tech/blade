@@ -2,6 +2,7 @@ package leveldb
 
 import (
 	"github.com/0xPolygon/polygon-edge/blockchain/storagev2"
+	"github.com/0xPolygon/polygon-edge/helper/common"
 	"github.com/hashicorp/go-hclog"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -44,7 +45,7 @@ func NewLevelDBStorage(path string, logger hclog.Logger) (*storagev2.Storage, er
 	ldbs[0] = &levelDB{maindb}
 	ldbs[1] = nil
 
-	return storagev2.Open(logger.Named("leveldb"), ldbs)
+	return storagev2.Open(logger.Named(common.LevelDB), ldbs)
 }
 
 func openLevelDBStorage(path string, options *opt.Options) (*leveldb.DB, error) {

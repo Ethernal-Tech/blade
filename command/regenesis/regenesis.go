@@ -5,8 +5,10 @@ import (
 	"fmt"
 
 	"github.com/0xPolygon/polygon-edge/command"
+	"github.com/0xPolygon/polygon-edge/helper/common"
 	itrie "github.com/0xPolygon/polygon-edge/state/immutable-trie"
 	"github.com/0xPolygon/polygon-edge/types"
+	"github.com/cockroachdb/pebble"
 	"github.com/spf13/cobra"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -41,6 +43,12 @@ func RegenesisCMD() *cobra.Command {
 		"",
 		"block state root of old chain",
 	)
+	genesisCmd.Flags().StringVar(
+		&params.DBEngine,
+		"db-engine",
+		"pebble",
+		"trie database, possible values: 'pebble' (default) and 'leveldb'",
+	)
 
 	outputter := command.InitializeOutputter(genesisCmd)
 	defer outputter.WriteOutput()
@@ -51,28 +59,32 @@ func RegenesisCMD() *cobra.Command {
 
 			return
 		}
+
+		if params.DBEngine != common.Pebble && params.DBEngine != common.LevelDB {
+			outputter.SetError(fmt.Errorf("wrong database engine"))
+
+			return
+		}
 	}
 
 	genesisCmd.Run = func(cmd *cobra.Command, args []string) {
-		trieDB, err := leveldb.OpenFile(params.TrieDBPath, &opt.Options{ReadOnly: true})
+		trieStorage, err := openStorage(params.TrieDBPath, params.DBEngine, true)
 		if err != nil {
 			outputter.SetError(fmt.Errorf("open trie trieDB error:%w", err))
 
 			return
 		}
-		defer trieDB.Close()
+		defer trieStorage.Close()
 
-		snapshotDB, err := leveldb.OpenFile(params.SnapshotTrieDBPath, nil)
+		snapshotStorage, err := openStorage(params.SnapshotTrieDBPath, params.DBEngine, false)
 		if err != nil {
 			outputter.SetError(fmt.Errorf("open snapshotDB error:%w", err))
 
 			return
 		}
-		defer snapshotDB.Close()
+		defer snapshotStorage.Close()
 
-		snapshotStorage := itrie.NewKV(snapshotDB)
-
-		err = itrie.CopyTrie(types.StringToHash(params.TrieRoot).Bytes(), itrie.NewKV(trieDB), snapshotStorage, nil, false)
+		err = itrie.CopyTrie(types.StringToHash(params.TrieRoot).Bytes(), trieStorage, snapshotStorage, nil, false)
 		if err != nil {
 			outputter.SetError(fmt.Errorf("copy trie error:%w", err))
 
@@ -96,6 +108,31 @@ func RegenesisCMD() *cobra.Command {
 	}
 
 	return genesisCmd
+}
+
+func openStorage(path, dbEngine string, isReadOnly bool) (itrie.Storage, error) {
+	switch dbEngine {
+	case common.Pebble:
+		opts := &pebble.Options{Logger: itrie.PebbleLogger{}, ReadOnly: isReadOnly}
+
+		db, err := pebble.Open(path, opts)
+		if err != nil {
+			return nil, err
+		}
+
+		return itrie.NewPebble(db), nil
+	case common.LevelDB:
+		opts := &opt.Options{ReadOnly: isReadOnly}
+
+		db, err := leveldb.OpenFile(path, opts)
+		if err != nil {
+			return nil, err
+		}
+
+		return itrie.NewKV(db), nil
+	default:
+		return nil, fmt.Errorf("invalid regenesis database engine %s", dbEngine)
+	}
 }
 
 type ReGenesisResult struct {

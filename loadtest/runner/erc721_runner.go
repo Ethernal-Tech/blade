@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"time"
@@ -43,8 +44,12 @@ func NewERC721Runner(cfg LoadTestConfig) (*ERC721Runner, error) {
 // 6. Waits for transaction receipts.
 // 7. Calculates the transactions per second (TPS) based on block information and transaction statistics.
 // Returns an error if any of the steps fail.
-func (e *ERC721Runner) Run() error {
+func (e *ERC721Runner) Run(ctx context.Context) error {
 	fmt.Println("Running ERC721 load test", e.cfg.LoadTestName)
+
+	// print state db metrics before and after test
+	e.printStateDBMetrics()
+	defer e.printStateDBMetrics()
 
 	if err := e.createVUs(); err != nil {
 		return err
@@ -58,8 +63,19 @@ func (e *ERC721Runner) Run() error {
 		return err
 	}
 
+	cancelableCtx, cancel := context.WithCancel(ctx)
+	defer func() {
+		cancel()
+
+		e.resultsCollector.PrintResults()
+	}()
+
+	go e.resultsCollector.CollectResults(ctx)
+	go e.readState(cancelableCtx)
+	go e.readTxPool(cancelableCtx)
+
 	if !e.cfg.WaitForTxPoolToEmpty {
-		go e.waitForReceiptsParallel()
+		go e.waitForReceiptsParallel(cancelableCtx)
 		go e.calculateResultsParallel()
 
 		_, err := e.sendTransactions(e.createERC721Transaction)
@@ -67,7 +83,16 @@ func (e *ERC721Runner) Run() error {
 			return err
 		}
 
-		return <-e.done
+		if err := <-e.done; err != nil {
+			return err
+		}
+
+		nodeInfos, err := e.queryLatestBlocks()
+		if err != nil {
+			return err
+		}
+
+		return e.printNodeInfos(nodeInfos)
 	}
 
 	txHashes, err := e.sendTransactions(e.createERC721Transaction)
@@ -79,7 +104,20 @@ func (e *ERC721Runner) Run() error {
 		return err
 	}
 
-	return e.calculateResults(e.waitForReceipts(txHashes))
+	if err := e.calculateResults(e.waitForReceipts(txHashes)); err != nil {
+		return err
+	}
+
+	nodeInfos, err := e.queryLatestBlocks()
+	if err != nil {
+		return err
+	}
+
+	if err := e.tearDown(); err != nil {
+		return err
+	}
+
+	return e.printNodeInfos(nodeInfos)
 }
 
 // deployERC21Token deploys an ERC721 token contract.
@@ -113,7 +151,7 @@ func (e *ERC721Runner) deployERC21Token() error {
 	))
 
 	txRelayer, err := txrelayer.NewTxRelayer(
-		txrelayer.WithClient(e.client),
+		txrelayer.WithClient(e.clients.getClient()),
 		txrelayer.WithReceiptsTimeout(e.cfg.ReceiptsTimeout))
 	if err != nil {
 		return err
@@ -145,7 +183,7 @@ func (e *ERC721Runner) deployERC21Token() error {
 
 // createERC721Transaction creates an ERC721 transaction
 func (e *ERC721Runner) createERC721Transaction(account *account, feeData *feeData,
-	chainID *big.Int) *types.Transaction {
+	chainID *big.Int) (*types.Transaction, error) {
 	if e.cfg.DynamicTxs {
 		return types.NewTx(types.NewDynamicFeeTx(
 			types.WithNonce(account.nonce),
@@ -155,7 +193,7 @@ func (e *ERC721Runner) createERC721Transaction(account *account, feeData *feeDat
 			types.WithGasTipCap(feeData.gasTipCap),
 			types.WithChainID(chainID),
 			types.WithInput(e.txInput),
-		))
+		)), nil
 	}
 
 	return types.NewTx(types.NewLegacyTx(
@@ -164,5 +202,5 @@ func (e *ERC721Runner) createERC721Transaction(account *account, feeData *feeDat
 		types.WithGasPrice(feeData.gasPrice),
 		types.WithFrom(account.key.Address()),
 		types.WithInput(e.txInput),
-	))
+	)), nil
 }

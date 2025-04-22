@@ -599,8 +599,8 @@ func (c *consensusRuntime) IsValidProposalHash(proposal *proto.Proposal, hash []
 	}
 
 	block := types.Block{}
-	if err := block.UnmarshalRLP(proposal.RawProposal); err != nil {
-		c.logger.Error("unable to unmarshal proposal", "error", err)
+	if err := block.UnmarshalRLPHeader(proposal.RawProposal); err != nil {
+		c.logger.Error("unable to validate proposal hash, failed to unmarshal the RLP data provided", "error", err)
 
 		return false
 	}
@@ -705,8 +705,8 @@ func (c *consensusRuntime) BuildPrePrepareMessage(
 	}
 
 	block := types.Block{}
-	if err := block.UnmarshalRLP(rawProposal); err != nil {
-		c.logger.Error(fmt.Sprintf("cannot unmarshal RLP: %s", err))
+	if err := block.UnmarshalRLPHeader(rawProposal); err != nil {
+		c.logger.Error("unable to build PRE-PREPARE message, failed to unmarshal the RLP data provided", "error", err)
 
 		return nil
 	}

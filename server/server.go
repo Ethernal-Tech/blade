@@ -24,6 +24,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/blockchain/storagev2"
 	"github.com/0xPolygon/polygon-edge/blockchain/storagev2/leveldb"
 	"github.com/0xPolygon/polygon-edge/blockchain/storagev2/memory"
+	"github.com/0xPolygon/polygon-edge/blockchain/storagev2/pebble"
 	"github.com/0xPolygon/polygon-edge/chain"
 	"github.com/0xPolygon/polygon-edge/consensus"
 	polycfg "github.com/0xPolygon/polygon-edge/consensus/polybft/config"
@@ -98,7 +99,7 @@ type Server struct {
 // newFileLogger returns logger instance that writes all logs to a specified file.
 // If log file can't be created, it returns an error
 func newFileLogger(config *Config) (hclog.Logger, error) {
-	logFileWriter, err := os.Create(config.LogFilePath)
+	logFileWriter, err := os.OpenFile(config.LogFilePath, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660)
 	if err != nil {
 		return nil, fmt.Errorf("could not create log file, %w", err)
 	}
@@ -212,7 +213,7 @@ func NewServer(config *Config) (*Server, error) {
 	}
 
 	// start blockchain object
-	stateStorage, err := itrie.NewLevelDBStorage(filepath.Join(m.config.DataDir, "trie"), logger)
+	stateStorage, err := openItrieStorage(m.config, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -322,10 +323,7 @@ func NewServer(config *Config) (*Server, error) {
 				return nil, err
 			}
 		} else {
-			db, err = leveldb.NewLevelDBStorage(
-				filepath.Join(m.config.DataDir, "blockchain"),
-				m.logger,
-			)
+			db, err = openBlockchainStorage(m.config, m.logger)
 			if err != nil {
 				return nil, err
 			}
@@ -385,6 +383,8 @@ func NewServer(config *Config) (*Server, error) {
 				PriceLimit:         m.config.PriceLimit,
 				MaxAccountEnqueued: m.config.MaxAccountEnqueued,
 				TxGossipBatchSize:  m.config.TxGossipBatchSize,
+				JournalRotateSize:  m.config.JournalRotateSize,
+				DataDir:            m.config.DataDir,
 				ChainID:            big.NewInt(m.config.Chain.Params.ChainID),
 				PeerID:             m.network.AddrInfo().ID,
 			},
@@ -427,11 +427,6 @@ func NewServer(config *Config) (*Server, error) {
 		return nil, err
 	}
 
-	// setup and start jsonrpc server
-	if err := m.setupJSONRPC(); err != nil {
-		return nil, err
-	}
-
 	// restore archive data before starting
 	if err := m.restoreChain(); err != nil {
 		return nil, err
@@ -442,10 +437,38 @@ func NewServer(config *Config) (*Server, error) {
 		return nil, err
 	}
 
+	// start txpool
 	m.txpool.SetBaseFee(m.blockchain.Header())
 	m.txpool.Start()
 
+	// setup and start jsonrpc server
+	if err := m.setupJSONRPC(); err != nil {
+		return nil, err
+	}
+
 	return m, nil
+}
+
+func openItrieStorage(config *Config, logger hclog.Logger) (itrie.Storage, error) {
+	switch config.DBEngine {
+	case common.Pebble:
+		return itrie.NewPebbleDBStorage(filepath.Join(config.DataDir, "trie"), logger)
+	case common.LevelDB:
+		return itrie.NewLevelDBStorage(filepath.Join(config.DataDir, "trie"), logger)
+	default:
+		return nil, fmt.Errorf("invalid trie database engine %s", config.DBEngine)
+	}
+}
+
+func openBlockchainStorage(config *Config, logger hclog.Logger) (*storagev2.Storage, error) {
+	switch config.DBEngine {
+	case common.Pebble:
+		return pebble.NewPebbleDBStorage(filepath.Join(config.DataDir, "blockchain"), logger)
+	case common.LevelDB:
+		return leveldb.NewLevelDBStorage(filepath.Join(config.DataDir, "blockchain"), logger)
+	default:
+		return nil, fmt.Errorf("invalid blockchain database engine %s", config.DBEngine)
+	}
 }
 
 func unaryInterceptor(

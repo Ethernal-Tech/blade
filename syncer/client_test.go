@@ -310,8 +310,6 @@ func TestPeerConnectionUpdateEventCh(t *testing.T) {
 		status := <-client.GetPeerStatusUpdateCh()
 		newStatuses = append(newStatuses, status)
 		doneCh <- struct{}{}
-
-		return
 	}()
 
 	// push latest block number to blockchain subscription

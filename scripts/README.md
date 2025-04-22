@@ -4,13 +4,13 @@
 
 When deploying with `polybft` consensus, there are some additional dependencies:
 
-* [go 1.22.x](https://go.dev/dl/)
+* [go 1.24.x](https://go.dev/dl/)
 * [jq](https://jqlang.github.io/jq)
 * [curl](https://everything.curl.dev/get)
 
 ## Local development
 
-Running `polygon-edge` from local binary can be done very easily by using provided `scripts` folder.
+Running `blade` from local binary can be done very easily by using provided `scripts` folder.
 
 * `scripts/cluster polybft` - deploy environment with `polybft` consensus
 

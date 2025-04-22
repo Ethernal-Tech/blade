@@ -15,7 +15,6 @@ type validatorInfoParams struct {
 	jsonRPC                string
 	supernetManagerAddress string
 	stakeManagerAddress    string
-	chainID                int64
 	txTimeout              time.Duration
 }
 

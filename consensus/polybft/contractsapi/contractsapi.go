@@ -2205,3 +2205,98 @@ func (b *BridgeMsgEvent) ParseLog(log *ethgo.Log) (bool, error) {
 func (b *BridgeMsgEvent) Decode(input []byte) error {
 	return Gateway.Abi.Events["BridgeMsg"].Inputs.DecodeStruct(input, &b)
 }
+type TestPerformanceConstructorFn struct {
+	QuorumCnt                          *big.Int `abi:"_quorumCnt"`
+	CheckBatchID                       bool     `abi:"_checkBatchID"`
+	DeleteTemporaryMappingsAfterQuorum bool     `abi:"_deleteTemporaryMappingsAfterQuorum"`
+}
+
+func (t *TestPerformanceConstructorFn) Sig() []byte {
+	return TestPerformance.Abi.Constructor.ID()
+}
+
+func (t *TestPerformanceConstructorFn) EncodeAbi() ([]byte, error) {
+	return TestPerformance.Abi.Constructor.Inputs.Encode(t)
+}
+
+func (t *TestPerformanceConstructorFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(TestPerformance.Abi.Constructor, buf, t)
+}
+
+type GetConfirmedBatchesTestPerformanceFn struct {
+}
+
+func (g *GetConfirmedBatchesTestPerformanceFn) Sig() []byte {
+	return TestPerformance.Abi.Methods["getConfirmedBatches"].ID()
+}
+
+func (g *GetConfirmedBatchesTestPerformanceFn) EncodeAbi() ([]byte, error) {
+	return TestPerformance.Abi.Methods["getConfirmedBatches"].Encode(g)
+}
+
+func (g *GetConfirmedBatchesTestPerformanceFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(TestPerformance.Abi.Methods["getConfirmedBatches"], buf, g)
+}
+
+type GetHashesCountTestPerformanceFn struct {
+}
+
+func (g *GetHashesCountTestPerformanceFn) Sig() []byte {
+	return TestPerformance.Abi.Methods["getHashesCount"].ID()
+}
+
+func (g *GetHashesCountTestPerformanceFn) EncodeAbi() ([]byte, error) {
+	return TestPerformance.Abi.Methods["getHashesCount"].Encode(g)
+}
+
+func (g *GetHashesCountTestPerformanceFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(TestPerformance.Abi.Methods["getHashesCount"], buf, g)
+}
+
+type GetLastBatchIDTestPerformanceFn struct {
+}
+
+func (g *GetLastBatchIDTestPerformanceFn) Sig() []byte {
+	return TestPerformance.Abi.Methods["getLastBatchID"].ID()
+}
+
+func (g *GetLastBatchIDTestPerformanceFn) EncodeAbi() ([]byte, error) {
+	return TestPerformance.Abi.Methods["getLastBatchID"].Encode(g)
+}
+
+func (g *GetLastBatchIDTestPerformanceFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(TestPerformance.Abi.Methods["getLastBatchID"], buf, g)
+}
+
+type SignedBatch struct {
+	BatchID     *big.Int `abi:"batchID"`
+	Counter     *big.Int `abi:"counter"`
+	ValidatorID *big.Int `abi:"validatorID"`
+	Signature   []byte   `abi:"signature"`
+}
+
+var SignedBatchABIType = abi.MustNewType("tuple(uint256 batchID,uint256 counter,uint256 validatorID,bytes signature)")
+
+func (s *SignedBatch) EncodeAbi() ([]byte, error) {
+	return SignedBatchABIType.Encode(s)
+}
+
+func (s *SignedBatch) DecodeAbi(buf []byte) error {
+	return decodeStruct(SignedBatchABIType, buf, &s)
+}
+
+type SubmitSignedBatchTestPerformanceFn struct {
+	SignedBatch *SignedBatch `abi:"_signedBatch"`
+}
+
+func (s *SubmitSignedBatchTestPerformanceFn) Sig() []byte {
+	return TestPerformance.Abi.Methods["submitSignedBatch"].ID()
+}
+
+func (s *SubmitSignedBatchTestPerformanceFn) EncodeAbi() ([]byte, error) {
+	return TestPerformance.Abi.Methods["submitSignedBatch"].Encode(s)
+}
+
+func (s *SubmitSignedBatchTestPerformanceFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(TestPerformance.Abi.Methods["submitSignedBatch"], buf, s)
+}

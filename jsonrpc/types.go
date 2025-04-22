@@ -19,7 +19,7 @@ var (
 	defaultPool  fastjson.ParserPool
 )
 
-const jsonRPCMetric = "json_rpc"
+const jsonRPCMetric = "jsonrpc"
 
 // For union type of transaction and types.Hash
 type transactionOrHash interface {
