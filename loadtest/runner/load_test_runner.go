@@ -14,6 +14,7 @@ const (
 	EOATestType      = "eoa"
 	ERC20TestType    = "erc20"
 	ERC721TestType   = "erc721"
+	ERC1155TestType  = "erc1155"
 	MixedTestType    = "mixed"
 	PerfContractType = "perf-contract"
 )
@@ -24,6 +25,7 @@ func IsLoadTestSupported(loadTestType string) bool {
 	return ltp == EOATestType ||
 		ltp == ERC20TestType ||
 		ltp == ERC721TestType ||
+		ltp == ERC1155TestType ||
 		ltp == MixedTestType ||
 		ltp == PerfContractType
 }
@@ -112,6 +114,13 @@ func (r *LoadTestRunner) Run(ctx context.Context, cfg LoadTestConfig) error {
 		}
 
 		return erc721Runner.Run(ctx)
+	case ERC1155TestType:
+		erc1155Runner, err := NewERC1155Runner(cfg)
+		if err != nil {
+			return err
+		}
+
+		return erc1155Runner.Run(ctx)
 	case MixedTestType:
 		mixedTxRunner, err := NewMixedTxRunner(cfg)
 		if err != nil {

@@ -51,7 +51,7 @@ func setFlags(cmd *cobra.Command) {
 		&params.loadTestType,
 		loadTestTypeFlag,
 		"eoa",
-		"the type of load test to run (supported types: eoa, erc20, erc721, mixed, perf-contract)",
+		"the type of load test to run (supported types: eoa, erc20, erc721, erc1155, mixed, perf-contract)",
 	)
 
 	cmd.Flags().StringVar(
