@@ -54,7 +54,7 @@ build: check-go check-git
 
 .PHONY: lint
 lint: check-lint
-	golangci-lint run --config .golangci.yml --whole-files
+	golangci-lint run --timeout 10m --config .golangci.yml --whole-files
 
 .PHONY: generate-bsd-licenses
 generate-bsd-licenses: check-git

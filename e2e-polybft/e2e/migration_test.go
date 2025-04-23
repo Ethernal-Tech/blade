@@ -8,9 +8,8 @@ import (
 	"time"
 
 	"github.com/Ethernal-Tech/ethgo"
+	"github.com/cockroachdb/pebble"
 	"github.com/stretchr/testify/require"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	"github.com/0xPolygon/polygon-edge/crypto"
@@ -128,12 +127,12 @@ func TestE2E_Migration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db, err := leveldb.OpenFile(tmpDir, &opt.Options{ReadOnly: true})
+	db, err := pebble.Open(tmpDir, &pebble.Options{ReadOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	stateStorageNew := itrie.NewKV(db)
+	stateStorageNew := itrie.NewPebble(db)
 
 	copiedStateRoot, err := itrie.HashChecker(block.Header.StateRoot.Bytes(), stateStorageNew)
 	if err != nil {

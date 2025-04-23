@@ -19,7 +19,7 @@ The account manager is the top layer, and the system interacts with it for every
 ## Interacting with account management
 Accounts are required for some features. So our software support two diffent ways of interaction with account management. You can interact with commands or with different json rpc calls.
 
-### Suported json-rpc calls
+### Suported jsonrpc calls
 * **personal_listAccount** - return addresses of all accounts
 * **personal_newAccount** - create new account and return address of account
 * **personal_importRawKey** - insert hex raw key and storing them in storage

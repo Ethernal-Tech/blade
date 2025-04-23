@@ -368,7 +368,7 @@ func TestAddTxErrors(t *testing.T) {
 		tx = signTx(tx)
 
 		// enqueue tx
-		assert.NoError(t, pool.AddTx(tx))
+		assert.NoError(t, pool.addTx(local, tx))
 
 		_, exists := pool.index.get(tx.Hash())
 		assert.True(t, exists)

@@ -233,7 +233,7 @@ func (t *TestServer) ExternalChainFundFor(accounts []types.Address, amounts []*b
 	args := []string{
 		"bridge",
 		"fund",
-		"--json-rpc", jsonrpc,
+		"--jsonrpc", jsonrpc,
 	}
 
 	for i := 0; i < len(accounts); i++ {

@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"math/big"
@@ -57,8 +58,12 @@ func NewMixedTxRunner(cfg LoadTestConfig) (*MixedTxRunner, error) {
 // 8. Waits for transaction receipts.
 // 9. Calculates the transactions per second (TPS) based on block information and transaction statistics.
 // Returns an error if any of the steps fail.
-func (m *MixedTxRunner) Run() error {
+func (m *MixedTxRunner) Run(ctx context.Context) error {
 	fmt.Println("Running mixed load test", m.cfg.LoadTestName)
+
+	// print state db metrics before and after test
+	m.printStateDBMetrics()
+	defer m.printStateDBMetrics()
 
 	if err := m.createVUs(); err != nil {
 		return err
@@ -84,8 +89,14 @@ func (m *MixedTxRunner) Run() error {
 		return err
 	}
 
+	cancelableCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	m.readState(cancelableCtx)
+	m.readTxPool(cancelableCtx)
+
 	if !m.cfg.WaitForTxPoolToEmpty {
-		go m.waitForReceiptsParallel()
+		go m.waitForReceiptsParallel(cancelableCtx)
 		go m.calculateResultsParallel()
 
 		_, err := m.sendTransactions(m.createTransaction)
@@ -95,7 +106,16 @@ func (m *MixedTxRunner) Run() error {
 
 		m.printHowManySent()
 
-		return <-m.done
+		if err := <-m.done; err != nil {
+			return err
+		}
+
+		nodeInfos, err := m.queryLatestBlocks()
+		if err != nil {
+			return err
+		}
+
+		return m.printNodeInfos(nodeInfos)
 	}
 
 	txHashes, err := m.sendTransactions(m.createTransaction)
@@ -109,11 +129,25 @@ func (m *MixedTxRunner) Run() error {
 		return err
 	}
 
-	return m.calculateResults(m.waitForReceipts(txHashes))
+	if err := m.calculateResults(m.waitForReceipts(txHashes)); err != nil {
+		return err
+	}
+
+	nodeInfos, err := m.queryLatestBlocks()
+	if err != nil {
+		return err
+	}
+
+	if err := m.tearDown(); err != nil {
+		return err
+	}
+
+	return m.printNodeInfos(nodeInfos)
 }
 
 // createTransaction creates a transaction for the mixed load test
-func (m *MixedTxRunner) createTransaction(account *account, feeData *feeData, chainID *big.Int) *types.Transaction {
+func (m *MixedTxRunner) createTransaction(
+	account *account, feeData *feeData, chainID *big.Int) (*types.Transaction, error) {
 	// Randomly choose a transaction type
 	r, _ := rand.Int(rand.Reader, three)
 
@@ -123,19 +157,19 @@ func (m *MixedTxRunner) createTransaction(account *account, feeData *feeData, ch
 		m.numOfERC20Txs++
 		m.lock.Unlock()
 
-		tx := m.createERC20Transaction(account, feeData, chainID)
+		tx, _ := m.createERC20Transaction(account, feeData, chainID)
 		tx.SetGas(m.erc20Gas)
 
-		return tx
+		return tx, nil
 	case 1:
 		m.lock.Lock()
 		m.numOfERC721Txs++
 		m.lock.Unlock()
 
-		tx := m.createERC721Transaction(account, feeData, chainID)
+		tx, _ := m.createERC721Transaction(account, feeData, chainID)
 		tx.SetGas(m.erc721Gas)
 
-		return tx
+		return tx, nil
 	default:
 		m.lock.Lock()
 		m.numOfEOATxs++
@@ -147,8 +181,9 @@ func (m *MixedTxRunner) createTransaction(account *account, feeData *feeData, ch
 
 // estimateGas estimates the gas for ERC transaction types
 func (m *MixedTxRunner) estimateGas() error {
+	client := m.clients.getClient()
 	estimateGasFn := func(tx *types.Transaction) uint64 {
-		gasLimit, err := m.client.EstimateGas(txrelayer.ConvertTxnToCallMsg(tx))
+		gasLimit, err := client.EstimateGas(txrelayer.ConvertTxnToCallMsg(tx))
 		if err != nil {
 			gasLimit = txrelayer.DefaultGasLimit
 		}
@@ -156,18 +191,21 @@ func (m *MixedTxRunner) estimateGas() error {
 		return gasLimit * 2 // double it just in case
 	}
 
-	chainID, err := m.client.ChainID()
+	chainID, err := client.ChainID()
 	if err != nil {
 		return err
 	}
 
-	feeData, err := getFeeData(m.client, m.cfg.DynamicTxs)
+	feeData, err := getFeeData(client, m.cfg.DynamicTxs)
 	if err != nil {
 		return err
 	}
 
-	m.erc20Gas = estimateGasFn(m.createERC20Transaction(m.loadTestAccount, feeData, chainID))
-	m.erc721Gas = estimateGasFn(m.createERC721Transaction(m.loadTestAccount, feeData, chainID))
+	erc20Txn, _ := m.createERC20Transaction(m.loadTestAccount, feeData, chainID)
+	erc721Txn, _ := m.createERC721Transaction(m.loadTestAccount, feeData, chainID)
+
+	m.erc20Gas = estimateGasFn(erc20Txn)
+	m.erc721Gas = estimateGasFn(erc721Txn)
 
 	return nil
 }

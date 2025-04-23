@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -12,12 +13,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/helper/common"
 	"github.com/0xPolygon/polygon-edge/jsonrpc"
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/Ethernal-Tech/ethgo"
+	jr "github.com/Ethernal-Tech/ethgo/jsonrpc"
 	"github.com/Ethernal-Tech/ethgo/wallet"
 	"github.com/olekukonko/tablewriter"
 	"github.com/schollz/progressbar/v3"
@@ -44,13 +47,15 @@ type BaseLoadTestRunner struct {
 
 	loadTestAccount *account
 	vus             []*account
-
-	client *jsonrpc.EthClient
+	vusAddresses    []types.Address
 
 	resultsCollectedCh chan *stats
 	done               chan error
 
-	batchSender *TransactionBatchSender
+	resultsCollector *ResultCollector
+	clients          ethClientList
+	receivers        receiversList
+	batchSenders     batchSendersList
 }
 
 // NewBaseLoadTestRunner creates a new instance of BaseLoadTestRunner with the provided LoadTestConfig.
@@ -59,40 +64,173 @@ type BaseLoadTestRunner struct {
 // If any error occurs during the initialization process, it returns nil and the error.
 // Otherwise, it returns a pointer to the initialized BaseLoadTestRunner and nil error.
 func NewBaseLoadTestRunner(cfg LoadTestConfig) (*BaseLoadTestRunner, error) {
-	key, err := wallet.NewWalletFromMnemonic(cfg.Mnemonnic)
+	key, err := wallet.NewWalletFromMnemonic(cfg.Mnemonic)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create wallet from mnemonic: %w", err)
 	}
 
 	raw, err := key.MarshallPrivateKey()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to marshal private key for load test account: %w", err)
 	}
 
 	ecdsaKey, err := crypto.NewECDSAKeyFromRawPrivECDSA(raw)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create ECDSA key for load test account: %w", err)
 	}
 
-	client, err := jsonrpc.NewEthClient(cfg.JSONRPCUrl)
+	ethClientList, err := newEthClientList(cfg.JSONRPCUrls)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create eth client list: %w", err)
+	}
+
+	receiversList, err := newReceiversList(cfg.ReceiversNum)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create receivers list: %w", err)
 	}
 
 	return &BaseLoadTestRunner{
 		cfg:                cfg,
 		loadTestAccount:    &account{key: ecdsaKey},
-		client:             client,
 		resultsCollectedCh: make(chan *stats),
 		done:               make(chan error),
-		batchSender:        newTransactionBatchSender(cfg.JSONRPCUrl),
+		batchSenders:       newBatchSenders(cfg.JSONRPCUrls),
+		resultsCollector:   NewResultCollector(cfg),
+		clients:            ethClientList,
+		receivers:          receiversList,
+		vus:                make([]*account, cfg.VUs),
+		vusAddresses:       make([]types.Address, cfg.VUs),
 	}, nil
+}
+
+func (r *BaseLoadTestRunner) tearDown() error {
+	if !r.cfg.TearDown {
+		return nil
+	}
+
+	fmt.Println("=============================================================")
+	fmt.Println("Unfunding users...")
+
+	start := time.Now().UTC()
+	bar := progressbar.Default(int64(r.cfg.VUs), "Unfund users")
+
+	defer func() {
+		_ = bar.Close()
+
+		fmt.Println("Unfund users took", time.Since(start))
+	}()
+
+	txRelayer, err := txrelayer.NewTxRelayer(
+		txrelayer.WithClient(r.clients.getClient()),
+		txrelayer.WithoutNonceGet(),
+	)
+	if err != nil {
+		return err
+	}
+
+	g, ctx := errgroup.WithContext(context.Background())
+
+	loadTestAddr := r.loadTestAccount.key.Address()
+
+	chainID, err := r.clients.getClient().ChainID()
+	if err != nil {
+		return err
+	}
+
+	for _, vu := range r.vus {
+		vu := vu
+
+		g.Go(func() error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				addr := vu.key.Address()
+
+				balance, err := r.clients.getClient().GetBalance(addr, jsonrpc.LatestBlockNumberOrHash)
+				if err != nil {
+					return err
+				}
+
+				refundAmount := balance.Sub(balance, big.NewInt(1e16))
+
+				feeData, err := getFeeData(r.clients.getClient(), false)
+				if err != nil {
+					return err
+				}
+
+				var tx *types.Transaction
+
+				if r.cfg.DynamicTxs {
+					tx = types.NewTx(types.NewDynamicFeeTx(
+						types.WithNonce(vu.nonce),
+						types.WithTo(&loadTestAddr),
+						types.WithFrom(addr),
+						types.WithGasFeeCap(feeData.gasFeeCap),
+						types.WithGasTipCap(feeData.gasTipCap),
+						types.WithChainID(chainID),
+						types.WithValue(refundAmount),
+					))
+				} else {
+					tx = types.NewTx(types.NewLegacyTx(
+						types.WithNonce(vu.nonce),
+						types.WithTo(&loadTestAddr),
+						types.WithGasPrice(feeData.gasPrice),
+						types.WithFrom(addr),
+						types.WithValue(refundAmount),
+					))
+				}
+
+				receipt, err := txRelayer.SendTransaction(tx, vu.key)
+				if err != nil {
+					return fmt.Errorf("failed to send transaction: %w", err)
+				}
+
+				if receipt == nil || receipt.Status != uint64(types.ReceiptSuccess) {
+					return fmt.Errorf("failed to tear down user %s", vu.key.Address().String())
+				}
+
+				_ = bar.Add(1)
+
+				return nil
+			}
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *BaseLoadTestRunner) printStateDBMetrics() {
+	fmt.Println("=============================================================")
+	fmt.Println("Getting state DB metrics...")
+
+	for _, rpc := range r.cfg.JSONRPCUrls {
+		jsonrpc, err := jr.NewClient(rpc)
+		if err != nil {
+			fmt.Println("Error creating JSON RPC client:", err)
+
+			continue
+		}
+
+		var result string
+		if err := jsonrpc.Call("debug_chaindbProperty", &result, ""); err != nil {
+			fmt.Println("Error getting DB metrics:", err)
+
+			continue
+		}
+
+		fmt.Printf("Result for %s node: \n%s\n", rpc, result)
+	}
 }
 
 // Close closes the BaseLoadTestRunner by closing the underlying client connection.
 // It returns an error if there was a problem closing the connection.
 func (r *BaseLoadTestRunner) Close() error {
-	return r.client.Close()
+	return r.clients.close()
 }
 
 // createVUs creates virtual users (VUs) for the load test.
@@ -116,7 +254,9 @@ func (r *BaseLoadTestRunner) createVUs() error {
 			return err
 		}
 
-		r.vus = append(r.vus, &account{key: key})
+		r.vus[i] = &account{index: i, key: key, id: fmt.Sprintf("Index: %d Address: %s", i, key.Address().String())}
+		r.vusAddresses[i] = key.Address()
+
 		_ = bar.Add(1)
 	}
 
@@ -146,14 +286,14 @@ func (r *BaseLoadTestRunner) fundVUs() error {
 	}
 
 	txRelayer, err := txrelayer.NewTxRelayer(
-		txrelayer.WithClient(r.client),
+		txrelayer.WithClient(r.clients.getClient()),
 		txrelayer.WithoutNonceGet(),
 	)
 	if err != nil {
 		return err
 	}
 
-	nonce, err := r.client.GetNonce(r.loadTestAccount.key.Address(), jsonrpc.PendingBlockNumberOrHash)
+	nonce, err := r.clients.getClient().GetNonce(r.loadTestAccount.key.Address(), jsonrpc.PendingBlockNumberOrHash)
 	if err != nil {
 		return err
 	}
@@ -219,7 +359,7 @@ func (r *BaseLoadTestRunner) waitForTxPoolToEmpty() error {
 	for {
 		select {
 		case <-ticker.C:
-			txPoolStatus, err := r.client.TxPoolStatus()
+			txPoolStatus, err := r.clients.getClient().TxPoolStatus()
 			if err != nil {
 				return err
 			}
@@ -241,8 +381,10 @@ func (r *BaseLoadTestRunner) waitForTxPoolToEmpty() error {
 // If the receipts are found, it sends the transaction statistics to the resultsCollectedCh channel.
 // If the timeout is reached before the receipts are found, it returns.
 // if there is a predefined number of empty blocks, it stops the results gathering before the timer.
-func (r *BaseLoadTestRunner) waitForReceiptsParallel() {
-	startBlock, err := r.client.BlockNumber()
+func (r *BaseLoadTestRunner) waitForReceiptsParallel(ctx context.Context) {
+	client := r.clients.getClient()
+
+	startBlock, err := client.BlockNumber()
 	if err != nil {
 		fmt.Println("Error getting start block on gathering block info:", err)
 
@@ -267,16 +409,22 @@ func (r *BaseLoadTestRunner) waitForReceiptsParallel() {
 
 	for {
 		select {
+		case <-ctx.Done():
+			fmt.Println("Context has been cancelled, aborting receipts retrieval...")
+
+			return
+
 		case <-timer.C:
 			fmt.Println("Timeout while gathering block info")
 
 			return
+
 		case <-ticker.C:
 			if sequentialEmptyBlocks >= emptyBlocksNum {
 				return
 			}
 
-			block, err := r.client.GetBlockByNumber(jsonrpc.BlockNumber(currentBlock), true)
+			block, err := client.GetBlockByNumber(jsonrpc.BlockNumber(currentBlock), true)
 			if err != nil {
 				foundErrors = append(foundErrors, err)
 
@@ -329,6 +477,7 @@ func (r *BaseLoadTestRunner) waitForReceipts(txHashes []types.Hash) (map[uint64]
 	blockInfoMap := make(map[uint64]*BlockInfo)
 	txToBlockMap := make(map[types.Hash]uint64)
 	bar := progressbar.Default(int64(len(txHashes)), "Gathering receipts")
+	client := r.clients.getClient()
 
 	defer func() {
 		_ = bar.Close()
@@ -363,7 +512,7 @@ func (r *BaseLoadTestRunner) waitForReceipts(txHashes []types.Hash) (map[uint64]
 
 			_ = bar.Add(1)
 
-			block, err := r.client.GetBlockByNumber(jsonrpc.BlockNumber(receipt.BlockNumber), true)
+			block, err := client.GetBlockByNumber(jsonrpc.BlockNumber(receipt.BlockNumber), true)
 			if err != nil {
 				lock.Lock()
 				foundErrors = append(foundErrors, err)
@@ -450,10 +599,12 @@ func (r *BaseLoadTestRunner) waitForReceipt(txHash types.Hash) (*ethgo.Receipt, 
 	ticker := time.NewTicker(tickerTimeout)
 	defer ticker.Stop()
 
+	client := r.clients.getClient()
+
 	for {
 		select {
 		case <-ticker.C:
-			receipt, err := r.client.GetTransactionReceipt(txHash)
+			receipt, err := client.GetTransactionReceipt(txHash)
 			if err != nil {
 				if err.Error() != "not found" {
 					return nil, err
@@ -507,6 +658,7 @@ func (r *BaseLoadTestRunner) calculateResults(blockInfos map[uint64]*BlockInfo, 
 		minGasUtilization   = math.MaxFloat64
 		maxGasUtilization   float64
 		totalGasUtilization float64
+		client              = r.clients.getClient()
 	)
 
 	for num, stat := range blockInfos {
@@ -521,7 +673,7 @@ func (r *BaseLoadTestRunner) calculateResults(blockInfos map[uint64]*BlockInfo, 
 
 		if _, exists := blockTimeMap[nextBlockNum]; !exists {
 			if nextBlockInfo, exists := blockInfos[nextBlockNum]; !exists {
-				nextBlock, err := r.client.GetBlockByNumber(jsonrpc.BlockNumber(nextBlockNum), false)
+				nextBlock, err := client.GetBlockByNumber(jsonrpc.BlockNumber(nextBlockNum), false)
 				if err != nil {
 					return err
 				}
@@ -540,7 +692,7 @@ func (r *BaseLoadTestRunner) calculateResults(blockInfos map[uint64]*BlockInfo, 
 
 		if _, ok := blockTimeMap[block]; !ok {
 			if currentBlockInfo, ok := blockInfos[block]; !ok {
-				currentBlock, err := r.client.GetBlockByNumber(jsonrpc.BlockNumber(block), true)
+				currentBlock, err := client.GetBlockByNumber(jsonrpc.BlockNumber(block), true)
 				if err != nil {
 					return err
 				}
@@ -623,8 +775,120 @@ func (r *BaseLoadTestRunner) calculateResults(blockInfos map[uint64]*BlockInfo, 
 		totalTxs, totalTime, totalGasUsed,
 		maxTxsPerSecond, minTxsPerSecond, avgTxsPerSecond, avgGasPerTx,
 		minGasUtilization, maxGasUtilization, avgGasUtilization,
-		infos,
+		infos)
+}
+
+type NodeInfoResult struct {
+	NodeInfos []*NodeInfo `json:"nodeInfos"`
+	OutOfSync []string    `json:"nodesOutOfSync"`
+}
+
+type NodeInfo struct {
+	URL         string `json:"url"`
+	BlockNumber uint64 `json:"blockNumber"`
+}
+
+// queryLatestBlocks queries for the latest blocks on all the nodes and
+// detects if there are nodes that are out of sync (whose latest block number is outside of predefined deadband)
+func (r *BaseLoadTestRunner) queryLatestBlocks() (*NodeInfoResult, error) {
+	fmt.Println("=============================================================")
+	fmt.Println("Querying latest blocks...")
+
+	if len(r.clients) == 0 {
+		return nil, errors.New("no clients available to query the latest blocks")
+	}
+
+	if len(r.cfg.JSONRPCUrls) != len(r.clients) {
+		return nil, errors.New("number of JSON RPC URLs does not match the number of clients")
+	}
+
+	fmt.Println("Number of nodes:", len(r.clients))
+
+	nodeInfos := make([]*NodeInfo, 0, len(r.clients))
+
+	// query each node for the latest block number and store the result
+	for i, client := range r.clients {
+		nodeURL := r.cfg.JSONRPCUrls[i]
+
+		blockNum, err := client.BlockNumber()
+		if err != nil {
+			return nil, fmt.Errorf("failed to query the latest block for %s node: %w", nodeURL, err)
+		}
+
+		nodeInfos = append(nodeInfos,
+			&NodeInfo{
+				URL:         nodeURL,
+				BlockNumber: blockNum,
+			})
+	}
+
+	// sort the node infos by block number (descending)
+	sort.Slice(nodeInfos, func(i, j int) bool {
+		return nodeInfos[i].BlockNumber > nodeInfos[j].BlockNumber
+	})
+
+	var (
+		nodesOutOfSync     = make([]string, 0)
+		largestBlockNumber = nodeInfos[0].BlockNumber
 	)
+
+	for _, nodeInfo := range nodeInfos[1:] {
+		blockNum := nodeInfo.BlockNumber
+		if blockNum == largestBlockNumber {
+			continue
+		}
+
+		if largestBlockNumber-blockNum > r.cfg.BlockNumberDeadband {
+			nodesOutOfSync = append(nodesOutOfSync, nodeInfo.URL)
+		}
+	}
+
+	return &NodeInfoResult{
+		NodeInfos: nodeInfos,
+		OutOfSync: nodesOutOfSync,
+	}, nil
+}
+
+// printNodeInfos prints the node information to the console.
+// It displays the node URL and the latest block number for each node.
+// If there are nodes that are out of sync, it displays the URLs of those nodes.
+func (r *BaseLoadTestRunner) printNodeInfos(nodesResult *NodeInfoResult) error {
+	if !r.cfg.ResultsToJSON {
+		fmt.Println("=============================================================")
+		fmt.Println("Node information:")
+
+		table := tablewriter.NewWriter(os.Stdout)
+		table.SetHeader([]string{"Node URL", "Block Number"})
+
+		for _, nodeInfo := range nodesResult.NodeInfos {
+			table.Append([]string{nodeInfo.URL, fmt.Sprint(nodeInfo.BlockNumber)})
+		}
+
+		table.Render()
+
+		if len(nodesResult.OutOfSync) > 0 {
+			fmt.Println("Nodes out of sync:")
+
+			for _, nodeURL := range nodesResult.OutOfSync {
+				fmt.Println(nodeURL)
+			}
+		} else {
+			fmt.Println("All nodes are in sync")
+		}
+	} else {
+		fileName := fmt.Sprintf("./%s_%s_node_infos.json", r.cfg.LoadTestName, r.cfg.LoadTestType)
+
+		jsonData, err := json.MarshalIndent(nodesResult, "", "   ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal JSON: %w", err)
+		}
+
+		if err := common.SaveFileSafe(fileName, jsonData, 0600); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // saveResultsToJSONFile saves the load test results to a JSON file.
@@ -669,7 +933,7 @@ func (r *BaseLoadTestRunner) saveResultsToJSONFile(
 		AvgGasUtilization: avgGasUtilization,
 	}
 
-	jsonData, err := json.Marshal(result)
+	jsonData, err := json.MarshalIndent(result, "", "   ")
 	if err != nil {
 		return err
 	}
@@ -693,19 +957,21 @@ func (r *BaseLoadTestRunner) saveResultsToJSONFile(
 // The transaction hashes are appended to the allTxnHashes slice.
 // Finally, the function prints the time taken to send the transactions
 // and returns the transaction hashes and nil error.
-func (r *BaseLoadTestRunner) sendTransactions(createTxnFn func(*account, *feeData, *big.Int) *types.Transaction,
+func (r *BaseLoadTestRunner) sendTransactions(
+	createTxnFn func(*account, *feeData, *big.Int) (*types.Transaction, error),
 ) ([]types.Hash, error) {
 	fmt.Println("=============================================================")
 
-	chainID, err := r.client.ChainID()
+	client := r.clients.getClient()
+	totalTxs := r.calculateTotalTxs()
+	foundErrs := make([]error, 0)
+	bar := progressbar.Default(totalTxs, "Sending transactions")
+	start := time.Now().UTC()
+
+	chainID, err := client.ChainID()
 	if err != nil {
 		return nil, err
 	}
-
-	start := time.Now().UTC()
-	totalTxs := r.cfg.VUs * r.cfg.TxsPerUser
-	foundErrs := make([]error, 0)
-	bar := progressbar.Default(int64(totalTxs), "Sending transactions")
 
 	defer func() {
 		_ = bar.Close()
@@ -713,12 +979,20 @@ func (r *BaseLoadTestRunner) sendTransactions(createTxnFn func(*account, *feeDat
 		fmt.Println("Sending transactions took", time.Since(start))
 	}()
 
-	allTxnHashes := make([]types.Hash, 0)
+	var (
+		allTxnHashes []types.Hash
+		appendMux    sync.Mutex
+		g, ctx       = errgroup.WithContext(context.Background())
+	)
 
-	g, ctx := errgroup.WithContext(context.Background())
+	if totalTxs > 0 {
+		allTxnHashes = make([]types.Hash, 0, totalTxs)
+	}
 
 	sendFn := r.sendTransactionsForUser
-	if r.cfg.BatchSize > 1 {
+	if r.cfg.ExecutionTime > 0 {
+		sendFn = r.sendTransactionsInTime
+	} else if r.cfg.BatchSize > 1 {
 		sendFn = r.sendTransactionsForUserInBatches
 	}
 
@@ -736,8 +1010,10 @@ func (r *BaseLoadTestRunner) sendTransactions(createTxnFn func(*account, *feeDat
 					return err
 				}
 
+				appendMux.Lock()
 				foundErrs = append(foundErrs, sendErrors...)
 				allTxnHashes = append(allTxnHashes, txnHashes...)
+				appendMux.Unlock()
 
 				return nil
 			}
@@ -759,14 +1035,141 @@ func (r *BaseLoadTestRunner) sendTransactions(createTxnFn func(*account, *feeDat
 	return allTxnHashes, nil
 }
 
-// sendTransactionsForUser sends ERC20 token transactions for a given user account.
+// readState continuously reads nonce and balance from blockchain
+// for each account, with a max of StateReadThreads concurrent workers.
+func (r *BaseLoadTestRunner) readState(ctx context.Context) {
+	if r.cfg.StateReadThreads == 0 {
+		return
+	}
+
+	contractMap := contracts.GetProxyImplementationMapping()
+
+	for i := 0; i < r.cfg.StateReadThreads; i++ {
+		i := i
+
+		go func() {
+			client := r.clients.getClientForAccount(i)
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					// read non stop the state of the accounts
+					r.readBasicState(client, contractMap)
+				}
+			}
+		}()
+	}
+}
+
+// readBasicState reads the basic state of the accounts and contracts.
+func (r *BaseLoadTestRunner) readBasicState(client *jsonrpc.EthClient, contractsMap map[types.Address]types.Address) {
+	for _, senderAddr := range r.vusAddresses {
+		r.readBalance(client, senderAddr)
+		r.readNonce(client, senderAddr)
+	}
+
+	for _, receiver := range r.receivers {
+		r.readBalance(client, receiver)
+		r.readNonce(client, receiver)
+	}
+
+	for _, contractAddr := range contractsMap {
+		r.readCode(client, contractAddr)
+	}
+}
+
+// readTxPool will read the transaction pool continuously until the context is canceled.
+func (r *BaseLoadTestRunner) readTxPool(ctx context.Context) {
+	if r.cfg.TxPoolReadThreads == 0 {
+		return
+	}
+
+	for i := 0; i < r.cfg.TxPoolReadThreads; i++ {
+		i := i
+
+		go func() {
+			client := r.clients.getClientForAccount(i)
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+
+				default:
+					_, err := client.TxPoolStatus()
+					if err != nil {
+						r.resultsCollector.TxPoolStatusReadErrorCh <- err
+
+						continue
+					}
+
+					r.resultsCollector.TxPoolStatusReadCountCh <- struct{}{}
+				}
+			}
+		}()
+	}
+}
+
+// sendTransactionsInTime sends transactions for each virtual user (vu) within a specified time duration
+// It uses the execution-time, and batch-size parameters to determine how many transactions per iteration
+// to send for each user. The function runs concurrently for each user using errgroup.
+// - if batch-size is 0 or 1, it sends transactions one by one
+// - if batch-size is greater than 1, it sends transactions in batches
+// (for example, 5 txns in batch each iteration)
+func (r *BaseLoadTestRunner) sendTransactionsInTime(
+	account *account, chainID *big.Int,
+	bar *progressbar.ProgressBar,
+	createTxnFn func(*account, *feeData, *big.Int) (*types.Transaction, error),
+) ([]types.Hash, []error, error) {
+	executionTimer := time.NewTimer(r.cfg.ExecutionTime)
+	defer executionTimer.Stop()
+
+	var (
+		txnHashes  []types.Hash
+		sendErrors []error
+	)
+
+	numOfTxns := 1 // by default we will send transaction per transaction
+	if r.cfg.BatchSize > 0 {
+		// if batch size is set, then we send batch per batch
+		numOfTxns = r.cfg.BatchSize
+	}
+
+	batchSender := r.batchSenders.getBatchSenderForAccount(account.index)
+
+	for {
+		h, se, err := r.sendTransactionsForUserInBatchesInternal(numOfTxns,
+			account, chainID, r.clients.getClientForAccount(account.index), bar, batchSender, createTxnFn)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		txnHashes = append(txnHashes, h...)
+		sendErrors = append(sendErrors, se...)
+
+		select {
+		case <-executionTimer.C:
+			return txnHashes, sendErrors, nil
+		default:
+			continue
+		}
+	}
+}
+
+// sendTransactionsForUser sends transactions for a given user account.
 // It takes an account pointer and a chainID as input parameters.
 // It returns a slice of transaction hashes and an error if any.
-func (r *BaseLoadTestRunner) sendTransactionsForUser(account *account, chainID *big.Int,
-	bar *progressbar.ProgressBar, createTxnFn func(*account, *feeData, *big.Int) *types.Transaction,
+func (r *BaseLoadTestRunner) sendTransactionsForUser(
+	account *account, chainID *big.Int,
+	bar *progressbar.ProgressBar,
+	createTxnFn func(*account, *feeData, *big.Int) (*types.Transaction, error),
 ) ([]types.Hash, []error, error) {
+	client := r.clients.getClient()
+
 	txRelayer, err := txrelayer.NewTxRelayer(
-		txrelayer.WithClient(r.client),
+		txrelayer.WithClient(client),
 		txrelayer.WithChainID(chainID),
 		txrelayer.WithCollectTxnHashes(),
 		txrelayer.WithNoWaiting(),
@@ -777,7 +1180,7 @@ func (r *BaseLoadTestRunner) sendTransactionsForUser(account *account, chainID *
 		return nil, nil, err
 	}
 
-	feeData, err := getFeeData(r.client, r.cfg.DynamicTxs)
+	feeData, err := getFeeData(client, r.cfg.DynamicTxs)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -787,16 +1190,26 @@ func (r *BaseLoadTestRunner) sendTransactionsForUser(account *account, chainID *
 
 	for i := 0; i < r.cfg.TxsPerUser; i++ {
 		if checkFeeDataNum > 0 && i%checkFeeDataNum == 0 {
-			feeData, err = getFeeData(r.client, r.cfg.DynamicTxs)
+			feeData, err = getFeeData(client, r.cfg.DynamicTxs)
 			if err != nil {
 				return nil, nil, err
 			}
 		}
 
-		_, err = txRelayer.SendTransaction(createTxnFn(account, feeData, chainID), account.key)
+		txn, err := createTxnFn(account, feeData, chainID)
+		if err != nil {
+			sendErrs = append(sendErrs, err)
+			_ = bar.Add(1)
+
+			continue
+		}
+
+		_, err = txRelayer.SendTransaction(txn, account.key)
 		if err != nil {
 			sendErrs = append(sendErrs, err)
 		}
+
+		r.resultsCollector.VUTxnCountCh <- VUTxnCount{account.id, 1}
 
 		account.nonce++
 		_ = bar.Add(1)
@@ -806,27 +1219,47 @@ func (r *BaseLoadTestRunner) sendTransactionsForUser(account *account, chainID *
 }
 
 // sendTransactionsForUserInBatches sends user transactions in batches to the rpc node
-func (r *BaseLoadTestRunner) sendTransactionsForUserInBatches(account *account, chainID *big.Int,
-	bar *progressbar.ProgressBar, createTxnFn func(*account, *feeData, *big.Int) *types.Transaction,
+func (r *BaseLoadTestRunner) sendTransactionsForUserInBatches(
+	account *account, chainID *big.Int,
+	bar *progressbar.ProgressBar,
+	createTxnFn func(*account, *feeData, *big.Int) (*types.Transaction, error),
+) ([]types.Hash, []error, error) {
+	return r.sendTransactionsForUserInBatchesInternal(
+		r.cfg.TxsPerUser, account, chainID, r.clients.getClient(),
+		bar, r.batchSenders.getBatchSender(), createTxnFn)
+}
+
+func (r *BaseLoadTestRunner) sendTransactionsForUserInBatchesInternal(
+	numOfTxns int,
+	account *account,
+	chainID *big.Int,
+	client *jsonrpc.EthClient,
+	bar *progressbar.ProgressBar,
+	batchSender *TransactionBatchSender,
+	createTxnFn func(*account, *feeData, *big.Int) (*types.Transaction, error),
 ) ([]types.Hash, []error, error) {
 	signer := crypto.NewLondonSigner(chainID.Uint64())
 
-	numOfBatches := int(math.Ceil(float64(r.cfg.TxsPerUser) / float64(r.cfg.BatchSize)))
-	txHashes := make([]types.Hash, 0, r.cfg.TxsPerUser)
+	numOfBatches := int(math.Ceil(float64(numOfTxns) / float64(r.cfg.BatchSize)))
+	txHashes := make([]types.Hash, 0, numOfTxns)
 	sendErrs := make([]error, 0)
 	totalTxs := 0
 
 	var gas uint64
 
-	feeData, err := getFeeData(r.client, r.cfg.DynamicTxs)
+	feeData, err := getFeeData(client, r.cfg.DynamicTxs)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	txnExample := createTxnFn(account, feeData, chainID)
+	txnExample, err := createTxnFn(account, feeData, chainID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create transaction example: %w", err)
+	}
+
 	if txnExample.Gas() == 0 {
 		// estimate gas initially
-		gasLimit, err := r.client.EstimateGas(txrelayer.ConvertTxnToCallMsg(txnExample))
+		gasLimit, err := client.EstimateGas(txrelayer.ConvertTxnToCallMsg(txnExample))
 		if err != nil {
 			gasLimit = txrelayer.DefaultGasLimit
 		}
@@ -839,17 +1272,23 @@ func (r *BaseLoadTestRunner) sendTransactionsForUserInBatches(account *account, 
 	for i := 0; i < numOfBatches; i++ {
 		batchTxs := make([]string, 0, r.cfg.BatchSize)
 
-		feeData, err := getFeeData(r.client, r.cfg.DynamicTxs)
+		feeData, err := getFeeData(client, r.cfg.DynamicTxs)
 		if err != nil {
 			return nil, nil, err
 		}
 
 		for j := 0; j < r.cfg.BatchSize; j++ {
-			if totalTxs >= r.cfg.TxsPerUser {
+			if totalTxs >= numOfTxns {
 				break
 			}
 
-			txn := createTxnFn(account, feeData, chainID)
+			txn, err := createTxnFn(account, feeData, chainID)
+			if err != nil {
+				sendErrs = append(sendErrs, err)
+
+				continue
+			}
+
 			if txn.Gas() == 0 {
 				txn.SetGas(gas)
 			}
@@ -869,16 +1308,75 @@ func (r *BaseLoadTestRunner) sendTransactionsForUserInBatches(account *account, 
 			totalTxs++
 		}
 
-		hashes, err := r.batchSender.SendBatch(batchTxs)
+		hashes, err := batchSender.SendBatch(batchTxs)
 		if err != nil {
 			return nil, nil, err
 		}
+
+		r.resultsCollector.VUTxnCountCh <- VUTxnCount{account.id, len(hashes)}
 
 		txHashes = append(txHashes, hashes...)
 		_ = bar.Add(len(batchTxs))
 	}
 
 	return txHashes, sendErrs, nil
+}
+
+// calculateTotalTxs calculates the total number of transactions to be sent based on the load test configuration.
+func (r *BaseLoadTestRunner) calculateTotalTxs() int64 {
+	var totalTxs int64
+
+	if r.cfg.ExecutionTime > 0 {
+		// we can not be sure how many txns we will send in this case
+		// so we will use a spinner instead of a progress bar
+		totalTxs = -1
+	} else {
+		totalTxs = int64(r.cfg.TxsPerUser * r.cfg.VUs)
+	}
+
+	return totalTxs
+}
+
+// readBalance reads the balance of the given address from the blockchain
+// and reports the result to the results collector.
+func (r *BaseLoadTestRunner) readBalance(client *jsonrpc.EthClient, addr types.Address) {
+	_, err := client.GetBalance(addr, jsonrpc.LatestBlockNumberOrHash)
+	if err != nil {
+		r.resultsCollector.BalanceReadErrorCh <- fmt.Errorf("failed to read balance for %s account: %w",
+			addr, err)
+
+		return
+	}
+
+	r.resultsCollector.BalanceReadCountCh <- struct{}{}
+}
+
+// readNonce reads the nonce of the given address from the blockchain
+// and reports the result to the results collector.
+func (r *BaseLoadTestRunner) readNonce(client *jsonrpc.EthClient, addr types.Address) {
+	_, err := client.GetNonce(addr, jsonrpc.LatestBlockNumberOrHash)
+	if err != nil {
+		r.resultsCollector.NonceReadErrorCh <- fmt.Errorf("failed to read nonce for %s account: %w",
+			addr, err)
+
+		return
+	}
+
+	r.resultsCollector.NonceReadCountCh <- struct{}{}
+}
+
+// readCode reads the code of the given contract address from the blockchain
+// and reports the result to the results collector.
+func (r *BaseLoadTestRunner) readCode(client *jsonrpc.EthClient, addr types.Address) {
+	_, err := client.GetCode(addr, jsonrpc.LatestBlockNumberOrHash)
+	if err != nil {
+		r.resultsCollector.CodeReadErrorCh <- fmt.Errorf("failed to read code for %s contract: %w",
+			addr, err)
+
+		return
+	}
+
+	r.resultsCollector.CodeReadCountCh <- struct{}{}
 }
 
 // getFeeData retrieves fee data based on the provided JSON-RPC Ethereum client and dynamicTxs flag.

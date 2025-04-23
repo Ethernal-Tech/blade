@@ -15,7 +15,7 @@ import (
 func GetCommand() *cobra.Command {
 	serverCmd := &cobra.Command{
 		Use:     "server",
-		Short:   "The default command that starts the Polygon Edge client, by bootstrapping all modules together",
+		Short:   "The default command that starts the Blade client, by bootstrapping all modules together",
 		PreRunE: runPreRun,
 		Run:     runCommand,
 	}
@@ -65,7 +65,7 @@ func setFlags(cmd *cobra.Command) {
 		&params.rawConfig.DataDir,
 		dataDirFlag,
 		defaultConfig.DataDir,
-		"the data directory used for storing Polygon Edge client data",
+		"the data directory used for storing Blade client data",
 	)
 
 	cmd.Flags().StringVar(
@@ -200,6 +200,13 @@ func setFlags(cmd *cobra.Command) {
 		"maximum number of transactions in gossip message",
 	)
 
+	cmd.Flags().Uint64Var(
+		&params.rawConfig.TxPool.JournalRotateSize,
+		journalRotateSizeFlag,
+		defaultConfig.TxPool.JournalRotateSize,
+		"number of local transactions in journal when rotate will be executed",
+	)
+
 	cmd.Flags().StringArrayVar(
 		&params.rawConfig.CorsAllowedOrigins,
 		corsOriginFlag,
@@ -211,14 +218,14 @@ func setFlags(cmd *cobra.Command) {
 		&params.rawConfig.JSONRPCBatchRequestLimit,
 		jsonRPCBatchRequestLimitFlag,
 		defaultConfig.JSONRPCBatchRequestLimit,
-		"max length to be considered when handling json-rpc batch requests, value of 0 disables it",
+		"max length to be considered when handling jsonrpc batch requests, value of 0 disables it",
 	)
 
 	cmd.Flags().Uint64Var(
 		&params.rawConfig.JSONRPCBlockRangeLimit,
 		jsonRPCBlockRangeLimitFlag,
 		defaultConfig.JSONRPCBlockRangeLimit,
-		"max block range to be considered when executing json-rpc requests "+
+		"max block range to be considered when executing jsonrpc requests "+
 			"that consider fromBlock/toBlock values (e.g. eth_getLogs), value of 0 disables it",
 	)
 
@@ -248,6 +255,13 @@ func setFlags(cmd *cobra.Command) {
 		tlsKeyFileLocationFlag,
 		defaultConfig.TLSKeyFile,
 		"path to TLS key file, if no file is provided then key file is loaded from secrets manager",
+	)
+
+	cmd.Flags().StringVar(
+		&params.rawConfig.DBEngine,
+		dbEngineFlag,
+		defaultConfig.DBEngine,
+		"database to be used in blade, possible values 'pebble' (default) and 'leveldb'",
 	)
 
 	cmd.Flags().BoolVar(

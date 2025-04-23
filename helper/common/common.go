@@ -32,6 +32,11 @@ var (
 	errInvalidDuration = errors.New("invalid duration")
 )
 
+const (
+	Pebble  = "pebble"
+	LevelDB = "leveldb"
+)
+
 // RetryForever will execute a function until it completes without error or
 // the context is cancelled or expired.
 func RetryForever(ctx context.Context, interval time.Duration, fn func(context.Context) error) {

@@ -1,33 +1,38 @@
 package runner
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"strings"
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/crypto"
-	"github.com/0xPolygon/polygon-edge/types"
 )
 
 const (
-	EOATestType    = "eoa"
-	ERC20TestType  = "erc20"
-	ERC721TestType = "erc721"
-	MixedTestType  = "mixed"
+	EOATestType      = "eoa"
+	ERC20TestType    = "erc20"
+	ERC721TestType   = "erc721"
+	MixedTestType    = "mixed"
+	PerfContractType = "perf-contract"
 )
-
-var receiverAddr = types.StringToAddress("0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF")
 
 func IsLoadTestSupported(loadTestType string) bool {
 	ltp := strings.ToLower(loadTestType)
 
-	return ltp == EOATestType || ltp == ERC20TestType || ltp == ERC721TestType || ltp == MixedTestType
+	return ltp == EOATestType ||
+		ltp == ERC20TestType ||
+		ltp == ERC721TestType ||
+		ltp == MixedTestType ||
+		ltp == PerfContractType
 }
 
 type account struct {
+	index int
 	nonce uint64
 	key   *crypto.ECDSAKey
+	id    string
 }
 
 type BlockInfo struct {
@@ -45,12 +50,12 @@ type BlockInfo struct {
 
 // LoadTestConfig represents the configuration for a load test.
 type LoadTestConfig struct {
-	Mnemonnic string // Mnemonnic is the mnemonic phrase used for account generation, and VUs funding.
+	Mnemonic string // Mnemonnic is the mnemonic phrase used for account generation, and VUs funding.
 
 	LoadTestType string // LoadTestType is the type of load test.
 	LoadTestName string // LoadTestName is the name of the load test.
 
-	JSONRPCUrl      string        // JSONRPCUrl is the URL of the JSON-RPC server.
+	JSONRPCUrls     []string      // JSONRPCUrls is the URL list of the JSON-RPC servers.
 	ReceiptsTimeout time.Duration // ReceiptsTimeout is the timeout for waiting for transaction receipts.
 	TxPoolTimeout   time.Duration // TxPoolTimeout is the timeout for waiting for tx pool to empty.
 
@@ -62,6 +67,19 @@ type LoadTestConfig struct {
 	ResultsToJSON        bool // ResultsToJSON indicates whether the results should be written in JSON format.
 	WaitForTxPoolToEmpty bool // WaitForTxPoolToEmpty indicates whether the load test
 	// should wait for the tx pool to empty before gathering results
+
+	// Performance parameters
+	ExecutionTime     time.Duration // ExecutionTime is the duration for which the load test should run.
+	StateReadThreads  int           // StateReadThreads is the number of threads to read state.
+	TxPoolReadThreads int           // TxPoolReadThreads is the number of threads to read tx pool.
+
+	ReceiversNum int // ReceiversNum is the number of receivers for different types of tokens
+
+	// BlockNumberDeadband is the maximum allowed discrepancy in the latest block numbers among the nodes
+	BlockNumberDeadband uint64
+
+	// Tear down for the load test
+	TearDown bool // TearDown indicates whether to tear down the load test.
 }
 
 // LoadTestRunner represents a runner for load tests.
@@ -71,7 +89,7 @@ type LoadTestRunner struct{}
 // It determines the load test type from the configuration and creates
 // the corresponding runner. Then, it runs the load test using the
 // created runner and returns any error encountered during the process.
-func (r *LoadTestRunner) Run(cfg LoadTestConfig) error {
+func (r *LoadTestRunner) Run(ctx context.Context, cfg LoadTestConfig) error {
 	switch strings.ToLower(cfg.LoadTestType) {
 	case EOATestType:
 		eoaRunner, err := NewEOARunner(cfg)
@@ -79,28 +97,35 @@ func (r *LoadTestRunner) Run(cfg LoadTestConfig) error {
 			return err
 		}
 
-		return eoaRunner.Run()
+		return eoaRunner.Run(ctx)
 	case ERC20TestType:
 		erc20Runner, err := NewERC20Runner(cfg)
 		if err != nil {
 			return err
 		}
 
-		return erc20Runner.Run()
+		return erc20Runner.Run(ctx)
 	case ERC721TestType:
 		erc721Runner, err := NewERC721Runner(cfg)
 		if err != nil {
 			return err
 		}
 
-		return erc721Runner.Run()
+		return erc721Runner.Run(ctx)
 	case MixedTestType:
 		mixedTxRunner, err := NewMixedTxRunner(cfg)
 		if err != nil {
 			return err
 		}
 
-		return mixedTxRunner.Run()
+		return mixedTxRunner.Run(ctx)
+	case PerfContractType:
+		perfContractRunner, err := NewPerfContractRunner(cfg)
+		if err != nil {
+			return err
+		}
+
+		return perfContractRunner.Run(ctx)
 	default:
 		return fmt.Errorf("unknown load test type %s", cfg.LoadTestType)
 	}

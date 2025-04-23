@@ -2079,14 +2079,14 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 			errChan <- err
 		}
 
-		t.Logf("All events processed " + dtype)
+		t.Logf("All events processed %s", dtype)
 
 		// second transfer - should fail because there are not enough funds
 		if err := transferFunc(true, 0); err != nil {
 			errChan <- err
 		}
 
-		t.Logf("Second transfer failed " + dtype)
+		t.Logf("Second transfer failed %s", dtype)
 
 		if err := mintFn(transfersCount); err != nil {
 			errChan <- err
@@ -2114,7 +2114,7 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 			errChan <- err
 		}
 
-		t.Logf("All events processed " + dtype)
+		t.Logf("All events processed %s", dtype)
 
 		var predicate *abi.ABI
 
@@ -2223,7 +2223,7 @@ func TestE2E_Bridge_InsufficientFunds(t *testing.T) {
 				}
 
 				if counter++; counter == 2 {
-					t.Logf("Test passed")
+					t.Log("Test passed")
 
 					return
 				}
@@ -2489,7 +2489,7 @@ func TestE2E_Bridge_WithdrawInsufficientFunds(t *testing.T) {
 			errChan <- err
 		}
 
-		t.Logf("All events processed " + dtype)
+		t.Logf("All events processed %s", dtype)
 
 		var predicate *abi.ABI
 

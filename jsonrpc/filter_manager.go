@@ -598,6 +598,13 @@ func (f *FilterManager) GetLogFilterFromID(filterID string) (*logFilter, error) 
 		return nil, ErrCastingFilterToLogFilter
 	}
 
+	if !logFilter.hasWSConn() {
+		// Refresh the timeout on this filter
+		f.Lock()
+		f.refreshFilterTimeout(logFilter.getFilterBase())
+		f.Unlock()
+	}
+
 	return logFilter, nil
 }
 

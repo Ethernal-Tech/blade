@@ -54,7 +54,7 @@ func NewMdbxStorage(path string, logger hclog.Logger) (*storagev2.Storage, error
 		path: path,
 	}
 
-	env, err := mdbx.NewEnv()
+	env, err := mdbx.NewEnv(mdbx.Default)
 	if err != nil {
 		return nil, err
 	}
