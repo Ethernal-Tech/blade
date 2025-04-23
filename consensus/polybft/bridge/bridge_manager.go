@@ -51,6 +51,27 @@ var (
 
 const maxNumberOfBatchEvents = 10
 
+// BridgeBatchVoteConsensusData encapsulates sender identifier and its signature.
+type BridgeBatchVoteConsensusData struct {
+	// Signer of the vote.
+	Sender string
+	// Signature of the message.
+	Signature []byte
+}
+
+// BridgeBatchVote represents the payload which is gossiped across the network.
+type BridgeBatchVote struct {
+	*BridgeBatchVoteConsensusData
+	// Hash represents the full hash of the bridge batch. This is the subject of the signing.
+	Hash []byte
+	// EpochNumber denotes the epoch in which the vote was produced.
+	EpochNumber uint64
+	// SourceChainID represents the ID of the originating chain.
+	SourceChainID uint64
+	// DestinationChainID represents the ID of the destination chain.
+	DestinationChainID uint64
+}
+
 type Runtime interface {
 	IsActiveValidator() bool
 }
@@ -75,50 +96,50 @@ type BridgeManager interface {
 	GetInternalGatewayAddr() types.Address
 }
 
-var _ BridgeManager = (*dummyBridgeEventManager)(nil)
+var _ BridgeManager = (*dummyBridgeManager)(nil)
 
-// dummyBridgeEventManager is used when bridge is not enabled
-type dummyBridgeEventManager struct{}
+// dummyBridgeManager is used when bridge is not enabled
+type dummyBridgeManager struct{}
 
-func (d *dummyBridgeEventManager) Start(runtimeCfg *config.Runtime) error             { return nil }
-func (d *dummyBridgeEventManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error { return nil }
-func (d *dummyBridgeEventManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSigned, error) {
+func (d *dummyBridgeManager) Start(runtimeCfg *config.Runtime) error             { return nil }
+func (d *dummyBridgeManager) AddLog(chainID *big.Int, eventLog *ethgo.Log) error { return nil }
+func (d *dummyBridgeManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSigned, error) {
 	return nil, nil
 }
-func (d *dummyBridgeEventManager) PostBlock(req *oracle.PostBlockRequest) error { return nil }
-func (d *dummyBridgeEventManager) PostEpoch(req *oracle.PostEpochRequest) error {
+func (d *dummyBridgeManager) PostBlock(req *oracle.PostBlockRequest) error { return nil }
+func (d *dummyBridgeManager) PostEpoch(req *oracle.PostEpochRequest) error {
 	return nil
 }
 
-func (d *dummyBridgeEventManager) GetInternalGatewayAddr() types.Address { return [20]byte{} }
+func (d *dummyBridgeManager) GetInternalGatewayAddr() types.Address { return [20]byte{} }
 
 // EventSubscriber implementation
-func (d *dummyBridgeEventManager) GetLogFilters() map[types.Address][]types.Hash {
+func (d *dummyBridgeManager) GetLogFilters() map[types.Address][]types.Hash {
 	return make(map[types.Address][]types.Hash)
 }
-func (d *dummyBridgeEventManager) ProcessLog(header *types.Header,
+func (d *dummyBridgeManager) ProcessLog(header *types.Header,
 	log *ethgo.Log, dbTx *bolt.Tx) error {
 	return nil
 }
-func (d *dummyBridgeEventManager) Close() {}
+func (d *dummyBridgeManager) Close() {}
 
-// bridgeEventManagerConfig holds the configuration data of bridge event manager
-type bridgeEventManagerConfig struct {
+// bridgeManagerConfig holds the configuration data of bridge event manager
+type bridgeManagerConfig struct {
 	bridgeCfg         *config.Bridge
 	topic             Topic
 	key               *wallet.Key
 	maxNumberOfEvents uint64
 }
 
-var _ BridgeManager = (*bridgeEventManager)(nil)
+var _ BridgeManager = (*bridgeManager)(nil)
 
-// bridgeEventManager is a struct that manages the workflow of
+// bridgeManager is a struct that manages the workflow of
 // saving and querying bridge message events, and creating, and submitting new batches
-type bridgeEventManager struct {
+type bridgeManager struct {
 	logger hclog.Logger
 	state  *BridgeManagerStore
 
-	config *bridgeEventManagerConfig
+	config *bridgeManagerConfig
 
 	// per epoch fields
 	lock                    sync.RWMutex
@@ -146,11 +167,11 @@ type bridgeEventManager struct {
 func newBridgeManager(
 	logger hclog.Logger,
 	state *BridgeManagerStore,
-	config *bridgeEventManagerConfig,
+	config *bridgeManagerConfig,
 	runtime Runtime,
 	externalClient JSONRPCClient,
-	externalChainID, internalChainID uint64, blockchain polychain.Blockchain, dbTx *bolt.Tx) *bridgeEventManager {
-	bm := &bridgeEventManager{
+	externalChainID, internalChainID uint64, blockchain polychain.Blockchain, dbTx *bolt.Tx) *bridgeManager {
+	bm := &bridgeManager{
 		logger:              logger,
 		state:               state,
 		config:              config,
@@ -170,7 +191,7 @@ func newBridgeManager(
 }
 
 // restoreUnexecutedBatches restores unexecuted batches (and indirectly retry batches).
-func (b *bridgeEventManager) restoreUnexecutedBatches(dbTx *bolt.Tx) {
+func (b *bridgeManager) restoreUnexecutedBatches(dbTx *bolt.Tx) {
 	ids, err := b.state.getUnexecutedBatches(b.externalChainID, dbTx)
 	if err != nil {
 		b.logger.Error("could not get unexecuted batches", "err", err)
@@ -206,7 +227,7 @@ func (b *bridgeEventManager) restoreUnexecutedBatches(dbTx *bolt.Tx) {
 }
 
 // Start starts the bridge event manager.
-func (b *bridgeEventManager) Start(runtimeConfig *config.Runtime) error {
+func (b *bridgeManager) Start(runtimeConfig *config.Runtime) error {
 	if err := b.initTransport(); err != nil {
 		return fmt.Errorf("failed to initialize bridge event transport layer. Error: %w", err)
 	}
@@ -221,17 +242,17 @@ func (b *bridgeEventManager) Start(runtimeConfig *config.Runtime) error {
 	return nil
 }
 
-func (b *bridgeEventManager) GetInternalGatewayAddr() types.Address {
+func (b *bridgeManager) GetInternalGatewayAddr() types.Address {
 	return b.config.bridgeCfg.InternalGatewayAddr
 }
 
 // Close stops the bridge event manager.
-func (b *bridgeEventManager) Close() {
+func (b *bridgeManager) Close() {
 	b.tracker.Close()
 }
 
 // initTracker starts a new event tracker (to receive bridge events the from external chain.
-func (b *bridgeEventManager) initTracker(runtimeCfg *config.Runtime) (*tracker.EventTracker, error) {
+func (b *bridgeManager) initTracker(runtimeCfg *config.Runtime) (*tracker.EventTracker, error) {
 	store, err := store.NewBoltDBEventTrackerStore(path.Join(runtimeCfg.StateDataDir,
 		fmt.Sprintf("/bridge-%d.db", b.externalChainID)))
 	if err != nil {
@@ -265,7 +286,7 @@ func (b *bridgeEventManager) initTracker(runtimeCfg *config.Runtime) (*tracker.E
 }
 
 // initTransport subscribes to bridge topics to receive votes for batches.
-func (b *bridgeEventManager) initTransport() error {
+func (b *bridgeManager) initTransport() error {
 	return b.config.topic.Subscribe(func(obj interface{}, _ peer.ID) {
 		if !b.runtime.IsActiveValidator() {
 			// Don't save votes if not a validator.
@@ -293,7 +314,7 @@ func (b *bridgeEventManager) initTransport() error {
 }
 
 // saveVotes checks the correctness of the vote, and if everything is fine, saves it.
-func (b *bridgeEventManager) saveVote(vote *BridgeBatchVote) error {
+func (b *bridgeManager) saveVote(vote *BridgeBatchVote) error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
@@ -339,7 +360,7 @@ func (b *bridgeEventManager) saveVote(vote *BridgeBatchVote) error {
 
 // verifyVoteSignature verifies signature of the message against the public key of the signer and
 // checks if the signer is a validator.
-func (b *bridgeEventManager) verifyVoteSignature(
+func (b *bridgeManager) verifyVoteSignature(
 	valSet validator.ValidatorSet,
 	vote *BridgeBatchVote) error {
 	signerAddr := types.StringToAddress(vote.Sender)
@@ -364,7 +385,7 @@ func (b *bridgeEventManager) verifyVoteSignature(
 }
 
 // BridgeBatch returns a list of batches to be submitted.
-func (b *bridgeEventManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSigned, error) {
+func (b *bridgeManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSigned, error) {
 	// BBB - just for "easy-to-search" purposes
 	getLargestPendingBatchFn := func(
 		pendingBatches []*PendingBridgeBatch,
@@ -441,7 +462,7 @@ func (b *bridgeEventManager) BridgeBatch(blockNumber uint64) ([]*BridgeBatchSign
 
 // getAggSignatureForBridgeBatch checks if the given pending batch has a quorum and, if it does,
 // aggregates and returns the signature.
-func (b *bridgeEventManager) getAggSignatureForBridgeBatch(
+func (b *bridgeManager) getAggSignatureForBridgeBatch(
 	blockNumber uint64,
 	pendingBridgeBatch *PendingBridgeBatch) (polytypes.Signature, error) {
 	b.lock.Lock()
@@ -511,7 +532,7 @@ func (b *bridgeEventManager) getAggSignatureForBridgeBatch(
 
 // PostEpoch notifies the bridge event manager that an epoch has changed, so that it can discard
 // any previous epoch bridge batch, and build a new one (since validator set changed)
-func (b *bridgeEventManager) PostEpoch(req *oracle.PostEpochRequest) error {
+func (b *bridgeManager) PostEpoch(req *oracle.PostEpochRequest) error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
@@ -525,7 +546,7 @@ func (b *bridgeEventManager) PostEpoch(req *oracle.PostEpochRequest) error {
 }
 
 // PostBlock creates I2E, E2I and retry batches.
-func (b *bridgeEventManager) PostBlock(req *oracle.PostBlockRequest) error {
+func (b *bridgeManager) PostBlock(req *oracle.PostBlockRequest) error {
 	var sysState systemstate.SystemState
 
 	if req.FullBlock.Block.Header.Number > 1 {
@@ -563,21 +584,21 @@ func (b *bridgeEventManager) PostBlock(req *oracle.PostBlockRequest) error {
 }
 
 // buildE2IBridgeBatch builds, signs, and multicasts the E2I batch.
-func (b *bridgeEventManager) buildE2IBridgeBatch(
+func (b *bridgeManager) buildE2IBridgeBatch(
 	sysState systemstate.SystemState,
 	dbTx *bolt.Tx) error {
 	return b.buildBridgeBatch(b.externalChainID, b.internalChainID, b.nextEventIDE2I, sysState, dbTx)
 }
 
 // buildI2EBridgeBatch builds, signs, and multicasts the I2E batch.
-func (b *bridgeEventManager) buildI2EBridgeBatch(
+func (b *bridgeManager) buildI2EBridgeBatch(
 	sysState systemstate.SystemState,
 	dbTx *bolt.Tx) error {
 	return b.buildBridgeBatch(b.internalChainID, b.externalChainID, b.nextEventIDI2E, sysState, dbTx)
 }
 
 // buildBridgeBatch builds, signs, and multicasts the batch.
-func (b *bridgeEventManager) buildBridgeBatch(
+func (b *bridgeManager) buildBridgeBatch(
 	sourceChainID,
 	destinationChainID uint64,
 	nextBridgeEventIDIndex uint64,
@@ -708,7 +729,7 @@ func (b *bridgeEventManager) buildBridgeBatch(
 
 // handleRetry handles the complete logic related to checking whether a batch is ready for retry,
 // as well as building and broadcasting retry candidates.
-func (b *bridgeEventManager) handleRetry(
+func (b *bridgeManager) handleRetry(
 	sysState systemstate.SystemState) {
 	blockNumber, err := b.externalTipProvider.GetLastProcessedBlock()
 	if err != nil {
@@ -790,7 +811,7 @@ func (b *bridgeEventManager) handleRetry(
 }
 
 // buildRetryBridgeBatch builds, signs, and multicasts a retry version of the batch.
-func (b *bridgeEventManager) buildRetryBridgeBatch(
+func (b *bridgeManager) buildRetryBridgeBatch(
 	baseHash types.Hash,
 	blockNumber uint64) error {
 	//
@@ -877,7 +898,7 @@ func (b *bridgeEventManager) buildRetryBridgeBatch(
 }
 
 // multicast publishes (broadcasts) a given message to the rest of the network.
-func (b *bridgeEventManager) multicast(msg any) {
+func (b *bridgeManager) multicast(msg any) {
 	data, err := json.Marshal(msg)
 	if err != nil {
 		b.logger.Warn("failed to marshal bridge message", "err", err)
@@ -892,7 +913,7 @@ func (b *bridgeEventManager) multicast(msg any) {
 }
 
 // GetLogFilters returns a map of log filters for getting desired events from the internal chain.
-func (b *bridgeEventManager) GetLogFilters() map[types.Address][]types.Hash {
+func (b *bridgeManager) GetLogFilters() map[types.Address][]types.Hash {
 	return map[types.Address][]types.Hash{
 		b.config.bridgeCfg.InternalGatewayAddr: {
 			types.Hash(bridgeMessageEventSig),
@@ -906,7 +927,7 @@ func (b *bridgeEventManager) GetLogFilters() map[types.Address][]types.Hash {
 
 // ProcessLog method is responsible for processing bridge events originating from the internal
 // (Blade) chain. An event provider is responsible for collecting these events.
-func (b *bridgeEventManager) ProcessLog(
+func (b *bridgeManager) ProcessLog(
 	header *types.Header,
 	eventLog *ethgo.Log,
 	dbTx *bolt.Tx) error {
@@ -1114,7 +1135,7 @@ func (b *bridgeEventManager) ProcessLog(
 
 // updateStateOnBatchCommit updates the bridge manager's state structures to reflect the latest
 // state resulting from the commit of the new batch.
-func (b *bridgeEventManager) updateStateOnBatchCommit(
+func (b *bridgeManager) updateStateOnBatchCommit(
 	eventID *big.Int,
 	baseHash types.Hash,
 	fullHash types.Hash,
@@ -1191,7 +1212,7 @@ func (b *bridgeEventManager) updateStateOnBatchCommit(
 }
 
 // handleBridgeMessageCommitment handles the commitment of the new message on the BridgeStorage.
-func (b *bridgeEventManager) handleBridgeMessageCommitment(
+func (b *bridgeManager) handleBridgeMessageCommitment(
 	message *contractsapi.BridgeMessage,
 	dbTx *bolt.Tx) error {
 	if message.IsRollback {
@@ -1220,7 +1241,7 @@ func (b *bridgeEventManager) handleBridgeMessageCommitment(
 
 // AddLog is responsible for processing bridge events originating from the external (non-Blade)
 // chain. An event tracker is responsible for collecting these events.
-func (b *bridgeEventManager) AddLog(
+func (b *bridgeManager) AddLog(
 	chainID *big.Int,
 	eventLog *ethgo.Log) error {
 	// If the event comes from an external chain that is not managed by this bridge manager, it
@@ -1344,7 +1365,7 @@ func (b *bridgeEventManager) AddLog(
 
 // handleBridgeMessageEvent handles the BridgeMsg event emitted by the Gateway SC on the internal
 // (Blade) and all external chains.
-func (b *bridgeEventManager) handleBridgeMessageEvent(
+func (b *bridgeManager) handleBridgeMessageEvent(
 	header *types.Header,
 	event *contractsapi.BridgeMsgEvent,
 	dbTx *bolt.Tx) error {
@@ -1403,7 +1424,7 @@ func (b *bridgeEventManager) handleBridgeMessageEvent(
 
 // handleBridgeMessageResultEvent handles the BridgeMessageResult event emitted by the Gateway SC
 // on the internal (Blade) and all external chains.
-func (b *bridgeEventManager) handleBridgeMessageResultEvent(
+func (b *bridgeManager) handleBridgeMessageResultEvent(
 	header *types.Header,
 	event *contractsapi.BridgeMessageResultEvent,
 	dbTx *bolt.Tx) error {
@@ -1477,7 +1498,7 @@ func (b *bridgeEventManager) handleBridgeMessageResultEvent(
 }
 
 // finalizeOrdinaryBridgeMessage represents the final phase of processing an ordinary message.
-func (b *bridgeEventManager) finalizeOrdinaryBridgeMessage(
+func (b *bridgeManager) finalizeOrdinaryBridgeMessage(
 	msg *contractsapi.BridgeMessage,
 	successful bool,
 	dbTx *bolt.Tx) error {
@@ -1538,7 +1559,7 @@ func (b *bridgeEventManager) finalizeOrdinaryBridgeMessage(
 
 // isBridgeMessageCommitted checks whether the bridge message has been committed up to the given
 // block (including the given block).
-func (b *bridgeEventManager) isBridgeMessageCommitted(
+func (b *bridgeManager) isBridgeMessageCommitted(
 	blockHeader *types.Header,
 	msg *contractsapi.BridgeMessage) (bool, error) {
 	//
