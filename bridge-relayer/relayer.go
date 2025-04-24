@@ -608,22 +608,11 @@ func (r *BridgeRelayer) Start() {
 					continue
 				}
 
-				metrics.SetGaugeWithLabels([]string{"balance"}, 1,
+				metrics.SetGaugeWithLabels([]string{"balance"}, float32(balance.Uint64()),
 					[]metrics.Label{{
 						Name:  "ID",
 						Value: r.externalChainID.String(),
-					}, {
-						Name:  "current_balance",
-						Value: balance.String(),
 					}})
-
-				b := big.NewInt(0).Div(balance, big.NewInt(1_000_000_000))
-				fmt.Println(balance.String())
-				fmt.Println(b.String())
-				fmt.Println(balance.Uint64())
-				fmt.Println(b.Uint64())
-				fmt.Println(float32(balance.Uint64()))
-				fmt.Println(float32(b.Uint64()))
 			}
 		}
 	}
