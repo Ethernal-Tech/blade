@@ -25,6 +25,10 @@ type commandParams struct {
 	// exposed or committed to any public service or version control system.
 	relayerPrivateKey string
 
+	// metricsEndpoint specifies the port and path (in the format :PORT/PATH) on
+	// which metrics for Prometheus will be exposed.
+	metricsEndpoint string
+
 	// this parameter enables JSON-formatted logs by setting its value to true.
 	jsonFormatOuttputter bool
 

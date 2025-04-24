@@ -58,6 +58,7 @@ func (t *TestRelayer) Start() {
 		"--external-chain-id", strconv.FormatUint(t.externalChainID, 10),
 		"--poll-interval", strconv.Itoa(5),
 		"--database-path", fmt.Sprintf("%s/bridge-relayer-%d.db", filepath.Dir(t.t.TempDir()), t.externalChainID),
+		"--metrics-endpoint", fmt.Sprintf(":54321/"),
 	}
 
 	stdout := t.clusterConfig.GetStdout("bridge-relayer")

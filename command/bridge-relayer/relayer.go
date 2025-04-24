@@ -31,6 +31,7 @@ func runCommand(*cobra.Command, []string) {
 		bridgerelayer.WithLogLevel(hclog.LevelFromString(params.logLevel)),
 		bridgerelayer.WithLogJSONFormat(params.jsonFormatOuttputter),
 		bridgerelayer.WithDBPath(params.boltDBPath),
+		bridgerelayer.WithMetricEndpoint(params.metricsEndpoint),
 	)
 
 	if err != nil {
@@ -119,5 +120,13 @@ func setFlags(cmd *cobra.Command) {
 		"database-path",
 		"",
 		"path to bolt database",
+	)
+
+	cmd.Flags().StringVarP(
+		&params.metricsEndpoint,
+		"metrics-endpoint",
+		"m",
+		"",
+		"endpoint where metrics for prometheus will be exposed (must be in :PORT/PATH format)",
 	)
 }
