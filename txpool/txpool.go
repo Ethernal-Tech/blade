@@ -400,9 +400,13 @@ func (p *TxPool) Start(syncer syncer.Syncer) {
 
 	// run sync of tx pool
 	if syncer != nil {
-		if err := syncer.SyncTxPool(); err != nil {
-			p.logger.Error("failed to sync txpool", "err", err)
-		}
+		go func() {
+			if err := syncer.SyncTxPool(); err != nil {
+				p.logger.Error("failed to sync txpool", "err", err)
+			} else {
+				p.logger.Debug("TxPool Synced", "num of txs", len(p.index.allTxs()))
+			}
+		}()
 	}
 
 	//	run the handler for high gauge level pruning

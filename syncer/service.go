@@ -32,6 +32,7 @@ func NewSyncPeerService(
 	return &syncPeerService{
 		blockchain: blockchain,
 		network:    network,
+		txPool:     txPool,
 	}
 }
 
@@ -94,10 +95,14 @@ func (s *syncPeerService) GetStatus(
 }
 
 func (s *syncPeerService) GetTxPool(req *empty.Empty, stream proto.SyncPeer_GetTxPoolServer) error {
+	if s.txPool == nil {
+		return nil
+	}
+
 	allTxs := s.txPool.GetAllTxs()
 
 	// max batch size is 10k
-	for i := range len(allTxs) / 10000 {
+	for i := range len(allTxs)/10000 + 1 {
 		start := i * 10000
 		end := start + 10000
 
@@ -119,6 +124,7 @@ func sendTxPoolBatch(txs types.Transactions, stream proto.SyncPeer_GetTxPoolServ
 	}
 
 	metrics.SetGauge([]string{syncerMetrics, "egress_bytes"}, float32(len(txPool.Txs)))
+
 	return stream.Send(txPool)
 }
 

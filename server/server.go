@@ -440,12 +440,14 @@ func NewServer(config *Config) (*Server, error) {
 
 	// start txpool
 	m.txpool.SetBaseFee(m.blockchain.Header())
+
 	var syncer syncer.Syncer
 
 	if ConsensusType(engineName) == PolyBFTConsensus {
-		consensus := m.consensus.(*consensusPolyBFT.Polybft)
-
-		syncer = consensus.GetSyncer()
+		consensus, ok := m.consensus.(*consensusPolyBFT.Polybft)
+		if ok {
+			syncer = consensus.GetSyncer()
+		}
 	}
 
 	m.txpool.Start(syncer)

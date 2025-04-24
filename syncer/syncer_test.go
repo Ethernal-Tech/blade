@@ -691,6 +691,7 @@ func transactionsToCh(txs []*types.Transaction) <-chan *types.Transactions {
 		for i := range len(txs) / 5 {
 			start := i * 5
 			end := (i + 1) * 5
+
 			if end > len(txs) {
 				end = len(txs)
 			}
@@ -729,6 +730,7 @@ func (m *mockTxPool) CompareTxPool(txs *types.Transactions) bool {
 
 func txsToTransactions(txs []*types.Transaction) *types.Transactions {
 	transactions := types.Transactions(txs)
+
 	return &transactions
 }
 

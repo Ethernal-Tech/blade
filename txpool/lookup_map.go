@@ -71,8 +71,11 @@ func (m *lookupMap) allTxs() []*types.Transaction {
 	defer m.RUnlock()
 
 	txs := make([]*types.Transaction, len(m.all))
+	i := 0
+
 	for _, tx := range m.all {
-		txs = append(txs, tx)
+		txs[i] = tx
+		i++
 	}
 
 	return txs
