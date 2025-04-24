@@ -72,7 +72,7 @@ func newTestBridgeManager(
 	key *validator.TestValidator,
 	runtime Runtime,
 	tipProvider ChainTipProvider,
-	blockchain blockchain.Blockchain) *bridgeEventManager {
+	blockchain blockchain.Blockchain) *bridgeManager {
 	t.Helper()
 
 	state := newTestState(t)
@@ -82,7 +82,7 @@ func newTestBridgeManager(
 	s := newBridgeManager(
 		hclog.NewNullLogger(),
 		state,
-		&bridgeEventManagerConfig{
+		&bridgeManagerConfig{
 			bridgeCfg:         &config.Bridge{BridgeBatchThreshold: 100},
 			topic:             topic,
 			key:               key.Key(),
@@ -592,7 +592,7 @@ func Test_handleBridgeMessageEvent(t *testing.T) {
 	//	3 - the message should go into the fin. phase and it has been unsuccessfully executed
 	checkFn := func(
 		msgEvent *contractsapi.BridgeMsgEvent,
-		bm *bridgeEventManager,
+		bm *bridgeManager,
 		typeOfCheck int) {
 		// Function to check whether the message is part of the ordinary bucket.
 		getOrdinaryMsg := func() (*contractsapi.BridgeMsgEvent, error) {
@@ -830,7 +830,7 @@ func Test_handleBridgeMessageResultEvent(t *testing.T) {
 	//	4 - the message should go into the fin. phase and it has been unsuccessfully executed
 	checkFn := func(
 		msgResultEvent *contractsapi.BridgeMessageResultEvent,
-		bm *bridgeEventManager,
+		bm *bridgeManager,
 		typeOfCheck int) {
 		// Function to check whether the execution result of a message is part of the ordinary
 		// bucket.
@@ -1159,7 +1159,7 @@ func Test_AddLog_Unexecuted_list(t *testing.T) {
 	}
 
 	// Function to insert an execution results of the messages.
-	insertFn := func(bm *bridgeEventManager, isRollback bool, ids ...int64) {
+	insertFn := func(bm *bridgeManager, isRollback bool, ids ...int64) {
 		for _, id := range ids {
 			err := bm.state.insertBridgeMessageResultEvent(
 				&contractsapi.BridgeMessageResultEvent{
@@ -1395,7 +1395,7 @@ func Test_updateStateOnBatchCommit(t *testing.T) {
 	// pendingRetryBatches.
 
 	// Function to create initial state used in all the following tests.
-	initFn := func(bm *bridgeEventManager) (*PendingBridgeBatch, types.Hash) {
+	initFn := func(bm *bridgeManager) (*PendingBridgeBatch, types.Hash) {
 		msg1 := &contractsapi.BridgeMessage{
 			ID:                 big.NewInt(1),
 			SourceChainID:      big.NewInt(100),
@@ -1432,7 +1432,7 @@ func Test_updateStateOnBatchCommit(t *testing.T) {
 	}
 
 	// Function to check whether the state structures reflect the correct state.
-	checkFn := func(bm *bridgeEventManager, unexe, penI2E, penE2I, ret, penRet int) {
+	checkFn := func(bm *bridgeManager, unexe, penI2E, penE2I, ret, penRet int) {
 		require.EqualValues(t, unexe, len(bm.unexecutedBatches))
 		require.EqualValues(t, penI2E, len(bm.pendingBridgeBatchesI2E))
 		require.EqualValues(t, penE2I, len(bm.pendingBridgeBatchesE2I))
@@ -1650,7 +1650,7 @@ func Test_ProcessLog_Remove_Rollback_messages(t *testing.T) {
 	bc.On("GetSystemState", mock.Anything).Return(ss)
 
 	// Function to insert a rollback messages with the given IDs.
-	insertFn := func(bm *bridgeEventManager, ids ...int64) {
+	insertFn := func(bm *bridgeManager, ids ...int64) {
 		for _, id := range ids {
 			err := bm.state.insertBridgeMessageEvent(
 				&contractsapi.BridgeMsgEvent{
@@ -1664,7 +1664,7 @@ func Test_ProcessLog_Remove_Rollback_messages(t *testing.T) {
 	}
 
 	// Function to check whether the rollback message is removed or not.
-	checkFn := func(bm *bridgeEventManager, id int64, shouldBeRemoved bool) {
+	checkFn := func(bm *bridgeManager, id int64, shouldBeRemoved bool) {
 		msg, err := bm.state.getBridgeMessageEvent(
 			big.NewInt(id),
 			big.NewInt(100),
@@ -1769,7 +1769,7 @@ func Test_handleBridgeMessageCommitment(t *testing.T) {
 	//	3 - both should be inserted
 	//
 	// Status argument denotes whether the message was executed successfully or not.
-	insertFn := func(bm *bridgeEventManager, typeOfInsert int, status bool) {
+	insertFn := func(bm *bridgeManager, typeOfInsert int, status bool) {
 		if typeOfInsert == 1 || typeOfInsert == 3 {
 			err := bm.state.insertBridgeMessageEvent(
 				&contractsapi.BridgeMsgEvent{
@@ -1805,7 +1805,7 @@ func Test_handleBridgeMessageCommitment(t *testing.T) {
 	//	2 - the message in known, but it should not go into the finalization (fin.) phase
 	//	3 - the message should go into the fin. phase and it has been successfully executed
 	//	4 - the message should go into the fin. phase and it has been unsuccessfully executed
-	checkFn := func(bm *bridgeEventManager, typeOfCheck int) {
+	checkFn := func(bm *bridgeManager, typeOfCheck int) {
 		// Function to check whether the message is part of the ordinary bucket.
 		getOrdinaryMsg := func() (*contractsapi.BridgeMsgEvent, error) {
 			return bm.state.getBridgeMessageEvent(
@@ -2383,7 +2383,7 @@ func Test_handleRetry(t *testing.T) {
 	batch.CommitCounter = big.NewInt(1)
 
 	// Function to check whether the state structures reflect the correct state.
-	checkFn := func(bm *bridgeEventManager, retNum, unNum int, removed bool) {
+	checkFn := func(bm *bridgeManager, retNum, unNum int, removed bool) {
 		require.EqualValues(t, retNum, len(bm.retryBatches))
 
 		require.EqualValues(t, retNum, len(bm.pendingRetryBatches))

@@ -81,27 +81,6 @@ var (
 	unexecutedBatches = []byte("unexecuted")
 )
 
-// BridgeBatchVoteConsensusData encapsulates sender identifier and its signature.
-type BridgeBatchVoteConsensusData struct {
-	// Signer of the vote.
-	Sender string
-	// Signature of the message.
-	Signature []byte
-}
-
-// BridgeBatchVote represents the payload which is gossiped across the network.
-type BridgeBatchVote struct {
-	*BridgeBatchVoteConsensusData
-	// Hash represents the full hash of the bridge batch. This is the subject of the signing.
-	Hash []byte
-	// EpochNumber denotes the epoch in which the vote was produced.
-	EpochNumber uint64
-	// SourceChainID represents the ID of the originating chain.
-	SourceChainID uint64
-	// DestinationChainID represents the ID of the destination chain.
-	DestinationChainID uint64
-}
-
 // BridgeManagerStore is a wrapper around boltDB that provides all the necessary methods for the
 // bridging "cold" storage logic.
 type BridgeManagerStore struct {

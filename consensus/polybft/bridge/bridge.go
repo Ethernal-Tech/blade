@@ -116,7 +116,7 @@ func NewBridge(runtime Runtime,
 			return nil, fmt.Errorf("failed to initialize bridge external client. Error: %w", err)
 		}
 
-		bridgeManager := newBridgeManager(logger, store, &bridgeEventManagerConfig{
+		bridgeManager := newBridgeManager(logger, store, &bridgeManagerConfig{
 			bridgeCfg:         cfg,
 			topic:             bridgeTopic,
 			key:               runtimeConfig.Key,
