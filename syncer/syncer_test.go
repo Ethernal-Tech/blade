@@ -739,6 +739,12 @@ func TestSyncTx(t *testing.T) {
 
 	transactions := createMockTransactions(20)
 
+	peerStatuses := []*NoForkPeer{
+		{
+			ID: peer.ID("A"),
+		},
+	}
+
 	tests := []struct {
 		name string
 
@@ -773,6 +779,9 @@ func TestSyncTx(t *testing.T) {
 			var (
 				syncer = NewTestSyncer(nil, nil, 0,
 					&mockSyncPeerClient{
+						getConnectedPeerStatusesHandler: func() []*NoForkPeer {
+							return peerStatuses
+						},
 						getSyncTxPoolHandler: func(i peer.ID) error {
 							txCh := test.peerTxCh[i]
 
@@ -790,8 +799,6 @@ func TestSyncTx(t *testing.T) {
 					},
 					nil)
 			)
-
-			syncer.peerMap.Put(&NoForkPeer{ID: peer.ID("A")})
 
 			errCh := make(chan error, 1)
 
