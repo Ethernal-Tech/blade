@@ -18,10 +18,10 @@ The main features of Blade Blockchain include:
 
 #### Table 1 - Transaction processing and gas consumption
 
-| Scenario                        | Transactions per second | Gas per second |
-| ------------------------------- | ----------------------- | -------------- |
-| Multiple native token transfers | 2983                    | 62643000       |
-| Multiple ERC20 transfers        | 1014                    | 62674768       |
+| Scenario                        | Transactions per second |
+| ------------------------------- | ----------------------- |
+| Multiple native token transfers | 8404                    |
+| Multiple ERC20 transfers        | 4831                    |
 
 * Highly configurable and customizable interfaces and system setup.
 * Ethereum Virtual Machine (EVM) compatibility.
