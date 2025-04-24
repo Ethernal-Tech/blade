@@ -460,7 +460,7 @@ func (r *BridgeRelayer) startPrometheusMetricsServer() {
 		"path", r.metricPath)
 
 	srv := &http.Server{
-		Addr:         ":54321",
+		Addr:         fmt.Sprintf(":%v", r.metricPort),
 		Handler:      mux,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -608,11 +608,22 @@ func (r *BridgeRelayer) Start() {
 					continue
 				}
 
-				metrics.SetGaugeWithLabels([]string{"balance"}, float32(balance.Uint64()),
+				metrics.SetGaugeWithLabels([]string{"balance"}, 1,
 					[]metrics.Label{{
 						Name:  "ID",
 						Value: r.externalChainID.String(),
+					}, {
+						Name:  "current_balance",
+						Value: balance.String(),
 					}})
+
+				b := big.NewInt(0).Div(balance, big.NewInt(1_000_000_000))
+				fmt.Println(balance.String())
+				fmt.Println(b.String())
+				fmt.Println(balance.Uint64())
+				fmt.Println(b.Uint64())
+				fmt.Println(float32(balance.Uint64()))
+				fmt.Println(float32(b.Uint64()))
 			}
 		}
 	}

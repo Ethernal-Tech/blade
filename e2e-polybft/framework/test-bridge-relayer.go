@@ -18,6 +18,7 @@ type TestRelayer struct {
 	genesisPath      string
 	key              *crypto.ECDSAKey
 	validatorJSONRPC string
+	metricPort       uint16 // prometheus
 
 	node *node
 }
@@ -28,7 +29,8 @@ func NewTestBridgeRelayer(
 	externalChainID uint64,
 	genesisPath string,
 	key *crypto.ECDSAKey,
-	validatorJSONRPC string) *TestRelayer {
+	validatorJSONRPC string,
+	metricPort uint16) *TestRelayer {
 	t.Helper()
 
 	relayer := &TestRelayer{
@@ -38,6 +40,7 @@ func NewTestBridgeRelayer(
 		genesisPath:      genesisPath,
 		key:              key,
 		validatorJSONRPC: validatorJSONRPC,
+		metricPort:       metricPort,
 	}
 
 	return relayer
@@ -58,7 +61,7 @@ func (t *TestRelayer) Start() {
 		"--external-chain-id", strconv.FormatUint(t.externalChainID, 10),
 		"--poll-interval", strconv.Itoa(5),
 		"--database-path", fmt.Sprintf("%s/bridge-relayer-%d.db", filepath.Dir(t.t.TempDir()), t.externalChainID),
-		"--metrics-endpoint", fmt.Sprintf(":54321/"),
+		"--metrics-endpoint", fmt.Sprintf(":%v/", t.metricPort),
 	}
 
 	stdout := t.clusterConfig.GetStdout("bridge-relayer")
