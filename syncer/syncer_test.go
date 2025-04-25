@@ -688,13 +688,18 @@ func transactionsToCh(txs []*types.Transaction) <-chan *types.Transactions {
 
 	go func() {
 		// batch transactions size 5
-		for i := range len(txs) / 5 {
-			start := i * 5
-			end := (i + 1) * 5
+		const maxBatchSize = 5
+		arrSize := len(txs)
 
-			if end > len(txs) {
-				end = len(txs)
+		for i := range arrSize/maxBatchSize + 1 {
+			start := i * maxBatchSize
+
+			batchSize := arrSize - start
+			if batchSize > maxBatchSize {
+				batchSize = maxBatchSize
 			}
+
+			end := start + batchSize
 
 			transactions := types.Transactions(txs[start:end])
 			ch <- &transactions

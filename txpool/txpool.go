@@ -404,7 +404,7 @@ func (p *TxPool) Start(syncer syncer.Syncer) {
 			if err := syncer.SyncTxPool(); err != nil {
 				p.logger.Error("failed to sync txpool", "err", err)
 			} else {
-				p.logger.Debug("TxPool Synced", "num of txs", len(p.index.allTxs()))
+				p.logger.Debug("TxPool Synced")
 			}
 		}()
 	}
