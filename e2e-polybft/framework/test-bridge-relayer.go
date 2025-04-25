@@ -62,6 +62,7 @@ func (t *TestRelayer) Start() {
 		"--poll-interval", strconv.Itoa(5),
 		"--database-path", fmt.Sprintf("%s/bridge-relayer-%d.db", filepath.Dir(t.t.TempDir()), t.externalChainID),
 		"--metrics-endpoint", fmt.Sprintf(":%v/", t.metricPort),
+		"--hearbeat-threshold", "999999999910527511497316", // this value should be much lower in real use
 	}
 
 	stdout := t.clusterConfig.GetStdout("bridge-relayer")

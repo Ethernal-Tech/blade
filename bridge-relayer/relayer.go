@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	bolt "go.etcd.io/bbolt"
 
@@ -90,6 +91,10 @@ type BridgeRelayer struct {
 	// metricPath specifies the path where metrics for Prometheus are exposed.
 	metricPath string
 
+	// heartbeatThreshold denotes value below which the relayer is considered
+	// dead (from the perspective of metrics and Prometheus).
+	heartbeatThreshold *big.Int
+
 	// he logger is an instance of the hclog logging library.
 	// used to handle application logging.
 	logger hclog.Logger
@@ -125,6 +130,7 @@ type options struct {
 	dbPath              *string
 	metricPort          *uint16
 	metricPath          *string
+	heartbeatThreshold  *string
 	logLevel            hclog.Level
 	jsonLogFormat       bool
 	logDir              string
@@ -309,6 +315,30 @@ func WithMetricEndpoint(endpoint string) BridgeRelayerOption {
 	}
 }
 
+// WithHeartbeat configures the relayer to report its health status to Prometheus
+// based on its balance on the external chain. When the balance is above the given
+// threshold, it sends an "alive" signal (1). If the balance falls below, the relayer
+// is considered "dead" and starts to send a "dead" signal (0).
+//
+// Note: Signals are only sent if a metrics endpoint is exposed (see WithMetricEndpoint).
+func WithHeartbeat(threshold string) BridgeRelayerOption {
+	return func(o *options) error {
+		if threshold == "" {
+			return fmt.Errorf("heartbeat threshold cannot be empty")
+		}
+
+		for _, r := range threshold {
+			if !unicode.IsDigit(r) {
+				return fmt.Errorf("heartbeat threshold must be a number")
+			}
+		}
+
+		o.heartbeatThreshold = &threshold
+
+		return nil
+	}
+}
+
 func WithLogLevel(level hclog.Level) BridgeRelayerOption {
 	return func(options *options) error {
 		options.logLevel = level
@@ -428,6 +458,10 @@ func NewBridgeRelayer(internalRPCAddr string, privateKey string, opts ...BridgeR
 		relayer.metricPath = *sopts.metricPath
 	}
 
+	if sopts.heartbeatThreshold != nil {
+		relayer.heartbeatThreshold, _ = big.NewInt(0).SetString(*sopts.heartbeatThreshold, 10)
+	}
+
 	return relayer, nil
 }
 
@@ -517,12 +551,25 @@ func (r *BridgeRelayer) Start() {
 	for {
 		select {
 		case <-t.C:
-			// A metric indicating that the relayer is active – relayer’s heartbeat.
-			metrics.SetGaugeWithLabels([]string{"active"}, 1,
-				[]metrics.Label{{
-					Name:  "ID",
-					Value: r.externalChainID.String(),
-				}})
+			balance, err := r.externalClient.Client().GetBalance(r.privateKey.Address(), jsonrpc.LatestBlockNumberOrHash)
+			if err != nil {
+				continue
+			}
+
+			alive := 1
+
+			if r.heartbeatThreshold != nil && balance.Cmp(r.heartbeatThreshold) <= 0 {
+				alive = 0
+			}
+
+			if r.heartbeatThreshold != nil {
+				// A metric indicating that the relayer is active – relayer’s heartbeat.
+				metrics.SetGaugeWithLabels([]string{"heartbeat"}, float32(alive),
+					[]metrics.Label{{
+						Name:  "ID",
+						Value: r.externalChainID.String(),
+					}})
+			}
 
 			r.logger.Info(fmt.Sprintf("getting new batches with id > %s", lastBridged.String()))
 
@@ -602,17 +649,6 @@ func (r *BridgeRelayer) Start() {
 				r.logger.Info("batch has been successfully saved into bolt DB", "batch id", lastBridged.String())
 
 				batchNum = 0
-
-				balance, err := r.externalClient.Client().GetBalance(r.privateKey.Address(), jsonrpc.LatestBlockNumberOrHash)
-				if err != nil {
-					continue
-				}
-
-				metrics.SetGaugeWithLabels([]string{"balance"}, float32(balance.Uint64()),
-					[]metrics.Label{{
-						Name:  "ID",
-						Value: r.externalChainID.String(),
-					}})
 			}
 		}
 	}

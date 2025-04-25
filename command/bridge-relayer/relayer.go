@@ -32,6 +32,7 @@ func runCommand(*cobra.Command, []string) {
 		bridgerelayer.WithLogJSONFormat(params.jsonFormatOuttputter),
 		bridgerelayer.WithDBPath(params.boltDBPath),
 		bridgerelayer.WithMetricEndpoint(params.metricsEndpoint),
+		bridgerelayer.WithHeartbeat(params.heartbeatThreshold),
 	)
 
 	if err != nil {
@@ -128,5 +129,12 @@ func setFlags(cmd *cobra.Command) {
 		"m",
 		"",
 		"endpoint where metrics for prometheus will be exposed (must be in :PORT/PATH format)",
+	)
+
+	cmd.Flags().StringVar(
+		&params.heartbeatThreshold,
+		"hearbeat-threshold",
+		"100000",
+		"relayer's balance below whitch it is considered dead in context of Prometheus metrics",
 	)
 }
