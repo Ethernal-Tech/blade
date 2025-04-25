@@ -3,6 +3,7 @@ package syncer
 import (
 	"context"
 	"errors"
+	"math"
 
 	"github.com/0xPolygon/polygon-edge/network/grpc"
 	"github.com/0xPolygon/polygon-edge/syncer/proto"
@@ -106,7 +107,7 @@ func (s *syncPeerService) GetTxPool(req *empty.Empty, stream proto.SyncPeer_GetT
 
 	arrSize := len(allTxs)
 
-	for i := range arrSize/maxBatchSize + 1 {
+	for i := range int(math.Ceil(float64(arrSize) / maxBatchSize)) {
 		start := i * maxBatchSize
 
 		batchSize := arrSize - start

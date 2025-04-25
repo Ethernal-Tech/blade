@@ -3,6 +3,7 @@ package syncer
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"sort"
 	"testing"
@@ -692,7 +693,7 @@ func transactionsToCh(txs []*types.Transaction) <-chan *types.Transactions {
 
 		arrSize := len(txs)
 
-		for i := range arrSize/maxBatchSize + 1 {
+		for i := range int(math.Ceil(float64(arrSize) / maxBatchSize)) {
 			start := i * maxBatchSize
 
 			batchSize := arrSize - start
