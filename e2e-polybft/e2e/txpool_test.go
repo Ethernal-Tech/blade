@@ -2,6 +2,9 @@ package e2e
 
 import (
 	"math/big"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -309,6 +312,125 @@ func TestE2E_TxPool_BroadcastTransactions(t *testing.T) {
 		return true
 	})
 	assert.NoError(t, err)
+}
+
+func init() {
+	wd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	parent := filepath.Dir(wd)
+	parent = strings.Trim(parent, "e2e-polybft")
+	wd = filepath.Join(parent, "/artifacts/blade")
+	os.Setenv("EDGE_BINARY", wd)
+	os.Setenv("E2E_TESTS", "true")
+	os.Setenv("E2E_LOGS", "true")
+	os.Setenv("E2E_LOG_LEVEL", "debug")
+}
+
+func TestE2E_TxPool_TestSync(t *testing.T) {
+	const (
+		numOfTxs = 10
+	)
+
+	sender, err := crypto.GenerateECDSAKey()
+	require.NoError(t, err)
+
+	cluster := framework.NewTestCluster(t, 2,
+		framework.WithPremine(sender.Address()),
+	)
+	defer cluster.Stop()
+
+	// Stop the second node
+	cluster.Servers[1].Stop()
+
+	txRelayer, err := txrelayer.NewTxRelayer(
+		txrelayer.WithClient(cluster.Servers[0].JSONRPC()),
+	)
+	require.NoError(t, err)
+
+	wg := sync.WaitGroup{}
+	wg.Add(numOfTxs)
+
+	addr := sender.Address()
+
+	// send transactions to the first node
+	for i := range numOfTxs {
+		go func(i int) {
+			defer wg.Done()
+
+			tx := types.NewTx(types.NewLegacyTx(
+				types.WithFrom(addr),
+				types.WithTo(&addr),
+				types.WithValue(big.NewInt(int64(i))),
+				types.WithGas(21000),
+				types.WithNonce(uint64(i)),
+			))
+
+			_, err := txRelayer.SendTransaction(tx, sender)
+			if err == nil {
+				t.Logf("transaction %s sent", tx.Hash())
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	t.Log("All transactions sent")
+
+	// Restart the second node
+	cluster.Servers[1].Start()
+
+	getTxHashMap := func(clt *jsonrpc.EthClient) map[types.Hash]bool {
+		content, err := clt.TxPoolContent()
+		require.NoError(t, err)
+
+		hashMap := make(map[types.Hash]bool)
+
+		for _, acc := range content.Pending {
+			for _, tx := range acc {
+				hashMap[tx.Hash] = true
+			}
+		}
+
+		for _, acc := range content.Queued {
+			for _, tx := range acc {
+				hashMap[tx.Hash] = true
+			}
+		}
+
+		return hashMap
+	}
+
+	firstHashMap := getTxHashMap(cluster.Servers[0].JSONRPC())
+
+	timeCh, ticker := time.After(2*time.Minute), time.NewTicker(5*time.Second)
+
+	secondHashMap := getTxHashMap(cluster.Servers[1].JSONRPC())
+
+	if len(secondHashMap) == 0 {
+	loop:
+		for {
+			select {
+			case <-timeCh:
+				t.Fatalf("timeout waiting for txpool sync")
+			case <-ticker.C:
+				secondHashMap = getTxHashMap(cluster.Servers[1].JSONRPC())
+				if len(secondHashMap) != 0 {
+					break loop
+				}
+			}
+		}
+	}
+
+	for key := range firstHashMap {
+		if _, ok := secondHashMap[key]; !ok {
+			t.Fatalf("transaction %s not found in the second node", key)
+		}
+	}
+
+	t.Logf("transaction pool sync successful")
 }
 
 // sendTransaction is a helper function which signs transaction with provided private key and sends it
