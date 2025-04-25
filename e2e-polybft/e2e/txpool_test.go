@@ -2,9 +2,6 @@ package e2e
 
 import (
 	"math/big"
-	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -312,21 +309,6 @@ func TestE2E_TxPool_BroadcastTransactions(t *testing.T) {
 		return true
 	})
 	assert.NoError(t, err)
-}
-
-func init() {
-	wd, err := os.Getwd()
-	if err != nil {
-		return
-	}
-
-	parent := filepath.Dir(wd)
-	parent = strings.Trim(parent, "e2e-polybft")
-	wd = filepath.Join(parent, "/artifacts/blade")
-	os.Setenv("EDGE_BINARY", wd)
-	os.Setenv("E2E_TESTS", "true")
-	os.Setenv("E2E_LOGS", "true")
-	os.Setenv("E2E_LOG_LEVEL", "debug")
 }
 
 func TestE2E_TxPool_TestSync(t *testing.T) {
