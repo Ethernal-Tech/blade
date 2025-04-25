@@ -101,14 +101,20 @@ func (s *syncPeerService) GetTxPool(req *empty.Empty, stream proto.SyncPeer_GetT
 
 	allTxs := s.txPool.GetAllTxs()
 
-	// max batch size is 10k
-	for i := range len(allTxs)/10000 + 1 {
-		start := i * 10000
-		end := start + 10000
+	// maxBatchSize batch size is 10k
+	const maxBatchSize = 10000
 
-		if end > len(allTxs) {
-			end = len(allTxs)
+	arrSize := len(allTxs)
+
+	for i := range arrSize/maxBatchSize + 1 {
+		start := i * maxBatchSize
+
+		batchSize := arrSize - start
+		if batchSize > maxBatchSize {
+			batchSize = maxBatchSize
 		}
+
+		end := start + batchSize
 
 		if err := sendTxPoolBatch(allTxs[start:end], stream); err != nil {
 			return err

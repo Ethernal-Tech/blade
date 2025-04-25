@@ -305,23 +305,27 @@ func updateMetrics(fullBlock *types.FullBlock) {
 }
 
 func (s *syncer) SyncTxPool() error {
-	timeCh, ticker := time.After(20*time.Second), time.Tick(2*time.Second)
+	s.initializePeerMap()
 
-	for {
-		select {
-		case <-ticker:
-			s.initializePeerMap()
+	bestPeer := s.peerMap.BestPeer(nil)
+	if bestPeer == nil {
+		timeCh, ticker := time.After(20*time.Second), time.Tick(2*time.Second)
 
-			bestPeer := s.peerMap.BestPeer(nil)
-			if bestPeer == nil {
-				continue
+	loop:
+		for {
+			select {
+			case <-ticker:
+				s.initializePeerMap()
+
+				bestPeer = s.peerMap.BestPeer(nil)
+				if bestPeer != nil {
+					break loop
+				}
+			case <-timeCh:
+				return fmt.Errorf("no best peer found")
 			}
-
-			s.logger.Debug("TxPool Sync initialized")
-
-			return s.syncPeerClient.SyncTxPool(bestPeer.ID)
-		case <-timeCh:
-			return fmt.Errorf("no sync peer found")
 		}
 	}
+
+	return s.syncPeerClient.SyncTxPool(bestPeer.ID)
 }
