@@ -389,19 +389,17 @@ func TestE2E_TxPool_TestSync(t *testing.T) {
 
 	timeCh, ticker := time.After(2*time.Minute), time.NewTicker(5*time.Second)
 
-	secondHashMap := getTxHashMap(cluster.Servers[1].JSONRPC())
+	var secondHashMap map[types.Hash]bool
 
-	if len(secondHashMap) == 0 {
-	loop:
-		for {
-			select {
-			case <-timeCh:
-				t.Fatalf("timeout waiting for txpool sync")
-			case <-ticker.C:
-				secondHashMap = getTxHashMap(cluster.Servers[1].JSONRPC())
-				if len(secondHashMap) != 0 {
-					break loop
-				}
+loop:
+	for {
+		select {
+		case <-timeCh:
+			t.Fatalf("timeout waiting for txpool sync")
+		case <-ticker.C:
+			secondHashMap = getTxHashMap(cluster.Servers[1].JSONRPC())
+			if len(secondHashMap) == len(firstHashMap) {
+				break loop
 			}
 		}
 	}
