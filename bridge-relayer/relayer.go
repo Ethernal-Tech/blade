@@ -92,7 +92,8 @@ type BridgeRelayer struct {
 	metricPath string
 
 	// heartbeatThreshold denotes value below which the relayer is considered
-	// dead (from the perspective of metrics and Prometheus).
+	// logically dead, that is, in low balance alarm (from the perspective of
+	// metrics and Prometheus).
 	heartbeatThreshold *big.Int
 
 	// he logger is an instance of the hclog logging library.
@@ -318,7 +319,8 @@ func WithMetricEndpoint(endpoint string) BridgeRelayerOption {
 // WithHeartbeat configures the relayer to report its health status to Prometheus
 // based on its balance on the external chain. When the balance is above the given
 // threshold, it sends an "alive" signal (1). If the balance falls below, the relayer
-// is considered "dead" and starts to send a "dead" signal (0).
+// is considered logically dead, that is, in low balance alarm and starts to send a
+// signal (0).
 //
 // Note: Signals are only sent if a metrics endpoint is exposed (see WithMetricEndpoint).
 func WithHeartbeat(threshold string) BridgeRelayerOption {
@@ -779,7 +781,7 @@ func (r *BridgeRelayer) sendTransaction(input []byte) error {
 
 	defer func() {
 		if receipt == nil || receipt.Status == 0 {
-			metrics.IncrCounterWithLabels([]string{"unsuccessful_tx"}, 1,
+			metrics.IncrCounterWithLabels([]string{"num_of_unsuccessful_txs"}, 1,
 				[]metrics.Label{{
 					Name:  "ID",
 					Value: r.externalChainID.String(),
@@ -805,7 +807,7 @@ func (r *BridgeRelayer) sendTransaction(input []byte) error {
 	)
 
 	if receipt.Status == 1 {
-		metrics.IncrCounterWithLabels([]string{"successful_tx"}, 1,
+		metrics.IncrCounterWithLabels([]string{"num_of_successful_txs"}, 1,
 			[]metrics.Label{{
 				Name:  "ID",
 				Value: r.externalChainID.String(),

@@ -29,11 +29,11 @@ type commandParams struct {
 	// which metrics for Prometheus will be exposed.
 	metricsEndpoint string
 
-	// heartbeatThreshold denotes balance (expressed in external chain native tokens)
-	// below which the relayer is considered inactive. When the relayer's balance falls
-	// below this value, the relayer will be marked as 'dead', that is, it will sends
-	// 0 instead of 1 to Prometheus. This param only takes effect if the metricsEndpoint
-	// is set/configured.
+	// heartbeatThreshold denotes balance (expressed in the lowest unit (e.g. wei)
+	// of the external chain native tokens) below which the relayer is considered
+	// in alarm. When the relayer's balance falls below this value, the relayer will
+	// signal an alarm, that is, it will send 0 instead of 1 to Prometheus. This
+	// param only takes effect if the metricsEndpoint is set/configured.
 	heartbeatThreshold string
 
 	// this parameter enables JSON-formatted logs by setting its value to true.

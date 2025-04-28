@@ -134,7 +134,8 @@ func setFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(
 		&params.heartbeatThreshold,
 		"hearbeat-threshold",
-		"100000",
-		"relayer's balance below whitch it is considered dead in context of Prometheus metrics",
+		"100000000000000000", // 0.1 eth
+		"relayer's balance on the external chain (expressed in the lowest unit; e.g. wei) below"+
+			"which it is considered in low balance alarm in context of Prometheus metrics",
 	)
 }

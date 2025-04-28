@@ -1546,6 +1546,11 @@ func (b *bridgeEventManager) finalizeOrdinaryBridgeMessage(
 			Value: strconv.Itoa(int(b.externalChainID)),
 		}})
 
+	// In this case, we don't decrease the number of pending messages (in the context of metrics),
+	// because even though the ordinary message is executed (and the number of pending messages
+	// should decreases by one), a new rollback message is created, thus the number of pending
+	// messages remains the same.
+
 	rollbackMsg, err := b.state.getBridgeMessageEvent(id, sid, did, false, dbTx)
 	if err != nil {
 		b.logger.Error("could not get ordinary bridge message", "err", err)
