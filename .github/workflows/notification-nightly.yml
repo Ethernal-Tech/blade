@@ -429,6 +429,10 @@ jobs:
                     {
                       "type": "mrkdwn",
                       "text": "${{ inputs.load_test_mixed_output == 'true' && inputs.load_test_mixed_txpool_pending_output == '0' && inputs.load_test_mixed_txpool_queued_output == '0' && env.succeed_job || env.failed_job }} *Load Test MIXED*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.load_test_erc1155_output == 'true' && inputs.load_test_erc1155_txpool_pending_output == '0' && inputs.load_test_erc1155_txpool_queued_output == '0' && env.succeed_job || env.failed_job }} *Load Test ERC1155*"
                     }
                   ]
                 }
