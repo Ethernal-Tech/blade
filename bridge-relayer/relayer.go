@@ -318,8 +318,9 @@ func WithMetricEndpoint(endpoint string) BridgeRelayerOption {
 
 // WithHeartbeat configures the relayer to report its health status to Prometheus
 // based on its balance on the external chain. When the balance is above the given
-// threshold, it sends an "alive" signal (1). If the balance falls below, the relayer
-// is considered logically dead, that is, in low balance alarm and starts to send a
+// threshold (expressed in the lowest unit of the external chain native token, e.g.
+// wei), it sends an "alive" signal (1). If the balance falls below, the relayer is
+// considered logically dead, that is, in low balance alarm and starts to send a
 // signal (0).
 //
 // Note: Signals are only sent if a metrics endpoint is exposed (see WithMetricEndpoint).
