@@ -9,12 +9,14 @@ import (
 	"math/big"
 	"net"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/Ethernal-Tech/blockchain-event-tracker/store"
 	"github.com/Ethernal-Tech/blockchain-event-tracker/tracker"
 	"github.com/Ethernal-Tech/ethgo"
+	"github.com/armon/go-metrics"
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
 	bolt "go.etcd.io/bbolt"
@@ -1392,6 +1394,12 @@ func (b *bridgeManager) handleBridgeMessageEvent(
 		return err
 	}
 
+	metrics.IncrCounterWithLabels([]string{"num_of_pending_bridge_messages"}, 1,
+		[]metrics.Label{{
+			Name:  "ID",
+			Value: strconv.Itoa(int(b.externalChainID)),
+		}})
+
 	msg := &contractsapi.BridgeMessage{
 		ID:                 id,
 		SourceChainID:      sid,
@@ -1485,6 +1493,18 @@ func (b *bridgeManager) handleBridgeMessageResultEvent(
 			b.logger.Info(fmt.Sprintf("Rollback bridge message %s has been successfully processed",
 				id.String()))
 
+			metrics.IncrCounterWithLabels([]string{"num_of_successful_bridge_messages"}, 1,
+				[]metrics.Label{{
+					Name:  "ID",
+					Value: strconv.Itoa(int(b.externalChainID)),
+				}})
+
+			metrics.IncrCounterWithLabels([]string{"num_of_pending_bridge_messages"}, -1,
+				[]metrics.Label{{
+					Name:  "ID",
+					Value: strconv.Itoa(int(b.externalChainID)),
+				}})
+
 			return nil
 		}
 
@@ -1524,10 +1544,33 @@ func (b *bridgeManager) finalizeOrdinaryBridgeMessage(
 			return err
 		}
 
+		metrics.IncrCounterWithLabels([]string{"num_of_successful_bridge_messages"}, 1,
+			[]metrics.Label{{
+				Name:  "ID",
+				Value: strconv.Itoa(int(b.externalChainID)),
+			}})
+
+		metrics.IncrCounterWithLabels([]string{"num_of_pending_bridge_messages"}, -1,
+			[]metrics.Label{{
+				Name:  "ID",
+				Value: strconv.Itoa(int(b.externalChainID)),
+			}})
+
 		b.logger.Info(fmt.Sprintf("Bridge message %s has been successfully processed", id.String()))
 
 		return nil
 	}
+
+	metrics.IncrCounterWithLabels([]string{"num_of_unsuccessful_bridge_messages"}, 1,
+		[]metrics.Label{{
+			Name:  "ID",
+			Value: strconv.Itoa(int(b.externalChainID)),
+		}})
+
+	// In this case, we don't decrease the number of pending messages (in the context of metrics),
+	// because even though the ordinary message is executed (and the number of pending messages
+	// should decreases by one), a new rollback message is created, thus the number of pending
+	// messages remains the same.
 
 	rollbackMsg, err := b.state.getBridgeMessageEvent(id, sid, did, false, dbTx)
 	if err != nil {

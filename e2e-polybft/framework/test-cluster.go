@@ -885,7 +885,8 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 			1,
 			cluster.Config.Dir(command.DefaultGenesisFileName),
 			cluster.Config.RelayerPrivateKey,
-			cluster.Servers[0].JSONRPCAddr())
+			cluster.Servers[0].JSONRPCAddr(),
+			54321)
 
 		cluster.BridgeRelayers[0] = bridgeRelayer
 		bridgeRelayer.Start()
@@ -901,7 +902,8 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 				i+1,
 				cluster.Config.Dir(command.DefaultGenesisFileName),
 				key,
-				cluster.Servers[0].JSONRPCAddr())
+				cluster.Servers[0].JSONRPCAddr(),
+				uint16(54321+i))
 
 			cluster.BridgeRelayers[i] = bridgeRelayer
 			bridgeRelayer.Start()

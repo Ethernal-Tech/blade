@@ -6,10 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
+	"net/http"
 	"net/url"
 	"os"
+	"strconv"
+	"strings"
 	"time"
+	"unicode"
 
 	bolt "go.etcd.io/bbolt"
 
@@ -18,9 +23,13 @@ import (
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/crypto"
+	"github.com/0xPolygon/polygon-edge/jsonrpc"
 	"github.com/0xPolygon/polygon-edge/txrelayer"
+	"github.com/armon/go-metrics"
+	"github.com/armon/go-metrics/prometheus"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/hashicorp/go-hclog"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/0xPolygon/polygon-edge/types"
 )
@@ -76,6 +85,17 @@ type BridgeRelayer struct {
 	// db is a BoltDB instance used for (persistent) local storage.
 	db *bolt.DB
 
+	// metricPort specifies the port where metrics for Prometheus are exposed.
+	metricPort uint16
+
+	// metricPath specifies the path where metrics for Prometheus are exposed.
+	metricPath string
+
+	// heartbeatThreshold denotes value below which the relayer is considered
+	// logically dead, that is, in low balance alarm (from the perspective of
+	// metrics and Prometheus).
+	heartbeatThreshold *big.Int
+
 	// he logger is an instance of the hclog logging library.
 	// used to handle application logging.
 	logger hclog.Logger
@@ -109,6 +129,9 @@ type options struct {
 	pollInterval        *time.Duration
 	privateKey          *string
 	dbPath              *string
+	metricPort          *uint16
+	metricPath          *string
+	heartbeatThreshold  *string
 	logLevel            hclog.Level
 	jsonLogFormat       bool
 	logDir              string
@@ -256,6 +279,69 @@ func WithDBPath(path string) BridgeRelayerOption {
 	}
 }
 
+// WithMetricEndpoint configures the relayer to expose metrics for the Prometheus
+// on the given endpoint. Endpoint must be in the format :PORT/PATH, where port
+// is an uint16 and path is defined according to the HTTP path rules.
+func WithMetricEndpoint(endpoint string) BridgeRelayerOption {
+	return func(o *options) error {
+		// Potential additional regex check should be performed to verify
+		// whether the provided endpoint is in the format :PORT/PATH, where
+		// port is an uint16 and path is defined according to HTTP path rules.
+		if !strings.HasPrefix(endpoint, ":") {
+			return fmt.Errorf("endpoint must start with ':'")
+		}
+
+		parts := strings.SplitN(endpoint[1:], "/", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("endpoint must be in the form ':PORT/PATH'")
+		}
+
+		port, err := strconv.ParseUint(parts[0], 10, 16)
+		if err != nil {
+			return fmt.Errorf("cannot parse port (endpoint): %w", err)
+		}
+
+		if port == 0 {
+			return fmt.Errorf("port cannot be zero")
+		}
+
+		port16 := uint16(port)
+
+		path := "/" + parts[1]
+
+		o.metricPort = &port16
+		o.metricPath = &path
+
+		return nil
+	}
+}
+
+// WithHeartbeat configures the relayer to report its health status to Prometheus
+// based on its balance on the external chain. When the balance is above the given
+// threshold (expressed in the lowest unit of the external chain native token, e.g.
+// wei), it sends an "alive" signal (1). If the balance falls below, the relayer is
+// considered logically dead, that is, in low balance alarm and starts to send a
+// signal (0).
+//
+// Note: Signals are only sent if a metrics endpoint is exposed (see WithMetricEndpoint).
+func WithHeartbeat(threshold string) BridgeRelayerOption {
+	return func(o *options) error {
+		if threshold == "" {
+			return fmt.Errorf("heartbeat threshold cannot be empty")
+		}
+
+		for _, r := range threshold {
+			if !unicode.IsDigit(r) {
+				return fmt.Errorf("heartbeat threshold must be a number")
+			}
+		}
+
+		o.heartbeatThreshold = &threshold
+
+		return nil
+	}
+}
+
 func WithLogLevel(level hclog.Level) BridgeRelayerOption {
 	return func(options *options) error {
 		options.logLevel = level
@@ -370,10 +456,64 @@ func NewBridgeRelayer(internalRPCAddr string, privateKey string, opts ...BridgeR
 		return nil, errFunc(err)
 	}
 
+	if sopts.metricPort != nil && sopts.metricPath != nil {
+		relayer.metricPort = *sopts.metricPort
+		relayer.metricPath = *sopts.metricPath
+	}
+
+	if sopts.heartbeatThreshold != nil {
+		relayer.heartbeatThreshold, _ = big.NewInt(0).SetString(*sopts.heartbeatThreshold, 10)
+	}
+
 	return relayer, nil
 }
 
+func (r *BridgeRelayer) startPrometheusMetricsServer() {
+	sink, err := prometheus.NewPrometheusSink()
+	if err != nil {
+		log.Fatalf("failed to create prometheus sink: %v", err)
+	}
+
+	conf := metrics.DefaultConfig("bridge_relayer")
+
+	_, err = metrics.NewGlobal(conf, sink)
+	if err != nil {
+		log.Fatalf("failed to create metrics: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+
+			return
+		}
+
+		promhttp.Handler().ServeHTTP(w, r)
+	})
+
+	r.logger.Info("starting Prometheus metrics server",
+		"port", r.metricPort,
+		"path", r.metricPath)
+
+	srv := &http.Server{
+		Addr:         fmt.Sprintf(":%v", r.metricPort),
+		Handler:      mux,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
+	go func() {
+		log.Fatal(srv.ListenAndServe())
+	}()
+}
+
 func (r *BridgeRelayer) Start() {
+	if r.metricPort != 0 && r.metricPath != "" {
+		r.startPrometheusMetricsServer()
+	}
+
 	lastBridged := big.NewInt(-1)
 
 	bucketName := []byte("lastBridgedBucket")
@@ -414,6 +554,26 @@ func (r *BridgeRelayer) Start() {
 	for {
 		select {
 		case <-t.C:
+			balance, err := r.externalClient.Client().GetBalance(r.privateKey.Address(), jsonrpc.LatestBlockNumberOrHash)
+			if err != nil {
+				continue
+			}
+
+			alive := 1
+
+			if r.heartbeatThreshold != nil && balance.Cmp(r.heartbeatThreshold) <= 0 {
+				alive = 0
+			}
+
+			if r.heartbeatThreshold != nil {
+				// A metric indicating that the relayer is active – relayer’s heartbeat.
+				metrics.SetGaugeWithLabels([]string{"heartbeat"}, float32(alive),
+					[]metrics.Label{{
+						Name:  "ID",
+						Value: r.externalChainID.String(),
+					}})
+			}
+
 			r.logger.Info(fmt.Sprintf("getting new batches with id > %s", lastBridged.String()))
 
 			batches, err := GetBridgeBatchesFromNumber(big.NewInt(0).Add(lastBridged, big.NewInt(1)), r.internalClient)
@@ -571,6 +731,8 @@ func newLoggerFromConfig(options *options) (hclog.Logger, error) {
 }
 
 func (r *BridgeRelayer) sendSignedBridgeMessageBatch(batch *contractsapi.SignedBridgeMessageBatch) error {
+	r.logger.Info("attempting to send a transaction with bridge messages")
+
 	input, err := (&contractsapi.ReceiveBatchGatewayFn{
 		SignedBatch: batch,
 	}).EncodeAbi()
@@ -578,28 +740,12 @@ func (r *BridgeRelayer) sendSignedBridgeMessageBatch(batch *contractsapi.SignedB
 		return fmt.Errorf("failed to encode abi, err: %w", err)
 	}
 
-	tx := types.NewTx(types.NewLegacyTx(
-		types.WithFrom(r.privateKey.Address()),
-		types.WithTo(&r.externalGatewayAddr),
-		types.WithInput(input),
-	))
-
-	receipt, err := r.externalClient.SendTransaction(tx, r.privateKey)
-	if err != nil {
-		return fmt.Errorf("id-ed batch has already been processed or cannot be processed, err: %w", err)
-	}
-
-	r.logger.Debug("sent commit bridge message batch transaction to external chain",
-		"gatewayAddr", r.externalGatewayAddr,
-		"status", types.ReceiptStatus(receipt.Status),
-		"txHash", receipt.TransactionHash,
-		"blockNumber", receipt.BlockNumber,
-	)
-
-	return nil
+	return r.sendTransaction(input)
 }
 
 func (r *BridgeRelayer) sendCommitValidatorSet(newValidatorSet *contractsapi.SignedValidatorSet) error {
+	r.logger.Info("attempting to send a transaction to commit a new validator set")
+
 	input, err := (&contractsapi.CommitValidatorSetBridgeStorageFn{
 		NewValidatorSet: newValidatorSet.NewValidatorSet,
 		Signature:       newValidatorSet.Signature,
@@ -610,23 +756,64 @@ func (r *BridgeRelayer) sendCommitValidatorSet(newValidatorSet *contractsapi.Sig
 		return err
 	}
 
+	return r.sendTransaction(input)
+}
+
+func (r *BridgeRelayer) sendTransaction(input []byte) error {
 	txn := types.NewTx(types.NewLegacyTx(
 		types.WithFrom(r.privateKey.Address()),
 		types.WithTo(&r.externalGatewayAddr),
 		types.WithInput(input),
 	))
 
+	d := time.Duration(0)
+
+	defer func() {
+		metrics.SetGaugeWithLabels([]string{"processing_time"}, float32(d.Milliseconds()),
+			[]metrics.Label{{
+				Name:  "ID",
+				Value: r.externalChainID.String(),
+			}})
+	}()
+
+	t := time.Now().UTC()
 	receipt, err := r.externalClient.SendTransaction(txn, r.privateKey)
+	d = time.Since(t)
+
+	defer func() {
+		if receipt == nil || receipt.Status == 0 {
+			metrics.IncrCounterWithLabels([]string{"num_of_unsuccessful_txs"}, 1,
+				[]metrics.Label{{
+					Name:  "ID",
+					Value: r.externalChainID.String(),
+				}})
+		}
+	}()
+
 	if err != nil {
-		return fmt.Errorf("failed to send commit validator set transaction to external chain, err: %w", err)
+		return fmt.Errorf("failed to send transaction to the external chain, err: %w", err)
 	}
 
-	r.logger.Debug("sent commit validator set transaction to external chain",
+	metrics.SetGaugeWithLabels([]string{"gas_used"}, float32(receipt.GasUsed),
+		[]metrics.Label{{
+			Name:  "ID",
+			Value: r.externalChainID.String(),
+		}})
+
+	r.logger.Info("transaction successfully sent (and processed) to the external chain",
 		"gatewayAddr", r.externalGatewayAddr,
 		"status", types.ReceiptStatus(receipt.Status),
 		"txHash", receipt.TransactionHash,
 		"blockNumber", receipt.BlockNumber,
 	)
+
+	if receipt.Status == 1 {
+		metrics.IncrCounterWithLabels([]string{"num_of_successful_txs"}, 1,
+			[]metrics.Label{{
+				Name:  "ID",
+				Value: r.externalChainID.String(),
+			}})
+	}
 
 	return nil
 }

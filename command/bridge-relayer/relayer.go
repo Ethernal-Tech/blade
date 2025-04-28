@@ -31,6 +31,8 @@ func runCommand(*cobra.Command, []string) {
 		bridgerelayer.WithLogLevel(hclog.LevelFromString(params.logLevel)),
 		bridgerelayer.WithLogJSONFormat(params.jsonFormatOuttputter),
 		bridgerelayer.WithDBPath(params.boltDBPath),
+		bridgerelayer.WithMetricEndpoint(params.metricsEndpoint),
+		bridgerelayer.WithHeartbeat(params.heartbeatThreshold),
 	)
 
 	if err != nil {
@@ -119,5 +121,21 @@ func setFlags(cmd *cobra.Command) {
 		"database-path",
 		"",
 		"path to bolt database",
+	)
+
+	cmd.Flags().StringVarP(
+		&params.metricsEndpoint,
+		"metrics-endpoint",
+		"m",
+		"",
+		"endpoint where metrics for prometheus will be exposed (must be in :PORT/PATH format)",
+	)
+
+	cmd.Flags().StringVar(
+		&params.heartbeatThreshold,
+		"hearbeat-threshold",
+		"100000000000000000", // 0.1 eth
+		"relayer's balance on the external chain (expressed in the lowest unit; e.g. wei) below"+
+			"which it is considered in low balance alarm in context of Prometheus metrics",
 	)
 }
