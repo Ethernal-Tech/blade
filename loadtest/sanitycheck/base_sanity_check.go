@@ -95,6 +95,117 @@ func (t *BaseSanityCheckTest) fundAddress(address types.Address, amount *big.Int
 	return nil
 }
 
+// unfund wallet after test
+func (t *BaseSanityCheckTest) unfundWallet(key *crypto.ECDSAKey) error {
+	fmt.Println("Unfunding wallet", key.Address().String())
+
+	s := time.Now().UTC()
+	defer func() {
+		fmt.Println("Unfunding wallet", key.Address().String(), "took", time.Since(s))
+	}()
+
+	balance, err := t.client.GetBalance(key.Address(), jsonrpc.LatestBlockNumberOrHash)
+	if err != nil {
+		return err
+	}
+
+	amount := balance.Sub(balance, big.NewInt(1e17))
+
+	recv := t.testAccountKey.Address()
+
+	tx := types.NewTx(types.NewLegacyTx(
+		types.WithTo(&recv),
+		types.WithFrom(key.Address()),
+		types.WithValue(amount),
+		types.WithGas(21000),
+	))
+
+	receipt, err := t.txrelayer.SendTransaction(tx, key)
+	if err != nil {
+		return err
+	}
+
+	if receipt == nil || receipt.Status != uint64(types.ReceiptSuccess) {
+		return fmt.Errorf("failed to unfund native tokens from %s", key.Address())
+	}
+
+	return nil
+}
+
+// unstake unstakes the given amount for the given validator.
+func (t *BaseSanityCheckTest) unstake(validatorKey *crypto.ECDSAKey, amount *big.Int) (uint64, error) {
+	fmt.Println("Unstaking for validator", validatorKey.Address(), "Amount", amount.String())
+
+	s := time.Now().UTC()
+	defer func() {
+		fmt.Println("Unstaking for validator", validatorKey.Address(), "took", time.Since(s))
+	}()
+
+	unstakeFn := &contractsapi.UnstakeStakeManagerFn{
+		Amount: amount,
+	}
+
+	encoded, err := unstakeFn.EncodeAbi()
+	if err != nil {
+		return 0, err
+	}
+
+	tx := types.NewTx(types.NewLegacyTx(
+		types.WithFrom(validatorKey.Address()),
+		types.WithTo(&contracts.StakeManagerContract),
+		types.WithInput(encoded)))
+
+	receipt, err := t.txrelayer.SendTransaction(tx, validatorKey)
+	if err != nil {
+		return 0, err
+	}
+
+	if receipt.Status == uint64(types.ReceiptFailed) {
+		return 0, fmt.Errorf("unstake transaction failed on block %d", receipt.BlockNumber)
+	}
+
+	return receipt.BlockNumber, nil
+}
+
+// stake stakes the given amount for the given validator.
+func (t *BaseSanityCheckTest) stake(validatorKey *crypto.ECDSAKey, amount *big.Int) (uint64, error) {
+	if err := t.approveNativeERC20(validatorKey, amount, contracts.StakeManagerContract); err != nil {
+		return 0, err
+	}
+
+	fmt.Println("Staking for validator", validatorKey.Address(), "Amount", amount.String())
+
+	s := time.Now().UTC()
+	defer func() {
+		fmt.Println("Staking for validator", validatorKey.Address(), "took", time.Since(s))
+	}()
+
+	stakeFn := &contractsapi.StakeStakeManagerFn{
+		Amount: amount,
+	}
+
+	encoded, err := stakeFn.EncodeAbi()
+	if err != nil {
+		return 0, err
+	}
+
+	tx := types.NewTx(types.NewLegacyTx(types.WithFrom(
+		validatorKey.Address()),
+		types.WithTo(&contracts.StakeManagerContract),
+		types.WithInput(encoded)))
+
+	receipt, err := t.txrelayer.SendTransaction(tx, validatorKey)
+	if err != nil {
+		return 0, err
+	}
+
+	if receipt.Status == uint64(types.ReceiptFailed) {
+		return 0, fmt.Errorf("stake transaction failed on block %d", receipt.BlockNumber)
+	}
+
+	return receipt.BlockNumber, nil
+}
+
 // CreateApproveERC20Txn sends approve transaction
 // to ERC20 token for spender so that it is able to spend given tokens
 func (t *BaseSanityCheckTest) approveNativeERC20(sender *crypto.ECDSAKey,
