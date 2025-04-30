@@ -126,7 +126,7 @@ jobs:
                       },
                       "style": "${{ inputs.sanity_check_tests_output == 'true' && env.succeed_bnt || env.failed_bnt }}",
                       "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ inputs.results_artifact_id }}"
-                    },
+                    }
                   ]
                 },
                 {
@@ -230,7 +230,6 @@ jobs:
                       "text": "${{ inputs.unstake_all_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Unstake All Test*"
                     }
                   ]
-                },
-                
+                }
               ]
             }
