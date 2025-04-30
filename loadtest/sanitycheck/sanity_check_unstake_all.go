@@ -82,5 +82,5 @@ func (t *UnstakeAllTest) Run() error {
 
 	fmt.Println("Validator", validatorAcc.Address(), "is removed from the validator set")
 
-	return t.unfundWallet(validatorAcc.Ecdsa)
+	return nil
 }

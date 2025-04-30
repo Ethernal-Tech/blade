@@ -95,43 +95,6 @@ func (t *BaseSanityCheckTest) fundAddress(address types.Address, amount *big.Int
 	return nil
 }
 
-// unfund wallet after test
-func (t *BaseSanityCheckTest) unfundWallet(key *crypto.ECDSAKey) error {
-	fmt.Println("Unfunding wallet", key.Address().String())
-
-	s := time.Now().UTC()
-	defer func() {
-		fmt.Println("Unfunding wallet", key.Address().String(), "took", time.Since(s))
-	}()
-
-	balance, err := t.client.GetBalance(key.Address(), jsonrpc.LatestBlockNumberOrHash)
-	if err != nil {
-		return err
-	}
-
-	amount := balance.Sub(balance, big.NewInt(1e17))
-
-	recv := t.testAccountKey.Address()
-
-	tx := types.NewTx(types.NewLegacyTx(
-		types.WithTo(&recv),
-		types.WithFrom(key.Address()),
-		types.WithValue(amount),
-		types.WithGas(21000),
-	))
-
-	receipt, err := t.txrelayer.SendTransaction(tx, key)
-	if err != nil {
-		return err
-	}
-
-	if receipt == nil || receipt.Status != uint64(types.ReceiptSuccess) {
-		return fmt.Errorf("failed to unfund native tokens from %s", key.Address())
-	}
-
-	return nil
-}
-
 // unstake unstakes the given amount for the given validator.
 func (t *BaseSanityCheckTest) unstake(validatorKey *crypto.ECDSAKey, amount *big.Int) (uint64, error) {
 	fmt.Println("Unstaking for validator", validatorKey.Address(), "Amount", amount.String())

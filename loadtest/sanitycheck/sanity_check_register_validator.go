@@ -62,7 +62,7 @@ func (t *RegisterValidatorTest) Run() error {
 		return err
 	}
 
-	return t.unfundWallet(validatorWallet.Ecdsa)
+	return nil
 }
 
 // runTest runs the register validator test.
