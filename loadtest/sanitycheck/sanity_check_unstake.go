@@ -120,9 +120,6 @@ func (t *UnstakeTest) Run() error {
 	fmt.Println("Validator", validatorKey.Address(), "is in the updated validator set with correct voting power")
 
 	_, err = t.stake(validatorKey, amountToUnstake)
-	if err != nil {
-		return err
-	}
 
-	return nil
+	return err
 }
