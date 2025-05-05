@@ -203,10 +203,10 @@ func getChildToken(t *testing.T, predicateABI *abi.ABI, predicateAddr types.Addr
 	rootToken types.Address, relayer txrelayer.TxRelayer) types.Address {
 	t.Helper()
 
-	sourceToDestTokenMapFn, exists := predicateABI.Methods["sourceTokenToDestinationToken"]
+	rootToChildTokenMapFn, exists := predicateABI.Methods["rootTokenToChildToken"]
 	require.True(t, exists, "rootTokenToChildToken function is not found in the provided predicate ABI definition")
 
-	input, err := sourceToDestTokenMapFn.Encode([]interface{}{rootToken})
+	input, err := rootToChildTokenMapFn.Encode([]interface{}{rootToken})
 	require.NoError(t, err)
 
 	childTokenRaw, err := relayer.Call(types.ZeroAddress, predicateAddr, input)
