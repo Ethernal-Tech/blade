@@ -58,11 +58,8 @@ func (t *RegisterValidatorTest) Run() error {
 	}
 
 	_, err = t.unstake(validatorWallet.Ecdsa, ethgo.Ether(1))
-	if err != nil {
-		return err
-	}
 
-	return nil
+	return err
 }
 
 // runTest runs the register validator test.
