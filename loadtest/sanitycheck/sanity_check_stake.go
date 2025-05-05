@@ -120,11 +120,8 @@ func (t *StakeTest) Run() error {
 	fmt.Println("Validator", validatorKey.Address(), "is in the updated validator set with correct voting power")
 
 	_, err = t.unstake(validatorKey, ethgo.Ether(1))
-	if err != nil {
-		return err
-	}
 
-	return nil
+	return err
 }
 
 // getStake returns the stake of the given validator on the StakeManager contract.
