@@ -56,6 +56,8 @@ jobs:
       receipts_timeout: "5m0s"
       batch_size: "1000"
       notification: false
+      txpool_read_threads: "4"
+      state_read_threads: "4"
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
@@ -80,6 +82,8 @@ jobs:
       receipts_timeout: "2m0s"
       batch_size: "1000"
       notification: false
+      txpool_read_threads: "4"
+      state_read_threads: "4"
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
@@ -104,6 +108,8 @@ jobs:
       receipts_timeout: "2m0s"
       batch_size: "1000"
       notification: false
+      txpool_read_threads: "4"
+      state_read_threads: "4"
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
@@ -128,6 +134,8 @@ jobs:
       receipts_timeout: "2m0s"
       batch_size: "1000"
       notification: false
+      txpool_read_threads: "4"
+      state_read_threads: "4"
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
@@ -159,6 +167,8 @@ jobs:
       receipts_timeout: "2m0s"
       batch_size: "1000"
       notification: false
+      txpool_read_threads: "4"
+      state_read_threads: "4"
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
@@ -190,6 +200,8 @@ jobs:
       receipts_timeout: "2m0s"
       batch_size: "1000"
       notification: false
+      txpool_read_threads: "4"
+      state_read_threads: "4"
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
