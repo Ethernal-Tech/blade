@@ -47,11 +47,11 @@ on: # yamllint disable-line rule:truthy
       txpool_read_threads:
         description: Number of threads to read from the txpool
         type: string
-        default: "1"
+        default: "0"
       state_read_threads:
         description: Number of threads to read from the state
         type: string
-        default: "1"
+        default: "0"
   workflow_call:
     inputs:
       environment:
@@ -97,11 +97,11 @@ on: # yamllint disable-line rule:truthy
       txpool_read_threads:
         description: Number of threads to read from the txpool
         type: string
-        default: "1"
+        default: "0"
       state_read_threads:
         description: Number of threads to read from the state
         type: string
-        default: "1"
+        default: "0"
     outputs:
       load_test_output:
         description: Load Test output
