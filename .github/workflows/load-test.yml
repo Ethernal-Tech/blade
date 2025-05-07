@@ -187,7 +187,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4.0.1
         with:
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-region: ${{ vars.MACHINE_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
       - name: Start Load Test Runner
         id: start_load_teste_runner
@@ -305,7 +305,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4.0.1
         with:
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-region: ${{ vars.MACHINE_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
       - name: Stop Load Test Runner
         uses: Ethernal-Tech/ec2-github-runner@v3.0.0
