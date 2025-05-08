@@ -183,34 +183,6 @@ jobs:
                   "fields": [
                     {
                       "type": "mrkdwn",
-                      "text": "${{ inputs.pp_produce_blocks == 'true' && env.succeed_job || env.failed_job }} *Produce Blocks*"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "${{ inputs.pp_fund_status == 'true' && env.succeed_job || env.failed_job }} *Fund Account*"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "${{ inputs.pp_check_deployed_smart_contract_status == 'true' && env.succeed_job || env.failed_job }} *Deploy Smart Contract*"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "${{ inputs.pp_method_set_status == 'true' && env.succeed_job || env.failed_job }} *Method set()*"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "${{ inputs.pp_method_get_status == 'true' && env.succeed_job || env.failed_job }} *Method get()*"
-                    }
-                  ]
-                },
-                {
-                  "type": "divider"
-                },
-                {
-                  "type": "section",
-                  "fields": [
-                    {
-                      "type": "mrkdwn",
                       "text": "${{ inputs.stake_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Stake Test*"
                     },
                     {
@@ -228,6 +200,34 @@ jobs:
                     {
                       "type": "mrkdwn",
                       "text": "${{ inputs.unstake_all_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Unstake All Test*"
+                    }
+                  ]
+                },
+                {
+                  "type": "divider"
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.pp_produce_blocks == 'true' && env.succeed_job || env.failed_job }} *Produce Blocks*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.pp_fund_status == 'true' && env.succeed_job || env.failed_job }} *Fund Account*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.pp_check_deployed_smart_contract_status == 'true' && env.succeed_job || env.failed_job }} *Deploy Smart Contract*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.pp_method_set_status == 'true' && env.succeed_job || env.failed_job }} *Method set()*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.pp_method_get_status == 'true' && env.succeed_job || env.failed_job }} *Method get()*"
                     }
                   ]
                 }
