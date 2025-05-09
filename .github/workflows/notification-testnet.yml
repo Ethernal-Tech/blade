@@ -167,6 +167,34 @@ jobs:
                   ]
                 },
                 {
+                  "type": "divider"
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.stake_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Stake Test*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.unstake_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Unstake Test*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.register_validator_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Register Validator Test*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.withdraw_rewards_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Withdraw Rewards Test*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.unstake_all_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Unstake All Test*"
+                    }
+                  ]
+                },
+                {
                   "type": "context",
                   "elements": [
                     {
