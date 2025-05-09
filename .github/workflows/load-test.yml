@@ -44,14 +44,6 @@ on: # yamllint disable-line rule:truthy
         description: Notification
         type: boolean
         default: true
-      txpool_read_threads:
-        description: Number of threads to read from the txpool
-        type: string
-        default: "0"
-      state_read_threads:
-        description: Number of threads to read from the state
-        type: string
-        default: "0"
   workflow_call:
     inputs:
       environment:
@@ -94,14 +86,6 @@ on: # yamllint disable-line rule:truthy
         description: Notification
         type: boolean
         required: true
-      txpool_read_threads:
-        description: Number of threads to read from the txpool
-        type: string
-        default: "0"
-      state_read_threads:
-        description: Number of threads to read from the state
-        type: string
-        default: "0"
     outputs:
       load_test_output:
         description: Load Test output
@@ -247,7 +231,7 @@ jobs:
       - name: Start Load Test
         id: load_test_results
         run: |
-          ./blade load-test --jsonrpc "http://${{ needs.check_network.outputs.rpc_url }}" --mnemonic "${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}" --name "results" --type ${{ inputs.type }} ${{ inputs.dynamic == true && '--dynamic' || '' }} --vus ${{ inputs.vus }} --txs-per-user ${{ inputs.txs_per_user }} --batch-size ${{ inputs.batch_size }} --txpool-timeout ${{ inputs.txpool_timeout }} ${{ inputs.wait_txpool == true && '--wait-txpool' || '' }} --receipts-timeout ${{ inputs.receipts_timeout }} --to-json ${{ inputs.environment == 'testnet' && '--tear-down' || ''}} --txpool-read-threads ${{ inputs.txpool_read_threads }} --state-read-threads ${{ inputs.state_read_threads }}
+          ./blade load-test --jsonrpc "http://${{ needs.check_network.outputs.rpc_url }}" --mnemonic "${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}" --name "results" --type ${{ inputs.type }} ${{ inputs.dynamic == true && '--dynamic' || '' }} --vus ${{ inputs.vus }} --txs-per-user ${{ inputs.txs_per_user }} --batch-size ${{ inputs.batch_size }} --txpool-timeout ${{ inputs.txpool_timeout }} ${{ inputs.wait_txpool == true && '--wait-txpool' || '' }} --receipts-timeout ${{ inputs.receipts_timeout }} --to-json ${{ inputs.environment == 'testnet' && '--tear-down' || ''}} --txpool-read-threads 4 --state-read-threads 4
           echo "total_time=$(cat results_${{ inputs.type }}.json | jq -r '.totalTime')" >> $GITHUB_OUTPUT
           echo "total_txs=$(cat results_${{ inputs.type }}.json | jq -r '.totalTxs')" >> $GITHUB_OUTPUT
           echo "total_blocks=$(cat results_${{ inputs.type }}.json | jq -r '.totalBlocks')" >> $GITHUB_OUTPUT
