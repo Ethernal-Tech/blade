@@ -167,15 +167,6 @@ jobs:
                   ]
                 },
                 {
-                  "type": "context",
-                  "elements": [
-                    {
-                      "type": "mrkdwn",
-                      "text": "Network: *${{ inputs.pp_network }}*"
-                    }
-                  ]
-                },
-                {
                   "type": "divider"
                 },
                 {
@@ -200,6 +191,15 @@ jobs:
                     {
                       "type": "mrkdwn",
                       "text": "${{ inputs.unstake_all_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Unstake All Test*"
+                    }
+                  ]
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "Network: *${{ inputs.pp_network }}*"
                     }
                   ]
                 },
