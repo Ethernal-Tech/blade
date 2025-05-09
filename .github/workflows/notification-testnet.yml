@@ -45,6 +45,33 @@ on: # yamllint disable-line rule:truthy
       pp_method_get_status:
         type: string
         required: true
+      sanity_check_tests_output:
+        description: Sanity Check Tests output
+        type: string
+        required: true
+      stake_test_output:
+        description: Stake Test output
+        type: string
+        required: true
+      unstake_test_output:
+        description: Unstake Test output
+        type: string
+        required: true
+      register_validator_test_output:
+        description: Register Validator Test output
+        type: string
+        required: true
+      withdraw_rewards_test_output:
+        description: Withdraw Rewards Test output
+        type: string
+        required: true
+      unstake_all_test_output:
+        description: Unstake All Test output
+        type: string
+        required: true
+      results_artifact_id:
+        type: string
+        required: true
     secrets:
       AWS_S3_BLADE_BUCKET:
         required: true
@@ -88,8 +115,17 @@ jobs:
                         "type": "plain_text",
                         "text": "Workflow Run"
                       },
-                      "style": "${{ inputs.bat_produce_blocks == 'true' && inputs.bat_fund_status == 'true' && inputs.bat_check_deployed_smart_contract_status == 'true' && inputs.bat_method_set_status == 'true' && inputs.bat_method_get_status == 'true' && inputs.pp_produce_blocks == 'true' && inputs.pp_fund_status == 'true' && inputs.pp_check_deployed_smart_contract_status == 'true' && inputs.pp_method_set_status == 'true' && inputs.pp_method_get_status == 'true' && env.succeed_bnt || env.failed_bnt }}",
+                      "style": "${{ inputs.bat_produce_blocks == 'true' && inputs.bat_fund_status == 'true' && inputs.bat_check_deployed_smart_contract_status == 'true' && inputs.bat_method_set_status == 'true' && inputs.bat_method_get_status == 'true' && inputs.pp_produce_blocks == 'true' && inputs.pp_fund_status == 'true' && inputs.pp_check_deployed_smart_contract_status == 'true' && inputs.pp_method_set_status == 'true' && inputs.pp_method_get_status == 'true' && inputs.sanity_check_tests_output == 'true' && env.succeed_bnt || env.failed_bnt }}",
                       "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "Sanity Check Results"
+                      },
+                      "style": "${{ inputs.sanity_check_tests_output == 'true' && env.succeed_bnt || env.failed_bnt }}",
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ inputs.results_artifact_id }}"
                     }
                   ]
                 },
@@ -127,6 +163,34 @@ jobs:
                     {
                       "type": "mrkdwn",
                       "text": "${{ inputs.bat_method_get_status == 'true' && env.succeed_job || env.failed_job }} *Method get()*"
+                    }
+                  ]
+                },
+                {
+                  "type": "divider"
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.stake_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Stake Test*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.unstake_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Unstake Test*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.register_validator_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Register Validator Test*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.withdraw_rewards_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Withdraw Rewards Test*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.unstake_all_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Unstake All Test*"
                     }
                   ]
                 },

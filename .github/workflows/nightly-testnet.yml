@@ -31,10 +31,20 @@ jobs:
       PREMINED_PRIVATE_KEY: ${{ secrets.LOADTEST_PRIVATE_KEY }}
       ACCOUNT_PRIVATE_KEY: ${{ secrets.ACCOUNT_PRIVATE_KEY }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  sanity_check_tests:
+    name: Sanity Check Test
+    uses: ./.github/workflows/sanity-check-test.yml
+    needs: [blade]
+    with:
+      environment: testnet
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
+      AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
   load_test_perf:
     name: Load Test PERFORMANCE CONTRACT
     uses: ./.github/workflows/load-test.yml
-    needs: [blade]
+    needs: [blade, sanity_check_tests]
     with:
       environment: testnet
       type: PERF-CONTRACT
@@ -58,7 +68,7 @@ jobs:
   testnet_notification:
     name: Testnet Nightly Notification
     uses: ./.github/workflows/notification-testnet.yml
-    needs: [blade, pink_panda, load_test_perf]
+    needs: [blade, pink_panda, sanity_check_tests, load_test_perf]
     if: success() || failure()
     with:
       bat_network: Blade Testnet
@@ -75,13 +85,20 @@ jobs:
       pp_check_deployed_smart_contract_status: ${{ needs.pink_panda.outputs.check_deployed_smart_contract_status }}
       pp_method_set_status: ${{ needs.pink_panda.outputs.method_set_status }}
       pp_method_get_status: ${{ needs.pink_panda.outputs.method_get_status }}
+      sanity_check_tests_output: ${{ needs.sanity_check_tests.outputs.sanity_check_tests_output }}
+      stake_test_output: ${{ needs.sanity_check_tests.outputs.stake_test_output }}
+      unstake_test_output: ${{ needs.sanity_check_tests.outputs.unstake_test_output }}
+      register_validator_test_output: ${{ needs.sanity_check_tests.outputs.register_validator_test_output }}
+      withdraw_rewards_test_output: ${{ needs.sanity_check_tests.outputs.withdraw_rewards_test_output }}
+      unstake_all_test_output: ${{ needs.sanity_check_tests.outputs.unstake_all_test_output }}
+      results_artifact_id: ${{ needs.sanity_check_tests.outputs.results_artifact_id }}
     secrets:
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   notification_load_test_perf:
     name: Load Test PERFORMANCE CONTRACT Notification
     uses: ./.github/workflows/notification-load-test.yml
-    needs: [load_test_perf]
+    needs: [testnet_notification, load_test_perf]
     if: (always() && needs.load_test_perf.outputs.load_test_output == 'true')
     with:
       environment: testnet

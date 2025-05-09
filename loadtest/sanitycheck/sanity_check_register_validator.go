@@ -52,7 +52,12 @@ func (t *RegisterValidatorTest) Run() error {
 	fmt.Println("Running", t.Name())
 	defer fmt.Println("Finished", t.Name())
 
-	_, err := t.runTest()
+	validatorWallet, err := t.runTest()
+	if err != nil {
+		return err
+	}
+
+	_, err = t.unstake(validatorWallet.Ecdsa, ethgo.Ether(1))
 
 	return err
 }

@@ -11,25 +11,18 @@ import (
 
 // UnstakeAllTest is a test that unstakes all the stake of a validator
 type UnstakeAllTest struct {
-	*UnstakeTest
 	*RegisterValidatorTest
 }
 
 // NewUnstakeAllTest creates a new UnstakeAllTest
 func NewUnstakeAllTest(cfg *SanityCheckTestConfig,
 	testAccountKey *crypto.ECDSAKey, client *jsonrpc.EthClient) (*UnstakeAllTest, error) {
-	unstakeTest, err := NewUnstakeTest(cfg, testAccountKey, client)
-	if err != nil {
-		return nil, err
-	}
-
 	registerValidatorTest, err := NewRegisterValidatorTest(cfg, testAccountKey, client)
 	if err != nil {
 		return nil, err
 	}
 
 	return &UnstakeAllTest{
-		UnstakeTest:           unstakeTest,
 		RegisterValidatorTest: registerValidatorTest,
 	}, nil
 }
@@ -56,7 +49,7 @@ func (t *UnstakeAllTest) Run() error {
 		return err
 	}
 
-	blockNum, err := t.UnstakeTest.unstake(validatorAcc.Ecdsa, ethgo.Ether(1))
+	blockNum, err := t.unstake(validatorAcc.Ecdsa, ethgo.Ether(1))
 	if err != nil {
 		return err
 	}

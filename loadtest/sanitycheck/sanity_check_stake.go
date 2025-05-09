@@ -3,7 +3,6 @@ package sanitycheck
 import (
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/0xPolygon/polygon-edge/consensus/polybft"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
@@ -120,46 +119,9 @@ func (t *StakeTest) Run() error {
 
 	fmt.Println("Validator", validatorKey.Address(), "is in the updated validator set with correct voting power")
 
-	return nil
-}
+	_, err = t.unstake(validatorKey, ethgo.Ether(1))
 
-// stake stakes the given amount for the given validator.
-func (t *StakeTest) stake(validatorKey *crypto.ECDSAKey, amount *big.Int) (uint64, error) {
-	if err := t.approveNativeERC20(validatorKey, amount, contracts.StakeManagerContract); err != nil {
-		return 0, err
-	}
-
-	fmt.Println("Staking for validator", validatorKey.Address(), "Amount", amount.String())
-
-	s := time.Now().UTC()
-	defer func() {
-		fmt.Println("Staking for validator", validatorKey.Address(), "took", time.Since(s))
-	}()
-
-	stakeFn := &contractsapi.StakeStakeManagerFn{
-		Amount: amount,
-	}
-
-	encoded, err := stakeFn.EncodeAbi()
-	if err != nil {
-		return 0, err
-	}
-
-	tx := types.NewTx(types.NewLegacyTx(types.WithFrom(
-		validatorKey.Address()),
-		types.WithTo(&contracts.StakeManagerContract),
-		types.WithInput(encoded)))
-
-	receipt, err := t.txrelayer.SendTransaction(tx, validatorKey)
-	if err != nil {
-		return 0, err
-	}
-
-	if receipt.Status == uint64(types.ReceiptFailed) {
-		return 0, fmt.Errorf("stake transaction failed on block %d", receipt.BlockNumber)
-	}
-
-	return receipt.BlockNumber, nil
+	return err
 }
 
 // getStake returns the stake of the given validator on the StakeManager contract.
