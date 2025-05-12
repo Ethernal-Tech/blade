@@ -153,8 +153,9 @@ jobs:
   check_network:
     name: Check if the network is already deployed
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     outputs:
-      rpc_url: ${{ steps.rpc_url.outputs.url || steps.testnet_rpc_url.outputs.testnet_url }}
+      rpc_url: steps.rpc_url.outputs.url
     steps:
       - name: Checkout code
         uses: actions/checkout@v4.1.1
@@ -165,15 +166,11 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
       - name: Retrieve state file from s3
         id: retrieve_state
-        run: echo "retrieve_state_output=$(aws s3 cp s3://${{ secrets.AWS_S3_BLADE_BUCKET }}/states/${{ inputs.environment }} state.json)" >> $GITHUB_OUTPUT
+        run: echo "retrieve_state_output=$(aws s3 cp s3://${{ secrets.AWS_S3_BLADE_BUCKET }}/${{ vars.TF_STATE_PATH }} state.json)" >> $GITHUB_OUTPUT
       - name: Set RPC URL
         id: rpc_url
         if: contains(steps.retrieve_state.outputs.retrieve_state_output, 'download')
         run: echo "url=$(cat state.json | jq -r '.outputs.aws_lb_ext_domain.value // empty')" >> $GITHUB_OUTPUT
-      - name: Set Testnet RPC URL
-        id: testnet_rpc_url
-        if: inputs.environment == 'testnet' && !cancelled()
-        run: echo "testnet_url=${{ vars.TESTNET_JSONRPC_URL }}" >> $GITHUB_OUTPUT
   load_test_runner:
     name: Deploy Load Test Runner
     runs-on: ubuntu-latest
@@ -231,7 +228,7 @@ jobs:
       - name: Start Load Test
         id: load_test_results
         run: |
-          ./blade load-test --jsonrpc "http://${{ needs.check_network.outputs.rpc_url }}" --mnemonic "${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}" --name "results" --type ${{ inputs.type }} ${{ inputs.dynamic == true && '--dynamic' || '' }} --vus ${{ inputs.vus }} --txs-per-user ${{ inputs.txs_per_user }} --batch-size ${{ inputs.batch_size }} --txpool-timeout ${{ inputs.txpool_timeout }} ${{ inputs.wait_txpool == true && '--wait-txpool' || '' }} --receipts-timeout ${{ inputs.receipts_timeout }} --to-json ${{ inputs.environment == 'testnet' && '--tear-down' || ''}} ${{ inputs.environment == 'testnet' && '--txpool-read-threads 4 --state-read-threads 4' || '' }}
+          ./blade load-test --jsonrpc "http://${{ needs.check_network.outputs.rpc_url }}" --mnemonic "${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}" --name "results" --type ${{ inputs.type }} ${{ inputs.dynamic == true && '--dynamic' || '' }} --vus ${{ inputs.vus }} --txs-per-user ${{ inputs.txs_per_user }} --batch-size ${{ inputs.batch_size }} --txpool-timeout ${{ inputs.txpool_timeout }} ${{ inputs.wait_txpool == true && '--wait-txpool' || '' }} --receipts-timeout ${{ inputs.receipts_timeout }} --to-json ${{ inputs.environment == 'testnet' && '--tear-down --txpool-read-threads 4 --state-read-threads 4' || ''}}
           echo "total_time=$(cat results_${{ inputs.type }}.json | jq -r '.totalTime')" >> $GITHUB_OUTPUT
           echo "total_txs=$(cat results_${{ inputs.type }}.json | jq -r '.totalTxs')" >> $GITHUB_OUTPUT
           echo "total_blocks=$(cat results_${{ inputs.type }}.json | jq -r '.totalBlocks')" >> $GITHUB_OUTPUT
