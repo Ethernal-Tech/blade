@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     outputs:
-      rpc_url: steps.rpc_url.outputs.url
+      rpc_url: ${{ steps.rpc_url.outputs.url }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4.1.1
