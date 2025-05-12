@@ -202,9 +202,9 @@ jobs:
       withdraw_rewards_test_output: ${{ needs.sanity_check_tests.outputs.withdraw_rewards_test_output }}
       unstake_all_test_output: ${{ needs.sanity_check_tests.outputs.unstake_all_test_output }}
       results_artifact_id: ${{ needs.sanity_check_tests.outputs.results_artifact_id }}
-      load_test_perf_output: ${{ needs.load_test_eoa.outputs.load_test_output }}
-      load_test_perf_txpool_pending_output: ${{ needs.load_test_eoa.outputs.txpool_pending }}
-      load_test_perf_txpool_queued_output: ${{ needs.load_test_eoa.outputs.txpool_queued }}
+      load_test_perf_output: ${{ needs.load_test_perf.outputs.load_test_output }}
+      load_test_perf_txpool_pending_output: ${{ needs.load_test_perf.outputs.txpool_pending }}
+      load_test_perf_txpool_queued_output: ${{ needs.load_test_perf.outputs.txpool_queued }}
       load_test_eoa_output: ${{ needs.load_test_eoa.outputs.load_test_output }}
       load_test_eoa_txpool_pending_output: ${{ needs.load_test_eoa.outputs.txpool_pending }}
       load_test_eoa_txpool_queued_output: ${{ needs.load_test_eoa.outputs.txpool_queued }}
