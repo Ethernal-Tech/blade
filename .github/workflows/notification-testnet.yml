@@ -164,10 +164,23 @@ jobs:
                       "type": "button",
                       "text": {
                         "type": "plain_text",
-                        "text": "${{ inputs.bat_network }} Sanity Check Results"
+                        "text": "Sanity Check Results"
                       },
                       "style": "${{ inputs.sanity_check_tests_output == 'true' && env.succeed_bnt || env.failed_bnt }}",
                       "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ inputs.results_artifact_id }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.bat_availability_test_status == 'true' && env.succeed_job || env.failed_job }} *${{ inputs.bat_network }} Availability Tests*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.pp_availability_test_status == 'true' && env.succeed_job || env.failed_job }} *${{ inputs.pp_network }} Availability Tests*"
                     }
                   ]
                 },
@@ -177,14 +190,6 @@ jobs:
                 {
                   "type": "section",
                   "fields": [
-                    {
-                      "type": "mrkdwn",
-                      "text": "${{ inputs.pp_availability_test_status == 'true' && env.succeed_job || env.failed_job }} *${{ inputs.pp_network }} Availability Tests*"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "${{ inputs.bat_availability_test_status == 'true' && env.succeed_job || env.failed_job }} *${{ inputs.bat_network }} Availability Tests*"
-                    },
                     {
                       "type": "mrkdwn",
                       "text": "${{ inputs.stake_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Stake Test*"
@@ -215,7 +220,7 @@ jobs:
                   "fields": [
                     {
                       "type": "mrkdwn",
-                      "text": "${{ inputs.load_test_perf_output == 'true' && inputs.load_test_perf_txpool_pending_output == '0' && inputs.load_test_perf_txpool_queued_output == '0' && env.succeed_job || env.failed_job }} *Load Test PERFORMANCE CONTRACT*"
+                      "text": "${{ inputs.load_test_perf_output == 'true' && inputs.load_test_perf_txpool_pending_output == '0' && inputs.load_test_perf_txpool_queued_output == '0' && env.succeed_job || env.failed_job }} *Load Test PERF. CONTRACT*"
                     },
                     {
                       "type": "mrkdwn",
