@@ -64,7 +64,7 @@ func (t *RegisterValidatorTest) Run() error {
 
 // runTest runs the register validator test.
 func (t *RegisterValidatorTest) runTest() (*wallet.Account, error) {
-	fundAmount := ethgo.Ether(2)
+	fundAmount := ethgo.Ether(10)
 	stakeAmount := ethgo.Ether(1)
 
 	newValidatorAcc, err := wallet.GenerateAccount()
