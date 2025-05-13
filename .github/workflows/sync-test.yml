@@ -1,0 +1,117 @@
+---
+concurrency: ci-$ # Only a single workflow can be executed concurrently
+name: Sync Fullnode Test
+on: # yamllint disable-line rule:truthy
+  workflow_call:
+    outputs:
+      terraform_output:
+        description: Terraform output
+        value: ${{ jobs.run_test.outputs.terraform_output }}
+      ansible_output:
+        description: Ansible output
+        value: ${{ jobs.run_test.outputs.ansible_output }}
+    secrets:
+      AWS_ROLE_ARN:
+        required: true
+      AWS_S3_BLADE_BUCKET:
+        required: true
+      VAULT_PASSWORD:
+        required: true
+      PERSONAL_ACCESS_USER:
+        required: true
+      PERSONAL_ACCESS_TOKEN:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+  security-events: write
+
+jobs:
+  check_network:
+    name: Check if the network is already deployed
+    runs-on: ubuntu-latest
+    outputs:
+      check_output: ${{ steps.check_state_file.outputs.resources }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.1.1
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4.0.1
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+      - name: Retrieve state file from s3
+        id: retrieve_state
+        run: echo "retrieve_state_output=$(aws s3 cp s3://${{ secrets.AWS_S3_BLADE_BUCKET }}/states/mmnet state.json)" >> $GITHUB_OUTPUT
+      - name: Check state file
+        id: check_state_file
+        if: contains(steps.retrieve_state.outputs.retrieve_state_output, 'download')
+        run: echo "resources=$(cat state.json | jq -r '.resources' | jq length)" >> $GITHUB_OUTPUT
+  run_test:
+    name: Run the fullnode sync test
+    runs-on: ubuntu-latest
+    needs: check_network
+    environment: ${{ inputs.environment }}
+    outputs:
+      terraform_output: ${{ steps.terraform_failure.outputs.terraform_output }}
+      ansible_output: ${{ steps.ansible_failure.outputs.ansible_output }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.1.1
+        with:
+          repository: Ethernal-Tech/blade-deployment
+          ref: new-testnet
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4.0.1
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3.0.0
+        with:
+          terraform_version: 1.4.5
+      - name: Configure Terraform
+        run: sed 's/# backend "s3" {}/backend "s3" {}/' main.tf > main.tf.tmp && mv main.tf.tmp main.tf
+      - name: Terraform Init
+        run: terraform init -backend-config="bucket=${{ secrets.AWS_S3_BLADE_BUCKET }}" -backend-config="key=states/mmnet" -backend-config="region=${{ vars.AWS_REGION }}"
+      - name: Terraform Validate
+        run: terraform validate -no-color
+        continue-on-error: true
+      - name: Configure private keys
+        run: |
+          terraform output pk_ansible > ~/private.key
+          chmod 600 ~/private.key
+          eval "$(ssh-agent)"
+          ssh-add ~/private.key
+      - name: Scale up fullnode
+        run: |
+          aws autoscaling set-desired-capacity --region us-west-1 --auto-scaling-group-name testnode_asg_testnet --desired-capacity 1
+          sleep 60
+      - name: Install Ansible / botocore / boto3
+        run: |
+          python3 -m pip install --user ansible==8.7.0
+          python3 -m pip install boto3 botocore
+      - name: Configure Ansible
+        working-directory: ansible
+        run: |
+          echo "${{ secrets.VAULT_PASSWORD }}" > password.txt
+          sed 's/devnet/testnet/g' inventory/aws_ec2.yml > inventory/aws_ec2.yml.tmp && mv inventory/aws_ec2.yml.tmp inventory/aws_ec2.yml
+          sed 's/slack_webhook: .*/slack_webhook: ${{ secrets.SLACK_WEBHOOK_URL }}/g' group_vars/all.yml > group_vars/all.yml.tmp && mv group_vars/all.yml.tmp group_vars/all.yml
+
+      - name: Setup Ansible
+        working-directory: ansible
+        run: |
+          ansible-inventory --graph
+          ansible-galaxy install -r requirements.yml
+      - name: Run Ansible
+        working-directory: ansible
+        run: ansible-playbook test.yml --extra-vars "clean_deploy_title=testnet blade_repository=${{ github.repository }} s3_bucket=${{ secrets.AWS_S3_BLADE_BUCKET }}"
+      - name: Ansible Failed
+        if: failure()
+        id: ansible_failure
+        run: echo "ansible_output=false" >> $GITHUB_OUTPUT
+      - name: Scale down fullnode
+        run: |
+          aws autoscaling set-desired-capacity --region us-west-1 --auto-scaling-group-name testnode_asg_testnet --desired-capacity 0
+          sleep 60
