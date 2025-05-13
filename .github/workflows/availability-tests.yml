@@ -21,17 +21,7 @@ on:
         required: true
     outputs:
       availability_test_status:
-       value: ${{ jobs.availability_test.outputs.availability_test_status }}
-      produce_blocks:
-        value: ${{ jobs.availability_test.outputs.produce_blocks }}
-      fund_status:
-        value: ${{ jobs.availability_test.outputs.fund_status }}
-      check_deployed_smart_contract_status:
-        value: ${{ jobs.availability_test.outputs.check_deployed_smart_contract_status }}
-      method_set_status:
-        value: ${{ jobs.availability_test.outputs.method_set_status }}
-      method_get_status:
-        value: ${{ jobs.availability_test.outputs.method_get_status }}
+        value: ${{ jobs.availability_test.outputs.availability_test_status }}
     secrets:
       PREMINED_PRIVATE_KEY:
         required: true
@@ -46,11 +36,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       availability_test_status: ${{ steps.final_status.outputs.status }}
-      produce_blocks: ${{ steps.latest_block_number.outputs.produce_blocks }}
-      fund_status: ${{ steps.fund.outputs.status }}
-      check_deployed_smart_contract_status: ${{ steps.check_deployed_smart_contract.outputs.status }}
-      method_set_status: ${{ steps.method_set.outputs.status }}
-      method_get_status: ${{ steps.method_get.outputs.status }}
     steps:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1

@@ -9,40 +9,10 @@ on: # yamllint disable-line rule:truthy
       bat_availability_test_status:
         type: string
         required: true
-      bat_produce_blocks:
-        type: string
-        required: true
-      bat_fund_status:
-        type: string
-        required: true
-      bat_check_deployed_smart_contract_status:
-        type: string
-        required: true
-      bat_method_set_status:
-        type: string
-        required: true
-      bat_method_get_status:
-        type: string
-        required: true
       pp_network:
         type: string
         required: true
       pp_availability_test_status:
-        type: string
-        required: true
-      pp_produce_blocks:
-        type: string
-        required: true
-      pp_fund_status:
-        type: string
-        required: true
-      pp_check_deployed_smart_contract_status:
-        type: string
-        required: true
-      pp_method_set_status:
-        type: string
-        required: true
-      pp_method_get_status:
         type: string
         required: true
       sanity_check_tests_output:
@@ -70,6 +40,78 @@ on: # yamllint disable-line rule:truthy
         type: string
         required: true
       results_artifact_id:
+        type: string
+        required: true
+      load_test_perf_output:
+        description: Load Test PERFORMANCE CONTRACT output
+        type: string
+        required: true
+      load_test_perf_txpool_pending_output:
+        description: Load Test PERFORMANCE CONTRACT txpool pending output
+        type: string
+        required: true
+      load_test_perf_txpool_queued_output:
+        description: Load Test PERFORMANCE CONTRACT txpool queued output
+        type: string
+        required: true
+      load_test_eoa_output:
+        description: Load Test EOA output
+        type: string
+        required: true
+      load_test_eoa_txpool_pending_output:
+        description: Load Test EOA txpool pending output
+        type: string
+        required: true
+      load_test_eoa_txpool_queued_output:
+        description: Load Test EOA txpool queued output
+        type: string
+        required: true
+      load_test_erc20_output:
+        description: Load Test ERC20 output
+        type: string
+        required: true
+      load_test_erc20_txpool_pending_output:
+        description: Load Test ERC20 txpool pending output
+        type: string
+        required: true
+      load_test_erc20_txpool_queued_output:
+        description: Load Test ERC20 txpool queued output
+        type: string
+        required: true
+      load_test_erc721_output:
+        description: Load Test ERC721 output
+        type: string
+        required: true
+      load_test_erc721_txpool_pending_output:
+        description: Load Test ERC721 txpool pending output
+        type: string
+        required: true
+      load_test_erc721_txpool_queued_output:
+        description: Load Test ERC721 txpool queued output
+        type: string
+        required: true
+      load_test_mixed_output:
+        description: Load Test MIXED output
+        type: string
+        required: true
+      load_test_mixed_txpool_pending_output:
+        description: Load Test MIXED txpool pending output
+        type: string
+        required: true
+      load_test_mixed_txpool_queued_output:
+        description: Load Test MIXED txpool queued output
+        type: string
+        required: true
+      load_test_erc1155_output:
+        description: Load Test ERC1155 output
+        type: string
+        required: true
+      load_test_erc1155_txpool_pending_output:
+        description: Load Test ERC1155 txpool pending output
+        type: string
+        required: true
+      load_test_erc1155_txpool_queued_output:
+        description: Load Test ERC1155 txpool queued output
         type: string
         required: true
     secrets:
@@ -115,7 +157,7 @@ jobs:
                         "type": "plain_text",
                         "text": "Workflow Run"
                       },
-                      "style": "${{ inputs.bat_produce_blocks == 'true' && inputs.bat_fund_status == 'true' && inputs.bat_check_deployed_smart_contract_status == 'true' && inputs.bat_method_set_status == 'true' && inputs.bat_method_get_status == 'true' && inputs.pp_produce_blocks == 'true' && inputs.pp_fund_status == 'true' && inputs.pp_check_deployed_smart_contract_status == 'true' && inputs.pp_method_set_status == 'true' && inputs.pp_method_get_status == 'true' && inputs.sanity_check_tests_output == 'true' && env.succeed_bnt || env.failed_bnt }}",
+                      "style": "${{ inputs.bat_availability_test_status == 'true' && inputs.pp_availability_test_status == 'true' && inputs.sanity_check_tests_output == 'true' && inputs.load_test_perf_output == 'true' && inputs.load_test_perf_txpool_pending_output == '0' && inputs.load_test_perf_txpool_queued_output == '0' && inputs.load_test_eoa_output == 'true' && inputs.load_test_eoa_txpool_pending_output == '0' && inputs.load_test_eoa_txpool_queued_output == '0' && inputs.load_test_erc20_output == 'true' && inputs.load_test_erc20_txpool_pending_output == '0' && inputs.load_test_erc20_txpool_queued_output == '0' && inputs.load_test_erc721_output == 'true' && inputs.load_test_erc721_txpool_pending_output == '0' && inputs.load_test_erc721_txpool_queued_output == '0' && inputs.load_test_mixed_output == 'true' && inputs.load_test_mixed_txpool_pending_output == '0' && inputs.load_test_mixed_txpool_queued_output == '0' && inputs.load_test_erc1155_output == 'true' && inputs.load_test_erc1155_txpool_pending_output == '0' && inputs.load_test_erc1155_txpool_queued_output == '0' && env.succeed_bnt || env.failed_bnt }}",
                       "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                     },
                     {
@@ -130,39 +172,15 @@ jobs:
                   ]
                 },
                 {
-                  "type": "context",
-                  "elements": [
-                    {
-                      "type": "mrkdwn",
-                      "text": "Network: *${{ inputs.bat_network }}*"
-                    }
-                  ]
-                },
-                {
-                  "type": "divider"
-                },
-                {
                   "type": "section",
                   "fields": [
                     {
                       "type": "mrkdwn",
-                      "text": "${{ inputs.bat_produce_blocks == 'true' && env.succeed_job || env.failed_job }} *Produce Blocks*"
+                      "text": "${{ inputs.bat_availability_test_status == 'true' && env.succeed_job || env.failed_job }} *${{ inputs.bat_network }} Availability Tests*"
                     },
                     {
                       "type": "mrkdwn",
-                      "text": "${{ inputs.bat_fund_status == 'true' && env.succeed_job || env.failed_job }} *Fund Account*"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "${{ inputs.bat_check_deployed_smart_contract_status == 'true' && env.succeed_job || env.failed_job }} *Deploy Smart Contract*"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "${{ inputs.bat_method_set_status == 'true' && env.succeed_job || env.failed_job }} *Method set()*"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "${{ inputs.bat_method_get_status == 'true' && env.succeed_job || env.failed_job }} *Method get()*"
+                      "text": "${{ inputs.pp_availability_test_status == 'true' && env.succeed_job || env.failed_job }} *${{ inputs.pp_network }} Availability Tests*"
                     }
                   ]
                 },
@@ -195,15 +213,6 @@ jobs:
                   ]
                 },
                 {
-                  "type": "context",
-                  "elements": [
-                    {
-                      "type": "mrkdwn",
-                      "text": "Network: *${{ inputs.pp_network }}*"
-                    }
-                  ]
-                },
-                {
                   "type": "divider"
                 },
                 {
@@ -211,23 +220,27 @@ jobs:
                   "fields": [
                     {
                       "type": "mrkdwn",
-                      "text": "${{ inputs.pp_produce_blocks == 'true' && env.succeed_job || env.failed_job }} *Produce Blocks*"
+                      "text": "${{ inputs.load_test_perf_output == 'true' && inputs.load_test_perf_txpool_pending_output == '0' && inputs.load_test_perf_txpool_queued_output == '0' && env.succeed_job || env.failed_job }} *Load Test PERF. CONTRACT*"
                     },
                     {
                       "type": "mrkdwn",
-                      "text": "${{ inputs.pp_fund_status == 'true' && env.succeed_job || env.failed_job }} *Fund Account*"
+                      "text": "${{ inputs.load_test_eoa_output == 'true' && inputs.load_test_eoa_txpool_pending_output == '0' && inputs.load_test_eoa_txpool_queued_output == '0' && env.succeed_job || env.failed_job }} *Load Test EOA*"
                     },
                     {
                       "type": "mrkdwn",
-                      "text": "${{ inputs.pp_check_deployed_smart_contract_status == 'true' && env.succeed_job || env.failed_job }} *Deploy Smart Contract*"
+                      "text": "${{ inputs.load_test_erc20_output == 'true' && inputs.load_test_erc20_txpool_pending_output == '0' && inputs.load_test_erc20_txpool_queued_output == '0' && env.succeed_job || env.failed_job }} *Load Test ERC20*"
                     },
                     {
                       "type": "mrkdwn",
-                      "text": "${{ inputs.pp_method_set_status == 'true' && env.succeed_job || env.failed_job }} *Method set()*"
+                      "text": "${{ inputs.load_test_erc721_output == 'true' && inputs.load_test_erc721_txpool_pending_output == '0' && inputs.load_test_erc721_txpool_queued_output == '0' && env.succeed_job || env.failed_job }} *Load Test ERC721*"
                     },
                     {
                       "type": "mrkdwn",
-                      "text": "${{ inputs.pp_method_get_status == 'true' && env.succeed_job || env.failed_job }} *Method get()*"
+                      "text": "${{ inputs.load_test_mixed_output == 'true' && inputs.load_test_mixed_txpool_pending_output == '0' && inputs.load_test_mixed_txpool_queued_output == '0' && env.succeed_job || env.failed_job }} *Load Test MIXED*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.load_test_erc1155_output == 'true' && inputs.load_test_erc1155_txpool_pending_output == '0' && inputs.load_test_erc1155_txpool_queued_output == '0' && env.succeed_job || env.failed_job }} *Load Test ERC1155*"
                     }
                   ]
                 }

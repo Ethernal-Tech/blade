@@ -7,7 +7,7 @@ on: # yamllint disable-line rule:truthy
       environment:
         description: The environment to run against
         type: choice
-        options: [dev, test] # nightly should not be initiated manually
+        options: [dev] # nightly should not be initiated manually
       block_gas_limit:
         description: Block Gas Limit
         type: string
@@ -117,6 +117,7 @@ jobs:
   check_network:
     name: Check if the network is already deployed
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     outputs:
       check_output: ${{ steps.check_state_file.outputs.resources }}
       rpc_url: ${{ steps.rpc_url.outputs.url }}
@@ -130,7 +131,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
       - name: Retrieve state file from s3
         id: retrieve_state
-        run: echo "retrieve_state_output=$(aws s3 cp s3://${{ secrets.AWS_S3_BLADE_BUCKET }}/states/${{ inputs.environment }} state.json)" >> $GITHUB_OUTPUT
+        run: echo "retrieve_state_output=$(aws s3 cp s3://${{ secrets.AWS_S3_BLADE_BUCKET }}/${{ vars.TF_STATE_PATH }} state.json)" >> $GITHUB_OUTPUT
       - name: Check state file
         id: check_state_file
         if: contains(steps.retrieve_state.outputs.retrieve_state_output, 'download')
@@ -168,7 +169,7 @@ jobs:
       - name: Configure Terraform
         run: sed 's/# backend "s3" {}/backend "s3" {}/' main.tf > main.tf.tmp && mv main.tf.tmp main.tf
       - name: Terraform Init
-        run: terraform init -backend-config="bucket=${{ secrets.AWS_S3_BLADE_BUCKET }}" -backend-config="key=states/${{ inputs.environment }}" -backend-config="region=${{ vars.AWS_REGION }}"
+        run: terraform init -backend-config="bucket=${{ secrets.AWS_S3_BLADE_BUCKET }}" -backend-config="key=${{ vars.TF_STATE_PATH }}" -backend-config="region=${{ vars.TF_BUCKET_REGION }}"
       - name: Terraform Validate
         run: terraform validate -no-color
         continue-on-error: true
@@ -217,17 +218,9 @@ jobs:
         run: |
           ansible-inventory --graph
           ansible-galaxy install -r requirements.yml
-      - name: Check previous blade data
-        id: previous_data
-        run: echo "previous_data_output=$(aws s3 cp s3://${{ secrets.AWS_S3_BLADE_BUCKET }}/states/${{ inputs.environment }}.data.tar.gz .)" >> $GITHUB_OUTPUT
       - name: Run Ansible (Bootstrap blade)
-        if: (steps.previous_data.outputs.previous_data_output == '' || contains(steps.previous_data.outputs.previous_data_output, 'error'))
         working-directory: ansible
         run: ansible-playbook site.yml --extra-vars "clean_deploy_title=${{ inputs.environment }} blade_repository=${{ github.repository }} block_gas_limit=${{ inputs.block_gas_limit }} block_time=${{ inputs.block_time }} max_slots=${{ inputs.max_slots }} max_enqueued=${{ inputs.max_enqueued }}"
-      - name: Run Ansible (Restore data)
-        if: contains(steps.previous_data.outputs.previous_data_output, 'download')
-        working-directory: ansible
-        run: ansible-playbook site.yml --extra-vars "clean_deploy_title=${{ inputs.environment }} blade_repository=${{ github.repository }} s3_bucket=${{ secrets.AWS_S3_BLADE_BUCKET }} restore_data=true"
       - name: Ansible Failed
         if: failure()
         id: ansible_failure
