@@ -2,7 +2,18 @@
 concurrency: ci-$ # Only a single workflow can be executed concurrently
 name: Sync Fullnode Test
 on: # yamllint disable-line rule:truthy
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: The environment to run against
+        type: choice
+        options: [testnet]
   workflow_call:
+    inputs:
+      environment:
+        description: The environment to run against
+        type: string
+        required: true
     outputs:
       terraform_output:
         description: Terraform output
@@ -31,6 +42,7 @@ jobs:
   check_network:
     name: Check if the network is already deployed
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     outputs:
       check_output: ${{ steps.check_state_file.outputs.resources }}
     steps:
@@ -43,7 +55,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
       - name: Retrieve state file from s3
         id: retrieve_state
-        run: echo "retrieve_state_output=$(aws s3 cp s3://${{ secrets.AWS_S3_BLADE_BUCKET }}/states/mmnet state.json)" >> $GITHUB_OUTPUT
+        run: echo "retrieve_state_output=$(aws s3 cp s3://${{ secrets.AWS_S3_BLADE_BUCKET }}/${{ vars.TF_STATE_PATH }} state.json)" >> $GITHUB_OUTPUT
       - name: Check state file
         id: check_state_file
         if: contains(steps.retrieve_state.outputs.retrieve_state_output, 'download')
@@ -74,7 +86,7 @@ jobs:
       - name: Configure Terraform
         run: sed 's/# backend "s3" {}/backend "s3" {}/' main.tf > main.tf.tmp && mv main.tf.tmp main.tf
       - name: Terraform Init
-        run: terraform init -backend-config="bucket=${{ secrets.AWS_S3_BLADE_BUCKET }}" -backend-config="key=states/mmnet" -backend-config="region=${{ vars.AWS_REGION }}"
+        run: terraform init -backend-config="bucket=${{ secrets.AWS_S3_BLADE_BUCKET }}" -backend-config="key=${{ vars.TF_STATE_PATH }}" -backend-config="region=${{ vars.TF_BUCKET_REGION }}"
       - name: Terraform Validate
         run: terraform validate -no-color
         continue-on-error: true
@@ -86,7 +98,7 @@ jobs:
           ssh-add ~/private.key
       - name: Scale up fullnode
         run: |
-          aws autoscaling set-desired-capacity --region us-west-1 --auto-scaling-group-name testnode_asg_testnet --desired-capacity 1
+          aws autoscaling set-desired-capacity --region ${{ vars.AWS_REGION }} --auto-scaling-group-name testnode_asg_testnet --desired-capacity 1
           sleep 60
       - name: Install Ansible / botocore / boto3
         run: |
@@ -96,9 +108,8 @@ jobs:
         working-directory: ansible
         run: |
           echo "${{ secrets.VAULT_PASSWORD }}" > password.txt
-          sed 's/devnet/testnet/g' inventory/aws_ec2.yml > inventory/aws_ec2.yml.tmp && mv inventory/aws_ec2.yml.tmp inventory/aws_ec2.yml
+          sed 's/devnet/${{ inputs.environment }}/g' inventory/aws_ec2.yml > inventory/aws_ec2.yml.tmp && mv inventory/aws_ec2.yml.tmp inventory/aws_ec2.yml
           sed 's/slack_webhook: .*/slack_webhook: ${{ secrets.SLACK_WEBHOOK_URL }}/g' group_vars/all.yml > group_vars/all.yml.tmp && mv group_vars/all.yml.tmp group_vars/all.yml
-
       - name: Setup Ansible
         working-directory: ansible
         run: |
@@ -106,12 +117,12 @@ jobs:
           ansible-galaxy install -r requirements.yml
       - name: Run Ansible
         working-directory: ansible
-        run: ansible-playbook test.yml --extra-vars "clean_deploy_title=testnet blade_repository=${{ github.repository }} s3_bucket=${{ secrets.AWS_S3_BLADE_BUCKET }}"
+        run: ansible-playbook test.yml --extra-vars "clean_deploy_title=${{ inputs.environment }} blade_repository=${{ github.repository }} s3_bucket=${{ secrets.AWS_S3_BLADE_BUCKET }}"
       - name: Ansible Failed
         if: failure()
         id: ansible_failure
         run: echo "ansible_output=false" >> $GITHUB_OUTPUT
       - name: Scale down fullnode
         run: |
-          aws autoscaling set-desired-capacity --region us-west-1 --auto-scaling-group-name testnode_asg_testnet --desired-capacity 0
+          aws autoscaling set-desired-capacity --region ${{ vars.AWS_REGION }} --auto-scaling-group-name testnode_asg_testnet --desired-capacity 0
           sleep 60
