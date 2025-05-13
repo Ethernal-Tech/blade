@@ -47,6 +47,10 @@ func NewERC721Runner(cfg LoadTestConfig) (*ERC721Runner, error) {
 func (e *ERC721Runner) Run(ctx context.Context) error {
 	fmt.Println("Running ERC721 load test", e.cfg.LoadTestName)
 
+	// print state db metrics before and after test
+	e.printStateDBMetrics()
+	defer e.printStateDBMetrics()
+
 	if err := e.createVUs(); err != nil {
 		return err
 	}
@@ -106,6 +110,10 @@ func (e *ERC721Runner) Run(ctx context.Context) error {
 
 	nodeInfos, err := e.queryLatestBlocks()
 	if err != nil {
+		return err
+	}
+
+	if err := e.tearDown(); err != nil {
 		return err
 	}
 

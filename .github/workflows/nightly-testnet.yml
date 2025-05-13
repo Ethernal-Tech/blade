@@ -1,5 +1,5 @@
 ---
-name: Nightly Build
+name: Nightly Testnet
 on: # yamllint disable-line rule:truthy
   schedule:
     # * is a special character in YAML so you have to quote this string
@@ -7,74 +7,78 @@ on: # yamllint disable-line rule:truthy
   workflow_dispatch:
 
 jobs:
-  ci:
-    name: CI
-    uses: ./.github/workflows/ci.yml
-    with:
-      build_blade: true
-      lint: true
-      unit_test: true
-      e2e_polybft_test: true
-      e2e_legacy_test: true
-      property_polybft_test: true
-      fuzz_test: true
-      benchmark_test: true
-  deploy_network:
-    name: Deploy Network
-    uses: ./.github/workflows/deploy-network.yml
-    with:
-      environment: nightly
-      block_gas_limit: "700000000"
-      block_time: "1"
-      max_slots: "20000000"
-      max_enqueued: "20000000"
-      is_london_fork_active: true
-      is_bridge_active: false
-      gossip_msg_size: "8388608"
-      notification: false
-    secrets:
-      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
-      AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
-      VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
-      PERSONAL_ACCESS_USER: ${{ secrets.PERSONAL_ACCESS_USER }}
-      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-  availability_tests:
-    name: Availability Tests
+  blade:
+    name: Blade Testnet
     uses: ./.github/workflows/availability-tests.yml
-    needs: deploy_network
     with:
-      rpc_url: ${{ needs.deploy_network.outputs.rpc_url }}
-      fund_amount: "5"
+      rpc_url: ${{ vars.TESTNET_JSONRPC_URL }}
+      fund_amount: "3"
       london: true
-      notification: false
+      notification: true
+    secrets:
+      PREMINED_PRIVATE_KEY: ${{ secrets.FAUCET_PRIVATE_KEY }}
+      ACCOUNT_PRIVATE_KEY: ${{ secrets.ACCOUNT_PRIVATE_KEY }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  pink_panda:
+    name: Pink Panda Testnet
+    uses: ./.github/workflows/availability-tests.yml
+    with:
+      rpc_url: https://blockchain-rpc.pinkpanda.network
+      fund_amount: "3"
+      london: true
+      notification: true
     secrets:
       PREMINED_PRIVATE_KEY: ${{ secrets.LOADTEST_PRIVATE_KEY }}
       ACCOUNT_PRIVATE_KEY: ${{ secrets.ACCOUNT_PRIVATE_KEY }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   sanity_check_tests:
-    name: Sanity Check Tests
+    name: Sanity Check Test
     uses: ./.github/workflows/sanity-check-test.yml
-    needs: [deploy_network, availability_tests]
+    needs: [blade]
     with:
-      environment: nightly
+      environment: testnet
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
       AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
+  load_test_perf:
+    name: Load Test PERFORMANCE CONTRACT
+    uses: ./.github/workflows/load-test.yml
+    needs: [blade, sanity_check_tests]
+    with:
+      environment: testnet
+      type: PERF-CONTRACT
+      dynamic: true
+      vus: "100"
+      txs_per_user: "1000"
+      txpool_timeout: "30m0s"
+      wait_txpool: true
+      receipts_timeout: "5m0s"
+      batch_size: "1000"
+      notification: false
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
+      AWS_LOADTESTRUNNER_AMI_ID: ${{ secrets.AWS_LOADTESTRUNNER_AMI_ID }}
+      AWS_LOADTESTRUNNER_SUBNET_ID: ${{ secrets.AWS_LOADTESTRUNNER_SUBNET_ID }}
+      AWS_LOADTESTRUNNER_SG_ID: ${{ secrets.AWS_LOADTESTRUNNER_SG_ID }}
+      AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
+      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   load_test_eoa:
     name: Load Test EOA
     uses: ./.github/workflows/load-test.yml
-    needs: [deploy_network, availability_tests, sanity_check_tests]
+    needs: [blade, sanity_check_tests, load_test_perf]
     with:
-      environment: nightly
+      environment: testnet
       type: EOA
       dynamic: true
       vus: "100"
-      txs_per_user: "10000"
+      txs_per_user: "1000"
       txpool_timeout: "15m0s"
       wait_txpool: true
       receipts_timeout: "2m0s"
-      batch_size: "10000"
+      batch_size: "1000"
       notification: false
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
@@ -88,18 +92,17 @@ jobs:
   load_test_erc20:
     name: Load Test ERC20
     uses: ./.github/workflows/load-test.yml
-    needs:
-      [deploy_network, availability_tests, sanity_check_tests, load_test_eoa]
+    needs: [blade, sanity_check_tests, load_test_perf, load_test_eoa]
     with:
-      environment: nightly
+      environment: testnet
       type: ERC20
       dynamic: true
       vus: "100"
-      txs_per_user: "10000"
+      txs_per_user: "1000"
       txpool_timeout: "20m0s"
       wait_txpool: true
       receipts_timeout: "2m0s"
-      batch_size: "10000"
+      batch_size: "1000"
       notification: false
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
@@ -113,24 +116,17 @@ jobs:
   load_test_erc721:
     name: Load Test ERC721
     uses: ./.github/workflows/load-test.yml
-    needs:
-      [
-        deploy_network,
-        availability_tests,
-        sanity_check_tests,
-        load_test_eoa,
-        load_test_erc20,
-      ]
+    needs: [blade, sanity_check_tests, load_test_perf, load_test_eoa, load_test_erc20]
     with:
-      environment: nightly
+      environment: testnet
       type: ERC721
       dynamic: true
       vus: "100"
-      txs_per_user: "10000"
+      txs_per_user: "1000"
       txpool_timeout: "55m0s"
       wait_txpool: true
       receipts_timeout: "2m0s"
-      batch_size: "10000"
+      batch_size: "1000"
       notification: false
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
@@ -144,25 +140,17 @@ jobs:
   load_test_mixed:
     name: Load Test MIXED
     uses: ./.github/workflows/load-test.yml
-    needs:
-      [
-        deploy_network,
-        availability_tests,
-        sanity_check_tests,
-        load_test_eoa,
-        load_test_erc20,
-        load_test_erc721,
-      ]
+    needs: [blade, sanity_check_tests, load_test_perf, load_test_eoa, load_test_erc20, load_test_erc721]
     with:
-      environment: nightly
+      environment: testnet
       type: MIXED
       dynamic: true
       vus: "100"
-      txs_per_user: "10000"
+      txs_per_user: "1000"
       txpool_timeout: "30m0s"
       wait_txpool: true
       receipts_timeout: "2m0s"
-      batch_size: "10000"
+      batch_size: "1000"
       notification: false
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
@@ -176,26 +164,17 @@ jobs:
   load_test_erc1155:
     name: Load Test ERC1155
     uses: ./.github/workflows/load-test.yml
-    needs:
-      [
-        deploy_network,
-        availability_tests,
-        sanity_check_tests,
-        load_test_eoa,
-        load_test_erc20,
-        load_test_erc721,
-        load_test_mixed,
-      ]
+    needs: [blade, sanity_check_tests, load_test_perf, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed]
     with:
-      environment: nightly
+      environment: testnet
       type: ERC1155
       dynamic: true
       vus: "100"
-      txs_per_user: "10000"
+      txs_per_user: "1000"
       txpool_timeout: "50m0s"
       wait_txpool: true
       receipts_timeout: "2m0s"
-      batch_size: "10000"
+      batch_size: "1000"
       notification: false
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
@@ -206,65 +185,16 @@ jobs:
       AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
       PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-  destroy_network:
-    name: Destroy Network
-    uses: ./.github/workflows/destroy-network.yml
-    needs:
-      [
-        deploy_network,
-        availability_tests,
-        sanity_check_tests,
-        load_test_eoa,
-        load_test_erc20,
-        load_test_erc721,
-        load_test_mixed,
-        load_test_erc1155,
-      ]
-    if: always()
-    with:
-      environment: nightly
-      logs: true
-      notification: false
-    secrets:
-      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
-      AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
-      VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
-  notification_nightly:
-    name: Nightly Notification
-    uses: ./.github/workflows/notification-nightly.yml
-    needs:
-      [
-        ci,
-        deploy_network,
-        availability_tests,
-        sanity_check_tests,
-        load_test_eoa,
-        load_test_erc20,
-        load_test_erc721,
-        load_test_mixed,
-        load_test_erc1155,
-        destroy_network,
-      ]
+  testnet_notification:
+    name: Testnet Nightly Notification
+    uses: ./.github/workflows/notification-testnet.yml
+    needs: [blade, pink_panda, sanity_check_tests, load_test_perf, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed, load_test_erc1155]
     if: success() || failure()
     with:
-      environment: nightly
-      block_gas_limit: "700000000"
-      block_time: "1"
-      max_slots: "20000000"
-      max_enqueued: "20000000"
-      is_london_fork_active: true
-      is_bridge_active: false
-      gossip_msg_size: "8388608"
-      logs: true
-      build_blade_output: ${{ needs.ci.outputs.build_blade }}
-      lint_output: ${{ needs.ci.outputs.lint }}
-      unit_test_output: ${{ needs.ci.outputs.unit_test }}
-      e2e_polybft_test_output: ${{ needs.ci.outputs.e2e_polybft_test }}
-      e2e_legacy_test_output: ${{ needs.ci.outputs.e2e_legacy_test }}
-      property_polybft_test_output: ${{ needs.ci.outputs.property_polybft_test }}
-      fuzz_test_output: ${{ needs.ci.outputs.fuzz_test }}
-      benchmark_test_output: ${{ needs.ci.outputs.benchmark_test }}
-      availability_test_status: ${{ needs.availability_tests.outputs.availability_test_status }}
+      bat_network: Blade Testnet
+      bat_availability_test_status: ${{ needs.blade.outputs.availability_test_status }}
+      pp_network: Pink Panda Testnet
+      pp_availability_test_status: ${{ needs.pink_panda.outputs.availability_test_status }}
       sanity_check_tests_output: ${{ needs.sanity_check_tests.outputs.sanity_check_tests_output }}
       stake_test_output: ${{ needs.sanity_check_tests.outputs.stake_test_output }}
       unstake_test_output: ${{ needs.sanity_check_tests.outputs.unstake_test_output }}
@@ -272,9 +202,9 @@ jobs:
       withdraw_rewards_test_output: ${{ needs.sanity_check_tests.outputs.withdraw_rewards_test_output }}
       unstake_all_test_output: ${{ needs.sanity_check_tests.outputs.unstake_all_test_output }}
       results_artifact_id: ${{ needs.sanity_check_tests.outputs.results_artifact_id }}
-      deploy_network_terraform_output: ${{ needs.deploy_network.outputs.terraform_output }}
-      deploy_network_ansible_output: ${{ needs.deploy_network.outputs.ansible_output }}
-      deploy_network_blade_healthcheck_output: ${{ needs.deploy_network.outputs.blade_healthcheck_output }}
+      load_test_perf_output: ${{ needs.load_test_perf.outputs.load_test_output }}
+      load_test_perf_txpool_pending_output: ${{ needs.load_test_perf.outputs.txpool_pending }}
+      load_test_perf_txpool_queued_output: ${{ needs.load_test_perf.outputs.txpool_queued }}
       load_test_eoa_output: ${{ needs.load_test_eoa.outputs.load_test_output }}
       load_test_eoa_txpool_pending_output: ${{ needs.load_test_eoa.outputs.txpool_pending }}
       load_test_eoa_txpool_queued_output: ${{ needs.load_test_eoa.outputs.txpool_queued }}
@@ -290,26 +220,53 @@ jobs:
       load_test_erc1155_output: ${{ needs.load_test_erc1155.outputs.load_test_output }}
       load_test_erc1155_txpool_pending_output: ${{ needs.load_test_erc1155.outputs.txpool_pending }}
       load_test_erc1155_txpool_queued_output: ${{ needs.load_test_erc1155.outputs.txpool_queued }}
-      destroy_network_logs_output: ${{ needs.destroy_network.outputs.logs_output }}
-      destroy_network_terraform_output: ${{ needs.destroy_network.outputs.terraform_output }}
     secrets:
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  notification_load_test_perf:
+    name: Load Test PERFORMANCE CONTRACT Notification
+    uses: ./.github/workflows/notification-load-test.yml
+    needs: [testnet_notification, load_test_perf]
+    if: (always() && needs.load_test_perf.outputs.load_test_output == 'true')
+    with:
+      environment: testnet
+      type: PERF-CONTRACT
+      dynamic: true
+      vus: "100"
+      txs_per_user: "1000"
+      txpool_timeout: "30m0s"
+      wait_txpool: true
+      receipts_timeout: "5m0s"
+      batch_size: "1000"
+      total_time: ${{ needs.load_test_perf.outputs.total_time }}
+      total_txs: ${{ needs.load_test_perf.outputs.total_txs }}
+      total_blocks: ${{ needs.load_test_perf.outputs.total_blocks }}
+      avg_txs_per_second: ${{ needs.load_test_perf.outputs.avg_txs_per_second }}
+      max_txs_per_second: ${{ needs.load_test_perf.outputs.max_txs_per_second }}
+      total_gas_used: ${{ needs.load_test_perf.outputs.total_gas_used }}
+      avg_gas_per_tx: ${{ needs.load_test_perf.outputs.avg_gas_per_tx }}
+      avg_gas_utilization: ${{ needs.load_test_perf.outputs.avg_gas_utilization }}
+      max_gas_utilization: ${{ needs.load_test_perf.outputs.max_gas_utilization }}
+      txpool_pending: ${{ needs.load_test_perf.outputs.txpool_pending }}
+      txpool_queued: ${{ needs.load_test_perf.outputs.txpool_queued }}
+      results_artifact_id: ${{ needs.load_test_perf.outputs.results_artifact_id }}
+    secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   notification_load_test_eoa:
     name: Load Test EOA Notification
     uses: ./.github/workflows/notification-load-test.yml
-    needs: [load_test_eoa, notification_nightly]
+    needs: [load_test_eoa, testnet_notification, notification_load_test_perf]
     if: (always() && needs.load_test_eoa.outputs.load_test_output == 'true')
     with:
-      environment: nightly
+      environment: testnet
       type: EOA
       dynamic: true
       vus: "100"
-      txs_per_user: "10000"
+      txs_per_user: "1000"
       txpool_timeout: "15m0s"
       wait_txpool: true
       receipts_timeout: "2m0s"
-      batch_size: "10000"
+      batch_size: "1000"
       total_time: ${{ needs.load_test_eoa.outputs.total_time }}
       total_txs: ${{ needs.load_test_eoa.outputs.total_txs }}
       total_blocks: ${{ needs.load_test_eoa.outputs.total_blocks }}
@@ -327,18 +284,24 @@ jobs:
   notification_load_test_erc20:
     name: Load Test ERC20 Notification
     uses: ./.github/workflows/notification-load-test.yml
-    needs: [load_test_erc20, notification_nightly, notification_load_test_eoa]
+    needs:
+      [
+        load_test_erc20,
+        testnet_notification,
+        notification_load_test_perf,
+        notification_load_test_eoa,
+      ]
     if: (always() && needs.load_test_erc20.outputs.load_test_output == 'true')
     with:
-      environment: nightly
+      environment: testnet
       type: ERC20
       dynamic: true
       vus: "100"
-      txs_per_user: "10000"
+      txs_per_user: "1000"
       txpool_timeout: "20m0s"
       wait_txpool: true
       receipts_timeout: "2m0s"
-      batch_size: "10000"
+      batch_size: "1000"
       total_time: ${{ needs.load_test_erc20.outputs.total_time }}
       total_txs: ${{ needs.load_test_erc20.outputs.total_txs }}
       total_blocks: ${{ needs.load_test_erc20.outputs.total_blocks }}
@@ -359,21 +322,22 @@ jobs:
     needs:
       [
         load_test_erc721,
-        notification_nightly,
+        testnet_notification,
+        notification_load_test_perf,
         notification_load_test_eoa,
         notification_load_test_erc20,
       ]
     if: (always() && needs.load_test_erc721.outputs.load_test_output == 'true')
     with:
-      environment: nightly
+      environment: testnet
       type: ERC721
       dynamic: true
       vus: "100"
-      txs_per_user: "10000"
+      txs_per_user: "1000"
       txpool_timeout: "55m0s"
       wait_txpool: true
       receipts_timeout: "2m0s"
-      batch_size: "10000"
+      batch_size: "1000"
       total_time: ${{ needs.load_test_erc721.outputs.total_time }}
       total_txs: ${{ needs.load_test_erc721.outputs.total_txs }}
       total_blocks: ${{ needs.load_test_erc721.outputs.total_blocks }}
@@ -394,22 +358,23 @@ jobs:
     needs:
       [
         load_test_mixed,
-        notification_nightly,
+        testnet_notification,
+        notification_load_test_perf,
         notification_load_test_eoa,
         notification_load_test_erc20,
         notification_load_test_erc721,
       ]
     if: (always() && needs.load_test_mixed.outputs.load_test_output == 'true')
     with:
-      environment: nightly
+      environment: testnet
       type: MIXED
       dynamic: true
       vus: "100"
-      txs_per_user: "10000"
+      txs_per_user: "1000"
       txpool_timeout: "30m0s"
       wait_txpool: true
       receipts_timeout: "2m0s"
-      batch_size: "10000"
+      batch_size: "1000"
       total_time: ${{ needs.load_test_mixed.outputs.total_time }}
       total_txs: ${{ needs.load_test_mixed.outputs.total_txs }}
       total_blocks: ${{ needs.load_test_mixed.outputs.total_blocks }}
@@ -430,7 +395,8 @@ jobs:
     needs:
       [
         load_test_erc1155,
-        notification_nightly,
+        testnet_notification,
+        notification_load_test_perf,
         notification_load_test_eoa,
         notification_load_test_erc20,
         notification_load_test_erc721,
@@ -438,15 +404,15 @@ jobs:
       ]
     if: (always() && needs.load_test_erc1155.outputs.load_test_output == 'true')
     with:
-      environment: nightly
+      environment: testnet
       type: ERC1155
       dynamic: true
       vus: "100"
-      txs_per_user: "10000"
+      txs_per_user: "1000"
       txpool_timeout: "50m0s"
       wait_txpool: true
       receipts_timeout: "2m0s"
-      batch_size: "10000"
+      batch_size: "1000"
       total_time: ${{ needs.load_test_erc1155.outputs.total_time }}
       total_txs: ${{ needs.load_test_erc1155.outputs.total_txs }}
       total_blocks: ${{ needs.load_test_erc1155.outputs.total_blocks }}

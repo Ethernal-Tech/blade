@@ -471,6 +471,7 @@ func (p *Polybft) Initialize() error {
 		p.config.Logger.Named("syncer"),
 		p.config.Network,
 		p.config.Blockchain,
+		p.config.TxPool,
 		time.Duration(p.config.BlockTime)*3*time.Second,
 	)
 
@@ -901,4 +902,8 @@ func getBurnContractAddress(config *chain.Chain, polyBFTConfig PolyBFTConfig) (t
 	}
 
 	return types.ZeroAddress, false
+}
+
+func (p *Polybft) GetSyncer() syncer.Syncer {
+	return p.syncer
 }

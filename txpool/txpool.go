@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,9 +16,11 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/0xPolygon/polygon-edge/chain"
+	"github.com/0xPolygon/polygon-edge/helper/common"
 	"github.com/0xPolygon/polygon-edge/network"
 	"github.com/0xPolygon/polygon-edge/state"
 	"github.com/0xPolygon/polygon-edge/state/runtime"
+	"github.com/0xPolygon/polygon-edge/syncer"
 	"github.com/0xPolygon/polygon-edge/txpool/proto"
 	"github.com/0xPolygon/polygon-edge/types"
 )
@@ -102,8 +105,10 @@ type Config struct {
 	MaxSlots           uint64
 	MaxAccountEnqueued uint64
 	TxGossipBatchSize  uint64
+	JournalRotateSize  uint64
 	ChainID            *big.Int
 	PeerID             peer.ID
+	DataDir            string
 }
 
 /* All requests are passed to the main loop
@@ -200,6 +205,18 @@ type TxPool struct {
 
 	// WG for batch flushing
 	gossipWG sync.WaitGroup
+
+	// journal for local txs
+	journal *journal
+
+	// journal channel
+	journalCh chan struct{}
+
+	// number of local txs in journal when rotate will be executed
+	journalRotateSize uint64
+
+	// data dir
+	dataDir string
 }
 
 const batchersNum = 1
@@ -224,12 +241,15 @@ func NewTxPool(
 		priceLimit:        config.PriceLimit,
 		chainID:           config.ChainID,
 		localPeerID:       config.PeerID,
+		dataDir:           config.DataDir,
 		txGossipBatchSize: int(config.TxGossipBatchSize),
+		journalRotateSize: config.JournalRotateSize,
 
 		//	main loop channels
 		promoteReqCh: make(chan promoteRequest),
 		pruneCh:      make(chan struct{}),
 		shutdownCh:   make(chan struct{}),
+		journalCh:    make(chan struct{}),
 		gossipCh:     make(chan *types.Transaction, 4*batchersNum*config.TxGossipBatchSize),
 	}
 
@@ -263,7 +283,7 @@ func (p *TxPool) updatePending(i int64) {
 }
 
 func (p *TxPool) startGossipBatchers() {
-	for i := 0; i < batchersNum; i++ {
+	for range batchersNum {
 		p.gossipWG.Add(1)
 
 		go p.gossipBatcher()
@@ -329,15 +349,65 @@ func (p *TxPool) publish(batch *[]*types.Transaction) {
 	clear(*batch)
 }
 
+func (p *TxPool) startJournal() {
+	journalDir := "txpool"
+	if err := common.SetupDataDir(p.dataDir, []string{journalDir}, 0770); err != nil {
+		p.logger.Error("txpool journal directory setup failed", "err", err)
+	}
+
+	p.journal = newTxJournal(filepath.Join(p.dataDir, journalDir, "transactions.rlp"),
+		p.logger, p.journalCh, p.journalRotateSize)
+
+	if err := p.journal.load(func(tx *types.Transaction) error {
+		return p.AddTx(tx)
+	}); err != nil {
+		p.logger.Error("journal loading failed", "err", err)
+	}
+
+	if err := p.journal.rotate(p.index.local()); err != nil {
+		p.logger.Error("initial journal rotation failed", "err", err)
+	}
+
+	// run the handler for journal rotation
+	go func() {
+		for {
+			select {
+			case <-p.shutdownCh:
+				p.journal.close()
+
+				return
+			case <-p.journalCh:
+				if err := p.journal.rotate(p.index.local()); err != nil {
+					p.logger.Error("journal rotation failed", "err", err)
+				}
+			}
+		}
+	}()
+}
+
 // Start runs the pool's main loop in the background.
 // On each request received, the appropriate handler
 // is invoked in a separate goroutine.
-func (p *TxPool) Start() {
+func (p *TxPool) Start(syncer syncer.Syncer) {
 	// set default value of txpool pending transactions gauge
 	p.updatePending(0)
 
 	// start gossip batchers
 	p.startGossipBatchers()
+
+	// start journal
+	p.startJournal()
+
+	// run sync of tx pool
+	if syncer != nil {
+		go func() {
+			if err := syncer.SyncTxPool(); err != nil {
+				p.logger.Error("failed to sync txpool", "err", err)
+			} else {
+				p.logger.Debug("TxPool Synced")
+			}
+		}()
+	}
 
 	//	run the handler for high gauge level pruning
 	go func() {
@@ -395,10 +465,27 @@ func (p *TxPool) AddTx(tx *types.Transaction) error {
 		return err
 	}
 
+	if err := p.journal.insert(tx); err != nil {
+		p.logger.Error("failed to insert tx into journal", "err", err)
+
+		return err
+	}
+
 	// broadcast the transaction only if a topic
 	// subscription is present
 	if p.topic != nil {
 		p.gossipCh <- tx
+	}
+
+	return nil
+}
+
+// AddTxSync adds a new transaction to the pool from syncer
+func (p *TxPool) AddTxSync(tx *types.Transaction) error {
+	if err := p.addTx(gossip, tx); err != nil {
+		p.logger.Error("failed to add tx", "err", err)
+
+		return err
 	}
 
 	return nil
@@ -884,6 +971,9 @@ func (p *TxPool) addTx(origin txOrigin, tx *types.Transaction) error {
 		p.logger.Trace("add tx", "origin", origin.String(), "hash", tx.Hash().String(), "type", tx.Type())
 	}
 
+	// set IsLocal
+	tx.IsLocal = origin == local
+
 	// validate incoming tx
 	if err := p.validateTx(tx); err != nil {
 		return err
@@ -1199,4 +1289,9 @@ func toHash(txs ...*types.Transaction) (hashes []types.Hash) {
 	}
 
 	return
+}
+
+// GetAllTxs returns pool transactions from lookup map
+func (p *TxPool) GetAllTxs() []*types.Transaction {
+	return p.index.allTxs()
 }

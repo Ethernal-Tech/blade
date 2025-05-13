@@ -20,6 +20,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/Ethernal-Tech/ethgo"
+	jr "github.com/Ethernal-Tech/ethgo/jsonrpc"
 	"github.com/Ethernal-Tech/ethgo/wallet"
 	"github.com/olekukonko/tablewriter"
 	"github.com/schollz/progressbar/v3"
@@ -63,7 +64,7 @@ type BaseLoadTestRunner struct {
 // If any error occurs during the initialization process, it returns nil and the error.
 // Otherwise, it returns a pointer to the initialized BaseLoadTestRunner and nil error.
 func NewBaseLoadTestRunner(cfg LoadTestConfig) (*BaseLoadTestRunner, error) {
-	key, err := wallet.NewWalletFromMnemonic(cfg.Mnemonnic)
+	key, err := wallet.NewWalletFromMnemonic(cfg.Mnemonic)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create wallet from mnemonic: %w", err)
 	}
@@ -100,6 +101,130 @@ func NewBaseLoadTestRunner(cfg LoadTestConfig) (*BaseLoadTestRunner, error) {
 		vus:                make([]*account, cfg.VUs),
 		vusAddresses:       make([]types.Address, cfg.VUs),
 	}, nil
+}
+
+func (r *BaseLoadTestRunner) tearDown() error {
+	if !r.cfg.TearDown {
+		return nil
+	}
+
+	fmt.Println("=============================================================")
+	fmt.Println("Unfunding users...")
+
+	start := time.Now().UTC()
+	bar := progressbar.Default(int64(r.cfg.VUs), "Unfund users")
+
+	defer func() {
+		_ = bar.Close()
+
+		fmt.Println("Unfund users took", time.Since(start))
+	}()
+
+	txRelayer, err := txrelayer.NewTxRelayer(
+		txrelayer.WithClient(r.clients.getClient()),
+		txrelayer.WithoutNonceGet(),
+	)
+	if err != nil {
+		return err
+	}
+
+	g, ctx := errgroup.WithContext(context.Background())
+
+	loadTestAddr := r.loadTestAccount.key.Address()
+
+	chainID, err := r.clients.getClient().ChainID()
+	if err != nil {
+		return err
+	}
+
+	for _, vu := range r.vus {
+		vu := vu
+
+		g.Go(func() error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				addr := vu.key.Address()
+
+				balance, err := r.clients.getClient().GetBalance(addr, jsonrpc.LatestBlockNumberOrHash)
+				if err != nil {
+					return err
+				}
+
+				refundAmount := balance.Sub(balance, ethgo.Ether(1))
+
+				feeData, err := getFeeData(r.clients.getClient(), false)
+				if err != nil {
+					return err
+				}
+
+				var tx *types.Transaction
+
+				if r.cfg.DynamicTxs {
+					tx = types.NewTx(types.NewDynamicFeeTx(
+						types.WithNonce(vu.nonce),
+						types.WithTo(&loadTestAddr),
+						types.WithFrom(addr),
+						types.WithGasFeeCap(feeData.gasFeeCap),
+						types.WithGasTipCap(feeData.gasTipCap),
+						types.WithChainID(chainID),
+						types.WithValue(refundAmount),
+					))
+				} else {
+					tx = types.NewTx(types.NewLegacyTx(
+						types.WithNonce(vu.nonce),
+						types.WithTo(&loadTestAddr),
+						types.WithGasPrice(feeData.gasPrice),
+						types.WithFrom(addr),
+						types.WithValue(refundAmount),
+					))
+				}
+
+				receipt, err := txRelayer.SendTransaction(tx, vu.key)
+				if err != nil {
+					return fmt.Errorf("failed to send transaction: %w", err)
+				}
+
+				if receipt == nil || receipt.Status != uint64(types.ReceiptSuccess) {
+					return fmt.Errorf("failed to tear down user %s", vu.key.Address().String())
+				}
+
+				_ = bar.Add(1)
+
+				return nil
+			}
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *BaseLoadTestRunner) printStateDBMetrics() {
+	fmt.Println("=============================================================")
+	fmt.Println("Getting state DB metrics...")
+
+	for _, rpc := range r.cfg.JSONRPCUrls {
+		jsonrpc, err := jr.NewClient(rpc)
+		if err != nil {
+			fmt.Println("Error creating JSON RPC client:", err)
+
+			continue
+		}
+
+		var result string
+		if err := jsonrpc.Call("debug_chaindbProperty", &result, ""); err != nil {
+			fmt.Println("Error getting DB metrics:", err)
+
+			continue
+		}
+
+		fmt.Printf("Result for %s node: \n%s\n", rpc, result)
+	}
 }
 
 // Close closes the BaseLoadTestRunner by closing the underlying client connection.

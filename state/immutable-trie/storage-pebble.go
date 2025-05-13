@@ -99,7 +99,17 @@ func (ps *pebbleStorage) Has(k []byte) (bool, error) {
 
 // Stat returns a particular internal stat of the database.
 func (ps *pebbleStorage) Stat(property string) (string, error) {
-	return "", fmt.Errorf("stat method not supported at database level")
+	switch property {
+	case "virtualSize":
+		return fmt.Sprintf("Virtual size: %dKB", ps.db.Metrics().VirtualSize()/1024), nil
+	case "memTable":
+		memTable := ps.db.Metrics().MemTable
+
+		return fmt.Sprintf("Size: %dKB\nCount: %d\nZombie size: %dKB\nZombie count: %d\n",
+			memTable.Size/1024, memTable.Count, memTable.ZombieSize/1024, memTable.ZombieCount), nil
+	default:
+		return ps.db.Metrics().String(), nil
+	}
 }
 
 // Compact flattens the underlying data store for the given key range. In essence,

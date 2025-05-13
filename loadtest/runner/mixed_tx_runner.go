@@ -61,6 +61,10 @@ func NewMixedTxRunner(cfg LoadTestConfig) (*MixedTxRunner, error) {
 func (m *MixedTxRunner) Run(ctx context.Context) error {
 	fmt.Println("Running mixed load test", m.cfg.LoadTestName)
 
+	// print state db metrics before and after test
+	m.printStateDBMetrics()
+	defer m.printStateDBMetrics()
+
 	if err := m.createVUs(); err != nil {
 		return err
 	}
@@ -131,6 +135,10 @@ func (m *MixedTxRunner) Run(ctx context.Context) error {
 
 	nodeInfos, err := m.queryLatestBlocks()
 	if err != nil {
+		return err
+	}
+
+	if err := m.tearDown(); err != nil {
 		return err
 	}
 

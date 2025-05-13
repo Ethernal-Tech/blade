@@ -52,14 +52,19 @@ func (t *RegisterValidatorTest) Run() error {
 	fmt.Println("Running", t.Name())
 	defer fmt.Println("Finished", t.Name())
 
-	_, err := t.runTest()
+	validatorWallet, err := t.runTest()
+	if err != nil {
+		return err
+	}
+
+	_, err = t.unstake(validatorWallet.Ecdsa, ethgo.Ether(1))
 
 	return err
 }
 
 // runTest runs the register validator test.
 func (t *RegisterValidatorTest) runTest() (*wallet.Account, error) {
-	fundAmount := ethgo.Ether(2)
+	fundAmount := ethgo.Ether(10)
 	stakeAmount := ethgo.Ether(1)
 
 	newValidatorAcc, err := wallet.GenerateAccount()

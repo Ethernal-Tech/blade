@@ -99,6 +99,9 @@ on: # yamllint disable-line rule:truthy
         description: Unstake All Test output
         type: string
         required: true
+      results_artifact_id:
+        type: string
+        required: true
       deploy_network_terraform_output:
         description: Deploy Network - Terraform output
         type: string
@@ -159,6 +162,18 @@ on: # yamllint disable-line rule:truthy
         description: Load Test MIXED txpool queued output
         type: string
         required: true
+      load_test_erc1155_output:
+        description: Load Test ERC1155 output
+        type: string
+        required: true
+      load_test_erc1155_txpool_pending_output:
+        description: Load Test ERC1155 txpool pending output
+        type: string
+        required: true
+      load_test_erc1155_txpool_queued_output:
+        description: Load Test ERC1155 txpool queued output
+        type: string
+        required: true
       destroy_network_logs_output:
         description: Deploy Network - Logs output
         type: string
@@ -195,10 +210,10 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-          succeed_bnt: 'primary'
-          failed_bnt: 'danger'
-          succeed_job: ':green:'
-          failed_job: ':red:'
+          succeed_bnt: "primary"
+          failed_bnt: "danger"
+          succeed_job: ":green:"
+          failed_job: ":red:"
         with:
           payload: |
             {
@@ -219,7 +234,7 @@ jobs:
                         "type": "plain_text",
                         "text": "Workflow Run"
                       },
-                      "style": "${{ inputs.build_blade_output == '' && inputs.lint_output == '' && inputs.unit_test_output == '' && inputs.e2e_polybft_test_output == '' && inputs.e2e_legacy_test_output == '' && inputs.property_polybft_test_output == '' && inputs.fuzz_test_output == '' && inputs.benchmark_test_output == '' && inputs.sanity_check_tests_output == 'true' && inputs.deploy_network_terraform_output == '' && inputs.deploy_network_ansible_output == '' && inputs.deploy_network_blade_healthcheck_output == 'true' && inputs.load_test_eoa_output == 'true' && inputs.load_test_eoa_txpool_pending_output == '0' && inputs.load_test_eoa_txpool_queued_output == '0' && inputs.load_test_erc20_output == 'true' && inputs.load_test_erc20_txpool_pending_output == '0' && inputs.load_test_erc20_txpool_queued_output == '0' && inputs.load_test_erc721_output == 'true' && inputs.load_test_erc721_txpool_pending_output == '0' && inputs.load_test_erc721_txpool_queued_output == '0' && inputs.load_test_mixed_output == 'true' && inputs.load_test_mixed_txpool_pending_output == '0' && inputs.load_test_mixed_txpool_queued_output == '0' && inputs.destroy_network_logs_output == '' && inputs.destroy_network_terraform_output == '' && env.succeed_bnt || env.failed_bnt }}",
+                      "style": "${{ inputs.build_blade_output == '' && inputs.lint_output == '' && inputs.unit_test_output == '' && inputs.e2e_polybft_test_output == '' && inputs.e2e_legacy_test_output == '' && inputs.property_polybft_test_output == '' && inputs.fuzz_test_output == '' && inputs.benchmark_test_output == '' && inputs.availability_test_status == 'true' && inputs.sanity_check_tests_output == 'true' && inputs.deploy_network_terraform_output == '' && inputs.deploy_network_ansible_output == '' && inputs.deploy_network_blade_healthcheck_output == 'true' && inputs.load_test_eoa_output == 'true' && inputs.load_test_eoa_txpool_pending_output == '0' && inputs.load_test_eoa_txpool_queued_output == '0' && inputs.load_test_erc20_output == 'true' && inputs.load_test_erc20_txpool_pending_output == '0' && inputs.load_test_erc20_txpool_queued_output == '0' && inputs.load_test_erc721_output == 'true' && inputs.load_test_erc721_txpool_pending_output == '0' && inputs.load_test_erc721_txpool_queued_output == '0' && inputs.load_test_mixed_output == 'true' && inputs.load_test_mixed_txpool_pending_output == '0' && inputs.load_test_mixed_txpool_queued_output == '0' && inputs.load_test_erc1155_output == 'true' && inputs.load_test_erc1155_txpool_pending_output == '0' && inputs.load_test_erc1155_txpool_queued_output == '0' && inputs.destroy_network_logs_output == '' && inputs.destroy_network_terraform_output == '' && env.succeed_bnt || env.failed_bnt }}",
                       "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                     },
                     {
@@ -230,6 +245,15 @@ jobs:
                       },
                       "style": "${{ inputs.logs == 'true' && inputs.destroy_network_logs_output == '' && env.succeed_bnt || env.failed_bnt }}",
                       "url": "https://s3.console.aws.amazon.com/s3/buckets/${{ secrets.AWS_S3_BLADE_BUCKET }}?region=${{ vars.AWS_REGION }}&prefix=logs/${{ github.run_id }}/"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "Sanity Check Results"
+                      },
+                      "style": "${{ inputs.sanity_check_tests_output == 'true' && env.succeed_bnt || env.failed_bnt }}",
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ inputs.results_artifact_id }}"
                     }
                   ]
                 },
@@ -405,6 +429,10 @@ jobs:
                     {
                       "type": "mrkdwn",
                       "text": "${{ inputs.load_test_mixed_output == 'true' && inputs.load_test_mixed_txpool_pending_output == '0' && inputs.load_test_mixed_txpool_queued_output == '0' && env.succeed_job || env.failed_job }} *Load Test MIXED*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.load_test_erc1155_output == 'true' && inputs.load_test_erc1155_txpool_pending_output == '0' && inputs.load_test_erc1155_txpool_queued_output == '0' && env.succeed_job || env.failed_job }} *Load Test ERC1155*"
                     }
                   ]
                 }

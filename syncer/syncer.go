@@ -47,14 +47,15 @@ func NewSyncer(
 	logger hclog.Logger,
 	network Network,
 	blockchain Blockchain,
+	txPool TxPool,
 	blockTimeout time.Duration,
 ) Syncer {
 	return &syncer{
 		logger:          logger.Named(syncerName),
 		blockchain:      blockchain,
 		syncProgression: progress.NewProgressionWrapper(progress.ChainSyncBulk),
-		syncPeerService: NewSyncPeerService(network, blockchain),
-		syncPeerClient:  NewSyncPeerClient(logger, network, blockchain),
+		syncPeerService: NewSyncPeerService(network, blockchain, txPool),
+		syncPeerClient:  NewSyncPeerClient(logger, network, blockchain, txPool),
 		blockTimeout:    blockTimeout,
 		newStatusCh:     make(chan struct{}),
 		peerMap:         new(PeerMap),
@@ -301,4 +302,30 @@ func updateMetrics(fullBlock *types.FullBlock) {
 	metrics.SetGauge([]string{syncerMetrics, "tx_num"}, float32(len(fullBlock.Block.Transactions)))
 	metrics.SetGauge([]string{syncerMetrics, "receipts_num"}, float32(len(fullBlock.Receipts)))
 	metrics.SetGauge([]string{syncerMetrics, "blocks_num"}, 1)
+}
+
+func (s *syncer) SyncTxPool() error {
+	s.initializePeerMap()
+
+	bestPeer := s.peerMap.BestPeer(nil)
+	if bestPeer == nil {
+		timeCh, ticker := time.After(20*time.Second), time.Tick(2*time.Second)
+
+	loop:
+		for {
+			select {
+			case <-ticker:
+				s.initializePeerMap()
+
+				bestPeer = s.peerMap.BestPeer(nil)
+				if bestPeer != nil {
+					break loop
+				}
+			case <-timeCh:
+				return fmt.Errorf("no best peer found")
+			}
+		}
+	}
+
+	return s.syncPeerClient.SyncTxPool(bestPeer.ID)
 }

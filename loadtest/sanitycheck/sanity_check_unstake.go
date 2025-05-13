@@ -2,15 +2,10 @@ package sanitycheck
 
 import (
 	"fmt"
-	"math/big"
-	"time"
 
 	"github.com/0xPolygon/polygon-edge/consensus/polybft"
-	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
-	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/jsonrpc"
-	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/Ethernal-Tech/ethgo"
 )
 
@@ -124,40 +119,7 @@ func (t *UnstakeTest) Run() error {
 
 	fmt.Println("Validator", validatorKey.Address(), "is in the updated validator set with correct voting power")
 
-	return nil
-}
+	_, err = t.stake(validatorKey, amountToUnstake)
 
-// unstake unstakes the given amount for the given validator.
-func (t *UnstakeTest) unstake(validatorKey *crypto.ECDSAKey, amount *big.Int) (uint64, error) {
-	fmt.Println("Unstaking for validator", validatorKey.Address(), "Amount", amount.String())
-
-	s := time.Now().UTC()
-	defer func() {
-		fmt.Println("Unstaking for validator", validatorKey.Address(), "took", time.Since(s))
-	}()
-
-	unstakeFn := &contractsapi.UnstakeStakeManagerFn{
-		Amount: amount,
-	}
-
-	encoded, err := unstakeFn.EncodeAbi()
-	if err != nil {
-		return 0, err
-	}
-
-	tx := types.NewTx(types.NewLegacyTx(
-		types.WithFrom(validatorKey.Address()),
-		types.WithTo(&contracts.StakeManagerContract),
-		types.WithInput(encoded)))
-
-	receipt, err := t.txrelayer.SendTransaction(tx, validatorKey)
-	if err != nil {
-		return 0, err
-	}
-
-	if receipt.Status == uint64(types.ReceiptFailed) {
-		return 0, fmt.Errorf("unstake transaction failed on block %d", receipt.BlockNumber)
-	}
-
-	return receipt.BlockNumber, nil
+	return err
 }

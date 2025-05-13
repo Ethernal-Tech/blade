@@ -51,7 +51,7 @@ func setFlags(cmd *cobra.Command) {
 		&params.loadTestType,
 		loadTestTypeFlag,
 		"eoa",
-		"the type of load test to run (supported types: eoa, erc20, erc721, mixed, perf-contract)",
+		"the type of load test to run (supported types: eoa, erc20, erc721, erc1155, mixed, perf-contract)",
 	)
 
 	cmd.Flags().StringVar(
@@ -152,6 +152,13 @@ func setFlags(cmd *cobra.Command) {
 		"the deadband of block numbers, that is used when checking whether all the nodes are on the same block number",
 	)
 
+	cmd.Flags().BoolVar(
+		&params.tearDown,
+		tearDownFlag,
+		false,
+		"indicates whether to tear down the load test",
+	)
+
 	_ = cmd.MarkFlagRequired(MnemonicFlag)
 	_ = cmd.MarkFlagRequired(loadTestTypeFlag)
 
@@ -165,7 +172,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 	loadTestRunner := &runner.LoadTestRunner{}
 
 	err := loadTestRunner.Run(cmd.Context(), runner.LoadTestConfig{
-		Mnemonnic:            params.mnemonic,
+		Mnemonic:             params.mnemonic,
 		LoadTestType:         params.loadTestType,
 		LoadTestName:         params.loadTestName,
 		JSONRPCUrls:          params.jsonRPCAddresses,
@@ -182,6 +189,7 @@ func runCommand(cmd *cobra.Command, _ []string) {
 		TxPoolReadThreads:    params.txpoolReadThreads,
 		ReceiversNum:         params.receiversNum,
 		BlockNumberDeadband:  params.blockNumberDeadband,
+		TearDown:             params.tearDown,
 	})
 
 	if err != nil {

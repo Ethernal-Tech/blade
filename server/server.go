@@ -43,6 +43,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/state/runtime"
 	"github.com/0xPolygon/polygon-edge/state/runtime/addresslist"
 	"github.com/0xPolygon/polygon-edge/state/runtime/tracer"
+	"github.com/0xPolygon/polygon-edge/syncer"
 	"github.com/0xPolygon/polygon-edge/txpool"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/0xPolygon/polygon-edge/validate"
@@ -99,7 +100,7 @@ type Server struct {
 // newFileLogger returns logger instance that writes all logs to a specified file.
 // If log file can't be created, it returns an error
 func newFileLogger(config *Config) (hclog.Logger, error) {
-	logFileWriter, err := os.Create(config.LogFilePath)
+	logFileWriter, err := os.OpenFile(config.LogFilePath, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660)
 	if err != nil {
 		return nil, fmt.Errorf("could not create log file, %w", err)
 	}
@@ -383,6 +384,8 @@ func NewServer(config *Config) (*Server, error) {
 				PriceLimit:         m.config.PriceLimit,
 				MaxAccountEnqueued: m.config.MaxAccountEnqueued,
 				TxGossipBatchSize:  m.config.TxGossipBatchSize,
+				JournalRotateSize:  m.config.JournalRotateSize,
+				DataDir:            m.config.DataDir,
 				ChainID:            big.NewInt(m.config.Chain.Params.ChainID),
 				PeerID:             m.network.AddrInfo().ID,
 			},
@@ -425,11 +428,6 @@ func NewServer(config *Config) (*Server, error) {
 		return nil, err
 	}
 
-	// setup and start jsonrpc server
-	if err := m.setupJSONRPC(); err != nil {
-		return nil, err
-	}
-
 	// restore archive data before starting
 	if err := m.restoreChain(); err != nil {
 		return nil, err
@@ -440,8 +438,22 @@ func NewServer(config *Config) (*Server, error) {
 		return nil, err
 	}
 
+	// start txpool
 	m.txpool.SetBaseFee(m.blockchain.Header())
-	m.txpool.Start()
+
+	var syncer syncer.Syncer
+
+	consensus, ok := m.consensus.(*consensusPolyBFT.Polybft)
+	if ok {
+		syncer = consensus.GetSyncer()
+	}
+
+	m.txpool.Start(syncer)
+
+	// setup and start jsonrpc server
+	if err := m.setupJSONRPC(); err != nil {
+		return nil, err
+	}
 
 	return m, nil
 }

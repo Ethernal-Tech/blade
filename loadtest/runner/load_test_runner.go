@@ -14,6 +14,7 @@ const (
 	EOATestType      = "eoa"
 	ERC20TestType    = "erc20"
 	ERC721TestType   = "erc721"
+	ERC1155TestType  = "erc1155"
 	MixedTestType    = "mixed"
 	PerfContractType = "perf-contract"
 )
@@ -24,6 +25,7 @@ func IsLoadTestSupported(loadTestType string) bool {
 	return ltp == EOATestType ||
 		ltp == ERC20TestType ||
 		ltp == ERC721TestType ||
+		ltp == ERC1155TestType ||
 		ltp == MixedTestType ||
 		ltp == PerfContractType
 }
@@ -50,7 +52,7 @@ type BlockInfo struct {
 
 // LoadTestConfig represents the configuration for a load test.
 type LoadTestConfig struct {
-	Mnemonnic string // Mnemonnic is the mnemonic phrase used for account generation, and VUs funding.
+	Mnemonic string // Mnemonnic is the mnemonic phrase used for account generation, and VUs funding.
 
 	LoadTestType string // LoadTestType is the type of load test.
 	LoadTestName string // LoadTestName is the name of the load test.
@@ -77,6 +79,9 @@ type LoadTestConfig struct {
 
 	// BlockNumberDeadband is the maximum allowed discrepancy in the latest block numbers among the nodes
 	BlockNumberDeadband uint64
+
+	// Tear down for the load test
+	TearDown bool // TearDown indicates whether to tear down the load test.
 }
 
 // LoadTestRunner represents a runner for load tests.
@@ -109,6 +114,13 @@ func (r *LoadTestRunner) Run(ctx context.Context, cfg LoadTestConfig) error {
 		}
 
 		return erc721Runner.Run(ctx)
+	case ERC1155TestType:
+		erc1155Runner, err := NewERC1155Runner(cfg)
+		if err != nil {
+			return err
+		}
+
+		return erc1155Runner.Run(ctx)
 	case MixedTestType:
 		mixedTxRunner, err := NewMixedTxRunner(cfg)
 		if err != nil {
