@@ -22,6 +22,3 @@ These design choices allow Ethereum to support **smart contracts** and **decentr
 * **Security**
 * **Transparency**
 * **Scalability**
-
-Ethereum blockchain data structures are explained in great detail in the following articles:\
-**Understanding Trie Databases in Ethereum** and **Ethereum State Trie Architecture Explained**

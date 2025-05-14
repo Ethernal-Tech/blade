@@ -11,8 +11,8 @@ A `Transition` instance is responsible for processing a **series of transactions
 ## Behavior
 
 * During transaction execution, the `Transition` maintains a set of **receipts**.
-* All **read** or **update** operations on the World State Trie (WST) are performed through the `transition.state.Txn` object.
-* `state.Txn` is an instance of an **immutable radix trie** (iradix), ensuring:
+* All **read** or **update** operations on the WST are performed through the `transition.state.Txn` object.
+* `state.Txn` is an instance of an iradix, ensuring:
   * The original **snapshot remains unchanged**
   * **All changes are captured** in an isolated, accessible structure
 

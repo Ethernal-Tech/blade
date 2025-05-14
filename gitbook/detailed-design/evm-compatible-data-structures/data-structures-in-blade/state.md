@@ -1,6 +1,6 @@
 # State
 
-The blockchain **World State Trie (WST)** is accessed at the application level through a `State` object.
+The blockchain **WST** is accessed at the application level through a `State` object.
 
 * `State` is a **wrapper around the Storage** layer.
 * It includes an **LRU cache** to optimize access to disk-based data.

@@ -1,6 +1,6 @@
 # Snapshot
 
-A **Snapshot** represents the state of a **subtree of the World State Trie (WST)** at a specific moment in time.
+A **Snapshot** represents the state of a **subtree of the WST** at a specific moment in time.
 
 * The **subtrie** is defined by specifying a **root hash**.
 * It enables:

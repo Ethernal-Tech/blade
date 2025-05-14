@@ -7,7 +7,7 @@ There are four types of state tries:
 * **Transaction Receipt Trie**
 * **Account Storage Trie**
 
-Each state trie is constructed using a **Merkle Patricia Trie** (MPT) \[Ref].
+Each state trie is constructed using a **Merkle Patricia Trie** (MPT) .
 
 Each block stores three central state tries:
 
@@ -16,6 +16,10 @@ Each block stores three central state tries:
 * **Receipt Trie**
 
 The **Account Storage Trie** (also known as the account storage contents trie) constructs the leaf nodes in the world state trie.
+
+{% content-ref url="block-structure.md" %}
+[block-structure.md](block-structure.md)
+{% endcontent-ref %}
 
 ***
 

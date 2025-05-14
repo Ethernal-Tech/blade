@@ -2,10 +2,8 @@
 
 The entire **World State Trie (WST)** is stored in a **key-value database** persisted on disk.
 
-**Storage** serves as an abstraction layer for accessing the databases used to persist blockchain data.
-
-* Currently, Blade uses **CockroachDB's Pebble** database.
-* Previously, it used **GoLevelDB**.
+Storage serves as an abstraction layer for accessing the databases used to persist blockchain data.\
+Blade supports both GoLevelDb and Pebble database for persisting blockchain data. Pebble is set by default.
 
 The following image presents:
 

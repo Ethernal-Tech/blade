@@ -1,6 +1,6 @@
 # World State Trie Update Dataflow
 
-This chapter illustrates the **execution flow** when a set of transactions is executed against a specific **World State Trie (WST)** during block building.
+This chapter illustrates the **execution flow** when a set of transactions is executed against a specific **WST** during block building.
 
 > 📝 **Note:** The process of selecting the block proposer, transaction set, etc., is out of scope for this document.\
 > The description begins from the point where the **parent block** and **transaction set** are already determined.
