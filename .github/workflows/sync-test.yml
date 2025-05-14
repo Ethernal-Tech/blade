@@ -64,6 +64,7 @@ jobs:
     name: Run the fullnode sync test
     runs-on: ubuntu-latest
     needs: check_network
+    if: needs.check_network.outputs.check_output > 0
     environment: ${{ inputs.environment }}
     outputs:
       terraform_output: ${{ steps.terraform_failure.outputs.terraform_output }}
