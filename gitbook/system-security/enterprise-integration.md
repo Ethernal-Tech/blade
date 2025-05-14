@@ -10,7 +10,7 @@ Each step is meticulously designed to contribute to the overall security posture
 
 ***
 
-**Step 1**&#x20;
+**Step 1**
 
 In this initial step, an enterprise user leverages the existing sign-in mechanisms, with Single Sign-On (SSO) support available if the enterprise Identity Management (IdM) system allows integration with external IdM providers. At this stage, the assumption is that the user is authenticated through conventional means, having a claims-based token that contains their username and role within the broader enterprise system. This authentication process forms the foundation for the user's access to the enterprise's systems and resources, ensuring secure and authorized entry.
 
@@ -34,7 +34,7 @@ Furthermore, it serves the purpose of scaling the cloud architecture by loosely 
 
 ***
 
-**Step 4**&#x20;
+**Step 4**
 
 In this phase, with the user's identification for initiating a transaction and details of the recipient user, authorization procedures are implemented. These procedures involve validating whether the users have the authorization to engage in the transaction. This is achieved by cross-referencing with Identity and Access Management (IaM) systems to confirm the users' transaction privileges, as well as their active employment status within the enterprise. This step essentially serves as a verification check to ensure that the User Experience (UX) successfully enforced the transactional restrictions as established in step 2. By validating the authorization and user status, the system upholds compliance and security measures, reinforcing the integrity of the transactional processes within the enterprise system.
 
@@ -42,13 +42,13 @@ In this phase, with the user's identification for initiating a transaction and d
 
 **Step 5**
 
-&#x20;Upon completion of the thorough validation and verification checks in previous steps, and upon TC confirming that all necessary criteria are met, the TC proceeds to utilize the user's private key to generate an actual blockchain transaction.
+Upon completion of the thorough validation and verification checks in previous steps, and upon TC confirming that all necessary criteria are met, the TC proceeds to utilize the user's private key to generate an actual blockchain transaction.
 
 ***
 
 **Step 6**
 
-&#x20;By leveraging the user's private key, the TC ensures the secure and authenticated creation of the blockchain transaction, thereby preserving the integrity and confidentiality of the transactional data. To leverage a user's private key, the service needs to acquire the private key from the Key Management Service by leveraging the user's public key.
+By leveraging the user's private key, the TC ensures the secure and authenticated creation of the blockchain transaction, thereby preserving the integrity and confidentiality of the transactional data. To leverage a user's private key, the service needs to acquire the private key from the Key Management Service by leveraging the user's public key.
 
 ***
 
