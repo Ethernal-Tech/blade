@@ -19,6 +19,7 @@ import (
 	itrie "github.com/0xPolygon/polygon-edge/state/immutable-trie"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/hashicorp/go-hclog"
+	"github.com/stretchr/testify/require"
 )
 
 // Constants used for the stress test
@@ -50,39 +51,41 @@ const (
 	PebbleDB
 )
 
-func TestDbStressPebble(t *testing.T) {
+func BenchmarkTriePebbleDb(b *testing.B) {
+	b.StopTimer()
 
 	startProfiler()
 
-	executeStorageStressTest(t, PebbleDB)
+	executeTrieDbTest(b, PebbleDB, 5)
 }
 
-func TestDbStressLevel(t *testing.T) {
+func BenchmarkTrieLevelDb(b *testing.B) {
+	b.StopTimer()
 
 	startProfiler()
 
-	executeStorageStressTest(t, LevelDB)
+	executeTrieDbTest(b, LevelDB, 6)
 }
 
-func executeStorageStressTest(t *testing.T, db DBType) bool {
+func executeTrieDbTest(b *testing.B, db DBType, writeTime float64) {
 	forks, baseFee, currentForks, coinbase, txBytes := getConstants()
 
 	s, snapshot, pastRoot, err := buildStateWithHelperAccounts(numberOfTransactionsPerBlock, db)
 	if err != nil {
-		t.Logf("Error building state with helper accounts: %v", err)
-		return true
+		b.Logf("Error building state with helper accounts: %v", err)
+		return
 	}
 
-	txs, err := GenerateSetOfTransactions(baseFee, numberOfTransactionsPerBlock)
+	txs, err := generateSetOfTransactions(baseFee, numberOfTransactionsPerBlock)
 	if err != nil {
-		t.Logf("Error generating transactions: %v", err)
-		return true
+		b.Logf("Error generating transactions: %v", err)
+		return
 	}
 
 	err = setupSigner(txBytes, currentForks)
 	if err != nil {
-		t.Logf("Error setting up signer: %v", err)
-		return true
+		b.Logf("Error setting up signer: %v", err)
+		return
 	}
 
 	executor := setupExecutor(forks, s)
@@ -93,7 +96,7 @@ func executeStorageStressTest(t *testing.T, db DBType) bool {
 
 	// Start the readers if numReaders is greater than 0
 	for i := 1; i <= numReaders; i++ {
-		go reader(ch, *executor, txs[0].From(), *GetHeader(t), coinbase)
+		go reader(ch, *executor, txs[0].From(), *getHeader(b), coinbase)
 	}
 
 	// Process blocks in a loop
@@ -104,24 +107,26 @@ func executeStorageStressTest(t *testing.T, db DBType) bool {
 
 		start := time.Now()
 
-		err, currentRoot = processBlock(t, currentRoot, s, index, executor, coinbase, txs, currentForks, snapshot, ch)
+		err, currentRoot = processBlock(b, currentRoot, s, index, executor, coinbase, txs, currentForks, snapshot, ch)
 		if err != nil {
-			t.Logf("Error processing block %d: %v", index, err)
-			return true
+			b.Logf("Error processing block %d: %v", index, err)
+			return
 		}
 
-		t.Logf("Iteration %d done in %ss", index, time.Since(start))
+		b.Logf("Iteration %d done in %ss", index, time.Since(start))
 
 		time.Sleep(sleepBetweenBlocks)
 	}
-	return false
+
+	b.Logf("\ttotal write time %f s", b.Elapsed().Seconds())
+	require.LessOrEqual(b, b.Elapsed().Seconds(), writeTime)
 }
 
-func processBlock(t *testing.T, currentRoot types.Hash, s state.State, index int, executor *state.Executor, coinbase types.Address, txs []*types.Transaction, currentForks chain.ForksInTime, snapshot state.Snapshot, ch chan types.Hash) (error, types.Hash) {
+func processBlock(b *testing.B, currentRoot types.Hash, s state.State, index int, executor *state.Executor, coinbase types.Address, txs []*types.Transaction, currentForks chain.ForksInTime, snapshot state.Snapshot, ch chan types.Hash) (error, types.Hash) {
 	// Add funds to the source account
 	_, _, currentRoot, _ = refill(s, currentRoot, uint64(index*numberOfTransactionsPerBlock+1))
 
-	transition, err := executor.BeginTxn(currentRoot, GetHeader(t), coinbase)
+	transition, err := executor.BeginTxn(currentRoot, getHeader(b), coinbase)
 	if err != nil {
 		fmt.Printf("Error in executor.BeginTxn: %v\n", err)
 		return err, types.ZeroHash
@@ -136,7 +141,9 @@ func processBlock(t *testing.T, currentRoot types.Hash, s state.State, index int
 		return fmt.Errorf("objects to commit are nil"), types.ZeroHash
 	}
 
+	b.StartTimer()
 	_, newRoot, err := snapshot.Commit(objs)
+	b.StopTimer()
 	if err != nil {
 		return err, types.ZeroHash
 	}
@@ -245,7 +252,7 @@ func refill(s state.State, currentRoot types.Hash, nonce uint64) (state.State, s
 	return s, snap, types.BytesToHash(root), err
 }
 
-func GenerateSetOfTransactions(baseFee *big.Int, count int) ([]*types.Transaction, error) {
+func generateSetOfTransactions(baseFee *big.Int, count int) ([]*types.Transaction, error) {
 	var txData types.TxData
 	txs := []*types.Transaction{}
 	from := types.StringToAddress(mainAccountAddress)
@@ -400,18 +407,18 @@ func startProfiler() {
 	}()
 }
 
-func GetHeader(t testing.TB) *types.Header {
-	t.Helper()
+func getHeader(b *testing.B) *types.Header {
+	b.Helper()
 
 	baseFee := uint64(0x01)
 
 	return &types.Header{
-		Miner:      stringToAddressT(t, "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba").Bytes(),
+		Miner:      stringToAddressT(b, "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba").Bytes(),
 		BaseFee:    baseFee,
-		Difficulty: stringToUint64T(t, "0x020000"),
-		GasLimit:   stringToUint64T(t, "0x05f5e100000"),
-		Number:     stringToUint64T(t, "0x01"),
-		Timestamp:  stringToUint64T(t, "0x03e8"),
+		Difficulty: stringToUint64T(b, "0x020000"),
+		GasLimit:   stringToUint64T(b, "0x05f5e100000"),
+		Number:     stringToUint64T(b, "0x01"),
+		Timestamp:  stringToUint64T(b, "0x03e8"),
 	}
 }
 
