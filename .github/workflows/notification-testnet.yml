@@ -124,6 +124,7 @@ jobs:
   notification:
     name: Notification
     runs-on: ubuntu-latest
+    environment: testnet
     steps:
       - name: Short SHA
         id: short_sha

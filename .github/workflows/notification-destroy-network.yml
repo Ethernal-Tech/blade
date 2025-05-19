@@ -29,6 +29,7 @@ jobs:
   notification:
     name: Notification
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     steps:
       - name: Notify Slack
         uses: slackapi/slack-github-action@v1.25.0

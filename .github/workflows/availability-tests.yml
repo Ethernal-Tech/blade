@@ -27,9 +27,7 @@ on:
         required: true
       ACCOUNT_PRIVATE_KEY:
         required: true
-      SLACK_WEBHOOK_URL:
-        required: true
-      
+
 jobs:
   availability_test:
     name: Availability Test

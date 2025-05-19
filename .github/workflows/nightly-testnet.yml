@@ -18,7 +18,6 @@ jobs:
     secrets:
       PREMINED_PRIVATE_KEY: ${{ secrets.FAUCET_PRIVATE_KEY }}
       ACCOUNT_PRIVATE_KEY: ${{ secrets.ACCOUNT_PRIVATE_KEY }}
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   pink_panda:
     name: Pink Panda Testnet
     uses: ./.github/workflows/availability-tests.yml
@@ -30,7 +29,6 @@ jobs:
     secrets:
       PREMINED_PRIVATE_KEY: ${{ secrets.LOADTEST_PRIVATE_KEY }}
       ACCOUNT_PRIVATE_KEY: ${{ secrets.ACCOUNT_PRIVATE_KEY }}
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   sanity_check_tests:
     name: Sanity Check Test
     uses: ./.github/workflows/sanity-check-test.yml

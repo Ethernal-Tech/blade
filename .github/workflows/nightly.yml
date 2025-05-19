@@ -50,7 +50,6 @@ jobs:
     secrets:
       PREMINED_PRIVATE_KEY: ${{ secrets.LOADTEST_PRIVATE_KEY }}
       ACCOUNT_PRIVATE_KEY: ${{ secrets.ACCOUNT_PRIVATE_KEY }}
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   sanity_check_tests:
     name: Sanity Check Tests
     uses: ./.github/workflows/sanity-check-test.yml
