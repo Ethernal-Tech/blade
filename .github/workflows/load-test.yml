@@ -171,6 +171,16 @@ jobs:
         id: rpc_url
         if: contains(steps.retrieve_state.outputs.retrieve_state_output, 'download')
         run: echo "url=$(cat state.json | jq -r '.outputs.aws_lb_ext_domain.value // empty')" >> $GITHUB_OUTPUT
+  notification_before_load_test:
+    name: Notification Before Load Test
+    needs: check_network
+    if: (needs.check_network.outputs.rpc_url != '' && (inputs.notification || github.event_name == 'schedule'))
+    uses: ./.github/workflows/notification.yml
+    with:
+      environment: ${{ inputs.environment }}
+      description: "Load Test ${{ inputs.type }} Started"
+    secrets:
+      MONITORING_SLACK_WEBHOOK_URL: ${{ secrets.MONITORING_SLACK_WEBHOOK_URL }}
   load_test_runner:
     name: Deploy Load Test Runner
     runs-on: ubuntu-latest
@@ -263,6 +273,16 @@ jobs:
           txpool_status=$(curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"txpool_status","params":[],"id":1}' http://${{ needs.check_network.outputs.rpc_url }} | jq -r .result)
           echo "txpool_pending=$(echo $txpool_status | jq -r '.pending')" >> $GITHUB_OUTPUT
           echo "txpool_queued=$(echo $txpool_status | jq -r '.queued')" >> $GITHUB_OUTPUT
+  notification_after_load_test:
+    name: Notification After Load Test
+    needs: [load_test, txpool_status]
+    if: (inputs.notification || github.event_name == 'schedule')
+    uses: ./.github/workflows/notification.yml
+    with:
+      environment: ${{ inputs.environment }}
+      description: "Load Test ${{ inputs.type }} Ended"
+    secrets:
+      MONITORING_SLACK_WEBHOOK_URL: ${{ secrets.MONITORING_SLACK_WEBHOOK_URL }}K_URL }}
   notification:
     name: Load Test Notification
     needs: [load_test, txpool_status]
