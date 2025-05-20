@@ -116,15 +116,15 @@ jobs:
         run: |
           ansible-inventory --graph
           ansible-galaxy install -r requirements.yml
-      - name: Run Ansible
+      - name: Start blade and pause
         working-directory: ansible
         run: ansible-playbook test.yml --tags "before" --extra-vars "clean_deploy_title=${{ inputs.environment }} blade_repository=${{ github.repository }} s3_bucket=${{ secrets.AWS_S3_BLADE_BUCKET }}"
-      - name: Configure AWS Credentials
+      - name: Refresh session
         uses: aws-actions/configure-aws-credentials@v4.0.1
         with:
           aws-region: ${{ vars.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-      - name: Run Ansible
+      - name: Call RPC and send notifications
         working-directory: ansible
         run: ansible-playbook test.yml --tags "after" --extra-vars "clean_deploy_title=${{ inputs.environment }} blade_repository=${{ github.repository }} s3_bucket=${{ secrets.AWS_S3_BLADE_BUCKET }}"
       - name: Ansible Failed
