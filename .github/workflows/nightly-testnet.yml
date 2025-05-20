@@ -8,7 +8,7 @@ on: # yamllint disable-line rule:truthy
 
 jobs:
   availability_tests:
-    name: Aavailability Tests
+    name: Availability Tests
     uses: ./.github/workflows/availability-tests.yml
     with:
       rpc_url: ${{ vars.TESTNET_JSONRPC_URL }}
