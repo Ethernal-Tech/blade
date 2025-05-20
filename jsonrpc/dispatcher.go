@@ -105,6 +105,7 @@ func (d *Dispatcher) registerEndpoints(store JSONRPCStore, manager accounts.Acco
 		d.filterManager,
 		d.params.priceLimit,
 		manager,
+		initRPCCache(store),
 	}
 	d.endpoints.Net = &Net{
 		store,
