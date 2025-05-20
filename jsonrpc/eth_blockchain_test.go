@@ -836,7 +836,7 @@ func (m *mockBlockStore) setupLogs() {
 	}
 }
 
-func (m *mockBlockStore) GetReceiptsByHash(hash types.Hash) ([]*types.Receipt, error) {
+func (m *mockBlockStore) GetReceiptsByHash(num uint64, hash types.Hash) ([]*types.Receipt, error) {
 	receipts, ok := m.receipts[hash]
 	if !ok {
 		return nil, nil

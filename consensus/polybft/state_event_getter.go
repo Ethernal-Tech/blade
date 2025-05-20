@@ -156,7 +156,7 @@ func (r *receiptsGetter) getReceiptsFromBlocksRange(from, to uint64,
 			return blockchain.ErrNoBlock
 		}
 
-		receipts, err := r.blockchain.GetReceiptsByHash(blockHeader.Hash)
+		receipts, err := r.blockchain.GetReceiptsByHash(i, blockHeader.Hash)
 		if err != nil {
 			return err
 		}

@@ -63,8 +63,8 @@ type ethBlockchainStore interface {
 	// ReadTxLookup returns a block hash in which a given txn was mined
 	ReadTxLookup(txnHash types.Hash) (uint64, bool)
 
-	// GetReceiptsByHash returns the receipts for a block hash
-	GetReceiptsByHash(hash types.Hash) ([]*types.Receipt, error)
+	// GetReceiptsByHash returns the receipts for a block number and hash
+	GetReceiptsByHash(num uint64, hash types.Hash) ([]*types.Receipt, error)
 
 	// GetAvgGasPrice returns the average gas price
 	GetAvgGasPrice() *big.Int
@@ -470,7 +470,7 @@ func (e *Eth) GetTransactionReceipt(hash types.Hash) (interface{}, error) {
 		return nil, nil
 	}
 
-	receipts, err := e.store.GetReceiptsByHash(block.Hash())
+	receipts, err := e.store.GetReceiptsByHash(blockNum, block.Hash())
 	if err != nil {
 		// block receipts not found
 		e.logger.Warn(
@@ -525,7 +525,7 @@ func (e *Eth) GetBlockReceipts(number BlockNumber) (interface{}, error) {
 		return nil, nil
 	}
 
-	receipts, err := e.store.GetReceiptsByHash(block.Hash())
+	receipts, err := e.store.GetReceiptsByHash(num, block.Hash())
 	if err != nil {
 		return nil, err
 	}
