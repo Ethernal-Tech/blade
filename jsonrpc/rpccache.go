@@ -58,7 +58,7 @@ func (r *rpcCache) getBlockCache(num uint64) *blockCache {
 	}
 
 	txHashToIndex := map[types.Hash]int{}
-	logIndex := []int{}
+	logIndex := make([]int, len(block.Transactions))
 	index := 0
 	// calculate txs indexes and receipts offset
 	for i, txn := range block.Transactions {
