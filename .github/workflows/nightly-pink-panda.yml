@@ -7,8 +7,8 @@ on: # yamllint disable-line rule:truthy
   workflow_dispatch:
 
 jobs:
-  pink_panda:
-    name: Pink Panda Testnet
+  availability_tests:
+    name: Availability Tests
     uses: ./.github/workflows/availability-tests.yml
     with:
       rpc_url: ${{ vars.PP_TESTNET_JSONRPC_URL }}
@@ -20,9 +20,9 @@ jobs:
   notification:
     name: Notification
     uses: ./.github/workflows/notification-pink-panda.yml
-    needs: pink_panda
+    needs: availability_tests
     if: success() || failure()
     with:
-      availability_test_status: ${{ needs.pink_panda.outputs.availability_test_status }}
+      availability_test_status: ${{ needs.availability_tests.outputs.availability_test_status }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
