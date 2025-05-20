@@ -3,16 +3,7 @@ name: Testnet Notification
 on: # yamllint disable-line rule:truthy
   workflow_call:
     inputs:
-      bat_network:
-        type: string
-        required: true
-      bat_availability_test_status:
-        type: string
-        required: true
-      pp_network:
-        type: string
-        required: true
-      pp_availability_test_status:
+      availability_test_status:
         type: string
         required: true
       sanity_check_tests_output:
@@ -115,8 +106,6 @@ on: # yamllint disable-line rule:truthy
         type: string
         required: true
     secrets:
-      AWS_S3_BLADE_BUCKET:
-        required: true
       SLACK_WEBHOOK_URL:
         required: true
 
@@ -146,7 +135,7 @@ jobs:
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "Nightly Testnet"
+                    "text": "Blade Testnet"
                   }
                 },
                 {
@@ -158,7 +147,7 @@ jobs:
                         "type": "plain_text",
                         "text": "Workflow Run"
                       },
-                      "style": "${{ inputs.bat_availability_test_status == 'true' && inputs.pp_availability_test_status == 'true' && inputs.sanity_check_tests_output == 'true' && inputs.load_test_perf_output == 'true' && inputs.load_test_perf_txpool_pending_output == '0' && inputs.load_test_perf_txpool_queued_output == '0' && inputs.load_test_eoa_output == 'true' && inputs.load_test_eoa_txpool_pending_output == '0' && inputs.load_test_eoa_txpool_queued_output == '0' && inputs.load_test_erc20_output == 'true' && inputs.load_test_erc20_txpool_pending_output == '0' && inputs.load_test_erc20_txpool_queued_output == '0' && inputs.load_test_erc721_output == 'true' && inputs.load_test_erc721_txpool_pending_output == '0' && inputs.load_test_erc721_txpool_queued_output == '0' && inputs.load_test_mixed_output == 'true' && inputs.load_test_mixed_txpool_pending_output == '0' && inputs.load_test_mixed_txpool_queued_output == '0' && inputs.load_test_erc1155_output == 'true' && inputs.load_test_erc1155_txpool_pending_output == '0' && inputs.load_test_erc1155_txpool_queued_output == '0' && env.succeed_bnt || env.failed_bnt }}",
+                      "style": "${{ inputs.availability_test_status == 'true' && inputs.sanity_check_tests_output == 'true' && inputs.load_test_perf_output == 'true' && inputs.load_test_perf_txpool_pending_output == '0' && inputs.load_test_perf_txpool_queued_output == '0' && inputs.load_test_eoa_output == 'true' && inputs.load_test_eoa_txpool_pending_output == '0' && inputs.load_test_eoa_txpool_queued_output == '0' && inputs.load_test_erc20_output == 'true' && inputs.load_test_erc20_txpool_pending_output == '0' && inputs.load_test_erc20_txpool_queued_output == '0' && inputs.load_test_erc721_output == 'true' && inputs.load_test_erc721_txpool_pending_output == '0' && inputs.load_test_erc721_txpool_queued_output == '0' && inputs.load_test_mixed_output == 'true' && inputs.load_test_mixed_txpool_pending_output == '0' && inputs.load_test_mixed_txpool_queued_output == '0' && inputs.load_test_erc1155_output == 'true' && inputs.load_test_erc1155_txpool_pending_output == '0' && inputs.load_test_erc1155_txpool_queued_output == '0' && env.succeed_bnt || env.failed_bnt }}",
                       "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                     },
                     {
@@ -177,16 +166,9 @@ jobs:
                   "fields": [
                     {
                       "type": "mrkdwn",
-                      "text": "${{ inputs.bat_availability_test_status == 'true' && env.succeed_job || env.failed_job }} *${{ inputs.bat_network }} Availability Tests*"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "${{ inputs.pp_availability_test_status == 'true' && env.succeed_job || env.failed_job }} *${{ inputs.pp_network }} Availability Tests*"
+                      "text": "${{ inputs.availability_test_status == 'true' && env.succeed_job || env.failed_job }} *Availability Tests*"
                     }
                   ]
-                },
-                {
-                  "type": "divider"
                 },
                 {
                   "type": "section",

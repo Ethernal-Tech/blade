@@ -28,9 +28,7 @@ on: # yamllint disable-line rule:truthy
         required: true
       VAULT_PASSWORD:
         required: true
-      PERSONAL_ACCESS_USER:
-        required: true
-      PERSONAL_ACCESS_TOKEN:
+      SLACK_WEBHOOK_URL:
         required: true
 
 permissions:

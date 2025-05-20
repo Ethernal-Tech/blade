@@ -1,0 +1,28 @@
+---
+name: Nightly Pink Panda
+on: # yamllint disable-line rule:truthy
+  schedule:
+    # * is a special character in YAML so you have to quote this string
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  pink_panda:
+    name: Pink Panda Testnet
+    uses: ./.github/workflows/availability-tests.yml
+    with:
+      rpc_url: ${{ vars.PP_TESTNET_JSONRPC_URL }}
+      fund_amount: "3"
+      london: true
+    secrets:
+      PREMINED_PRIVATE_KEY: ${{ secrets.LOADTEST_PRIVATE_KEY }}
+      ACCOUNT_PRIVATE_KEY: ${{ secrets.ACCOUNT_PRIVATE_KEY }}
+  notification:
+    name: Notification
+    uses: ./.github/workflows/notification-pink-panda.yml
+    needs: pink_panda
+    if: success() || failure()
+    with:
+      availability_test_status: ${{ needs.pink_panda.outputs.availability_test_status }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

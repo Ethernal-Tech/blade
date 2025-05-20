@@ -14,25 +14,13 @@ jobs:
       rpc_url: ${{ vars.TESTNET_JSONRPC_URL }}
       fund_amount: "3"
       london: true
-      notification: true
     secrets:
       PREMINED_PRIVATE_KEY: ${{ secrets.FAUCET_PRIVATE_KEY }}
-      ACCOUNT_PRIVATE_KEY: ${{ secrets.ACCOUNT_PRIVATE_KEY }}
-  pink_panda:
-    name: Pink Panda Testnet
-    uses: ./.github/workflows/availability-tests.yml
-    with:
-      rpc_url: https://blockchain-rpc.pinkpanda.network
-      fund_amount: "3"
-      london: true
-      notification: true
-    secrets:
-      PREMINED_PRIVATE_KEY: ${{ secrets.LOADTEST_PRIVATE_KEY }}
       ACCOUNT_PRIVATE_KEY: ${{ secrets.ACCOUNT_PRIVATE_KEY }}
   sanity_check_tests:
     name: Sanity Check Test
     uses: ./.github/workflows/sanity-check-test.yml
-    needs: [blade]
+    needs: blade
     with:
       environment: testnet
     secrets:
@@ -186,13 +174,10 @@ jobs:
   testnet_notification:
     name: Testnet Nightly Notification
     uses: ./.github/workflows/notification-testnet.yml
-    needs: [blade, pink_panda, sanity_check_tests, load_test_perf, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed, load_test_erc1155]
+    needs: [blade, sanity_check_tests, load_test_perf, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed, load_test_erc1155]
     if: success() || failure()
     with:
-      bat_network: Blade Testnet
-      bat_availability_test_status: ${{ needs.blade.outputs.availability_test_status }}
-      pp_network: Pink Panda Testnet
-      pp_availability_test_status: ${{ needs.pink_panda.outputs.availability_test_status }}
+      availability_test_status: ${{ needs.blade.outputs.availability_test_status }}
       sanity_check_tests_output: ${{ needs.sanity_check_tests.outputs.sanity_check_tests_output }}
       stake_test_output: ${{ needs.sanity_check_tests.outputs.stake_test_output }}
       unstake_test_output: ${{ needs.sanity_check_tests.outputs.unstake_test_output }}
@@ -219,7 +204,6 @@ jobs:
       load_test_erc1155_txpool_pending_output: ${{ needs.load_test_erc1155.outputs.txpool_pending }}
       load_test_erc1155_txpool_queued_output: ${{ needs.load_test_erc1155.outputs.txpool_queued }}
     secrets:
-      AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   notification_load_test_perf:
     name: Load Test PERFORMANCE CONTRACT Notification
@@ -282,13 +266,7 @@ jobs:
   notification_load_test_erc20:
     name: Load Test ERC20 Notification
     uses: ./.github/workflows/notification-load-test.yml
-    needs:
-      [
-        load_test_erc20,
-        testnet_notification,
-        notification_load_test_perf,
-        notification_load_test_eoa,
-      ]
+    needs: [load_test_erc20, testnet_notification, notification_load_test_perf, notification_load_test_eoa]
     if: (always() && needs.load_test_erc20.outputs.load_test_output == 'true')
     with:
       environment: testnet
@@ -317,14 +295,7 @@ jobs:
   notification_load_test_erc721:
     name: Load Test ERC721 Notification
     uses: ./.github/workflows/notification-load-test.yml
-    needs:
-      [
-        load_test_erc721,
-        testnet_notification,
-        notification_load_test_perf,
-        notification_load_test_eoa,
-        notification_load_test_erc20,
-      ]
+    needs: [load_test_erc721, testnet_notification, notification_load_test_perf, notification_load_test_eoa, notification_load_test_erc20]
     if: (always() && needs.load_test_erc721.outputs.load_test_output == 'true')
     with:
       environment: testnet
@@ -353,15 +324,7 @@ jobs:
   notification_load_test_mixed:
     name: Load Test MIXED Notification
     uses: ./.github/workflows/notification-load-test.yml
-    needs:
-      [
-        load_test_mixed,
-        testnet_notification,
-        notification_load_test_perf,
-        notification_load_test_eoa,
-        notification_load_test_erc20,
-        notification_load_test_erc721,
-      ]
+    needs: [load_test_mixed, testnet_notification, notification_load_test_perf, notification_load_test_eoa, notification_load_test_erc20, notification_load_test_erc721]
     if: (always() && needs.load_test_mixed.outputs.load_test_output == 'true')
     with:
       environment: testnet
@@ -390,16 +353,7 @@ jobs:
   notification_load_test_erc1155:
     name: Load Test ERC1155 Notification
     uses: ./.github/workflows/notification-load-test.yml
-    needs:
-      [
-        load_test_erc1155,
-        testnet_notification,
-        notification_load_test_perf,
-        notification_load_test_eoa,
-        notification_load_test_erc20,
-        notification_load_test_erc721,
-        notification_load_test_mixed,
-      ]
+    needs: [load_test_erc1155, testnet_notification, notification_load_test_perf, notification_load_test_eoa, notification_load_test_erc20, notification_load_test_erc721, notification_load_test_mixed]
     if: (always() && needs.load_test_erc1155.outputs.load_test_output == 'true')
     with:
       environment: testnet
