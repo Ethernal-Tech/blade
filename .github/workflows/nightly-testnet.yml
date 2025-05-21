@@ -42,6 +42,7 @@ jobs:
       receipts_timeout: "5m0s"
       batch_size: "1000"
       notification: false
+      monitoring: true
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
@@ -51,6 +52,7 @@ jobs:
       AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
       PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      MONITORING_SLACK_WEBHOOK_URL: ${{ secrets.MONITORING_SLACK_WEBHOOK_URL }}
   load_test_eoa:
     name: Load Test EOA
     uses: ./.github/workflows/load-test.yml
@@ -66,6 +68,7 @@ jobs:
       receipts_timeout: "2m0s"
       batch_size: "1000"
       notification: false
+      monitoring: true
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
@@ -75,6 +78,7 @@ jobs:
       AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
       PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      MONITORING_SLACK_WEBHOOK_URL: ${{ secrets.MONITORING_SLACK_WEBHOOK_URL }}
   load_test_erc20:
     name: Load Test ERC20
     uses: ./.github/workflows/load-test.yml
@@ -90,6 +94,7 @@ jobs:
       receipts_timeout: "2m0s"
       batch_size: "1000"
       notification: false
+      monitoring: true
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
@@ -99,6 +104,7 @@ jobs:
       AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
       PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      MONITORING_SLACK_WEBHOOK_URL: ${{ secrets.MONITORING_SLACK_WEBHOOK_URL }}
   load_test_erc721:
     name: Load Test ERC721
     uses: ./.github/workflows/load-test.yml
@@ -114,6 +120,7 @@ jobs:
       receipts_timeout: "2m0s"
       batch_size: "1000"
       notification: false
+      monitoring: true
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
@@ -123,6 +130,7 @@ jobs:
       AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
       PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      MONITORING_SLACK_WEBHOOK_URL: ${{ secrets.MONITORING_SLACK_WEBHOOK_URL }}
   load_test_mixed:
     name: Load Test MIXED
     uses: ./.github/workflows/load-test.yml
@@ -138,6 +146,7 @@ jobs:
       receipts_timeout: "2m0s"
       batch_size: "1000"
       notification: false
+      monitoring: true
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
@@ -147,6 +156,7 @@ jobs:
       AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
       PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      MONITORING_SLACK_WEBHOOK_URL: ${{ secrets.MONITORING_SLACK_WEBHOOK_URL }}
   load_test_erc1155:
     name: Load Test ERC1155
     uses: ./.github/workflows/load-test.yml
@@ -162,6 +172,7 @@ jobs:
       receipts_timeout: "2m0s"
       batch_size: "1000"
       notification: false
+      monitoring: true
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
@@ -171,10 +182,22 @@ jobs:
       AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
       PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      MONITORING_SLACK_WEBHOOK_URL: ${{ secrets.MONITORING_SLACK_WEBHOOK_URL }}
+  sync_fullnode_test:
+    name: Sync Fullnode Test
+    uses: ./.github/workflows/sync-test.yml
+    needs: [availability_tests, sanity_check_tests, load_test_perf, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed, load_test_erc1155]
+    with:
+      environment: testnet
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
+      VAULT_PASSWORD: ${{ secrets.VAULT_PASSWORD }}
+      MONITORING_SLACK_WEBHOOK_URL: ${{ secrets.MONITORING_SLACK_WEBHOOK_URL }}
   testnet_notification:
     name: Testnet Nightly Notification
     uses: ./.github/workflows/notification-testnet.yml
-    needs: [availability_tests, sanity_check_tests, load_test_perf, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed, load_test_erc1155]
+    needs: [availability_tests, sanity_check_tests, load_test_perf, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed, load_test_erc1155, sync_fullnode_test]
     if: success() || failure()
     with:
       availability_test_status: ${{ needs.availability_tests.outputs.availability_test_status }}
@@ -203,6 +226,7 @@ jobs:
       load_test_erc1155_output: ${{ needs.load_test_erc1155.outputs.load_test_output }}
       load_test_erc1155_txpool_pending_output: ${{ needs.load_test_erc1155.outputs.txpool_pending }}
       load_test_erc1155_txpool_queued_output: ${{ needs.load_test_erc1155.outputs.txpool_queued }}
+      sync_fullnode_test_output: ${{ needs.sync_fullnode_test.outputs.ansible_output }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   notification_load_test_perf:

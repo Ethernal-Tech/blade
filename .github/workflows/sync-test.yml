@@ -15,9 +15,6 @@ on: # yamllint disable-line rule:truthy
         type: string
         required: true
     outputs:
-      terraform_output:
-        description: Terraform output
-        value: ${{ jobs.run_test.outputs.terraform_output }}
       ansible_output:
         description: Ansible output
         value: ${{ jobs.run_test.outputs.ansible_output }}
@@ -28,7 +25,7 @@ on: # yamllint disable-line rule:truthy
         required: true
       VAULT_PASSWORD:
         required: true
-      SLACK_WEBHOOK_URL:
+      MONITORING_SLACK_WEBHOOK_URL:
         required: true
 
 permissions:
@@ -65,7 +62,6 @@ jobs:
     if: needs.check_network.outputs.check_output > 0
     environment: ${{ inputs.environment }}
     outputs:
-      terraform_output: ${{ steps.terraform_failure.outputs.terraform_output }}
       ansible_output: ${{ steps.ansible_failure.outputs.ansible_output }}
     steps:
       - name: Checkout code
@@ -78,6 +74,7 @@ jobs:
         with:
           aws-region: ${{ vars.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-duration-seconds: 5400
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v3.0.0
         with:
@@ -108,20 +105,24 @@ jobs:
         run: |
           echo "${{ secrets.VAULT_PASSWORD }}" > password.txt
           sed 's/devnet/${{ inputs.environment }}/g' inventory/aws_ec2.yml > inventory/aws_ec2.yml.tmp && mv inventory/aws_ec2.yml.tmp inventory/aws_ec2.yml
-          sed 's|slack_webhook: .*|slack_webhook: ${{ secrets.SLACK_WEBHOOK_URL }}|g' group_vars/all.yml > group_vars/all.yml.tmp && mv group_vars/all.yml.tmp group_vars/all.yml
+          sed 's|slack_webhook: .*|slack_webhook: ${{ secrets.MONITORING_SLACK_WEBHOOK_URL }}|g' group_vars/all.yml > group_vars/all.yml.tmp && mv group_vars/all.yml.tmp group_vars/all.yml
       - name: Setup Ansible
         working-directory: ansible
         run: |
           ansible-inventory --graph
           ansible-galaxy install -r requirements.yml
-      - name: Run Ansible
+      - name: Start blade and pause
         working-directory: ansible
-        run: ansible-playbook test.yml --extra-vars "clean_deploy_title=${{ inputs.environment }} blade_repository=${{ github.repository }} s3_bucket=${{ secrets.AWS_S3_BLADE_BUCKET }}"
+        run: ansible-playbook test.yml --tags "before" --extra-vars "clean_deploy_title=${{ inputs.environment }} blade_repository=${{ github.repository }} s3_bucket=${{ secrets.AWS_S3_BLADE_BUCKET }}"
+      - name: Call RPC and send notifications
+        working-directory: ansible
+        run: ansible-playbook test.yml --tags "after" --extra-vars "clean_deploy_title=${{ inputs.environment }} blade_repository=${{ github.repository }} s3_bucket=${{ secrets.AWS_S3_BLADE_BUCKET }}"
       - name: Ansible Failed
         if: failure()
         id: ansible_failure
         run: echo "ansible_output=false" >> $GITHUB_OUTPUT
       - name: Scale down fullnode
+        if: always()
         run: |
           aws autoscaling set-desired-capacity --region ${{ vars.AWS_REGION }} --auto-scaling-group-name testnode_asg_testnet --desired-capacity 0
           sleep 60

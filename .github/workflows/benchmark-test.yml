@@ -20,7 +20,7 @@ jobs:
           submodules: recursive
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
       - name: Setup Go
-        uses: actions/setup-go@v5.0.0
+        uses: actions/setup-go@v5.5.0
         with:
           go-version: ${{ vars.GOLANG_VERSION }}
       - name: Run Go Test

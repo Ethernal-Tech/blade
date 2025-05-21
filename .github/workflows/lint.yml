@@ -19,7 +19,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Install Go
-        uses: actions/setup-go@v5.0.0
+        uses: actions/setup-go@v5.5.0
         with:
           go-version: ${{ vars.GOLANG_VERSION }}
           cache: false
