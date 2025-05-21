@@ -245,6 +245,7 @@ func main() {
 				"whitelistValidators",
 				"register",
 				"unstake",
+				"getActiveValidators",
 			},
 			[]string{
 				"StakeAdded",

@@ -200,11 +200,9 @@ func (c *consensusRuntime) initStakeManager(logger hcf.Logger, dbTx *bolt.Tx) er
 
 	c.stakeManager, err = stake.NewStakeManager(
 		logger.Named("stake-manager"),
-		c.state,
 		contracts.StakeManagerContract,
 		c.blockchain,
 		c.backend,
-		dbTx,
 	)
 
 	c.eventProvider.Subscribe(c.stakeManager)

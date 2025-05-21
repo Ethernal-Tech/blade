@@ -880,6 +880,21 @@ func (u *UnstakeStakeManagerFn) DecodeAbi(buf []byte) error {
 	return decodeMethod(StakeManager.Abi.Methods["unstake"], buf, u)
 }
 
+type GetActiveValidatorsStakeManagerFn struct {
+}
+
+func (g *GetActiveValidatorsStakeManagerFn) Sig() []byte {
+	return StakeManager.Abi.Methods["getActiveValidators"].ID()
+}
+
+func (g *GetActiveValidatorsStakeManagerFn) EncodeAbi() ([]byte, error) {
+	return StakeManager.Abi.Methods["getActiveValidators"].Encode(g)
+}
+
+func (g *GetActiveValidatorsStakeManagerFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(StakeManager.Abi.Methods["getActiveValidators"], buf, g)
+}
+
 type StakeAddedEvent struct {
 	Validator types.Address `abi:"validator"`
 	Amount    *big.Int      `abi:"amount"`

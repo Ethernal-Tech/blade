@@ -18,6 +18,7 @@ import (
 	"github.com/Ethernal-Tech/ethgo/abi"
 	"github.com/Ethernal-Tech/ethgo/contract"
 	"github.com/hashicorp/go-hclog"
+	"github.com/mitchellh/mapstructure"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -75,7 +76,6 @@ var _ StakeManager = (*stakeManager)(nil)
 // and calculates updated validator set based on changed stake
 type stakeManager struct {
 	logger                   hclog.Logger
-	state                    *stakeStore
 	stakeManagerContractAddr types.Address
 	polybftBackend           polytypes.Polybft
 	blockchain               polychain.Blockchain
@@ -84,43 +84,27 @@ type stakeManager struct {
 // NewStakeManager returns a new instance of stake manager
 func NewStakeManager(
 	logger hclog.Logger,
-	state *state.State,
 	stakeManagerAddr types.Address,
 	blockchain polychain.Blockchain,
 	polybftBackend polytypes.Polybft,
-	dbTx *bolt.Tx,
 ) (StakeManager, error) {
-	stakeStore, err := newStakeStore(state.DB(), dbTx)
-	if err != nil {
-		return nil, err
-	}
 
-	return newStakeManager(logger, stakeStore, stakeManagerAddr, blockchain, polybftBackend, dbTx)
+	return newStakeManager(logger, stakeManagerAddr, blockchain, polybftBackend)
 }
 
 func newStakeManager(logger hclog.Logger,
-	stakeStore *stakeStore,
 	stakeManagerAddr types.Address,
 	blockchain polychain.Blockchain,
 	polybftBackend polytypes.Polybft,
-	dbTx *bolt.Tx,
 ) (StakeManager, error) {
 	sm := &stakeManager{
 		logger:                   logger,
-		state:                    stakeStore,
 		stakeManagerContractAddr: stakeManagerAddr,
 		polybftBackend:           polybftBackend,
 		blockchain:               blockchain,
 	}
 
-	validatorSet, err := sm.getOrInitValidatorSet(dbTx)
-	if err != nil {
-		return nil, err
-	}
-
-	sm.logger.Debug("stake manager validator set initialized",
-		"last saved", validatorSet.BlockNumber,
-		"last updated", validatorSet.UpdatedAtBlockNumber)
+	sm.logger.Debug("stake manager validator set initialized")
 
 	return sm, nil
 }
@@ -137,51 +121,7 @@ func (s *stakeManager) PostEpoch(req *oracle.PostEpochRequest) error {
 // It will update the fullValidatorSet in db to the current block number
 // Note that EventSubscriber - AddLog will get all the transfer events that happened in block
 func (s *stakeManager) PostBlock(req *oracle.PostBlockRequest) error {
-	fullValidatorSet, err := s.getOrInitValidatorSet(req.DBTx)
-	if err != nil {
-		return err
-	}
-
-	blockNumber := req.FullBlock.Block.Number()
-
-	s.logger.Debug("Stake manager on post block",
-		"block", blockNumber,
-		"last saved", fullValidatorSet.BlockNumber,
-		"last updated", fullValidatorSet.UpdatedAtBlockNumber)
-
-	// we should save new state even if number of events is zero
-	// because otherwise next time we will process more blocks
-	fullValidatorSet.EpochID = req.Epoch
-	fullValidatorSet.BlockNumber = blockNumber
-
-	return s.state.insertFullValidatorSet(fullValidatorSet, req.DBTx)
-}
-
-func (s *stakeManager) getOrInitValidatorSet(dbTx *bolt.Tx) (validator.ValidatorSetState, error) {
-	validatorSet, err := s.state.getFullValidatorSet(dbTx)
-	if err != nil {
-		if !errors.Is(err, errNoFullValidatorSet) {
-			return validator.ValidatorSetState{}, err
-		}
-
-		validators, err := s.polybftBackend.GetValidatorsWithTx(0, nil, dbTx)
-		if err != nil {
-			return validator.ValidatorSetState{}, err
-		}
-
-		validatorSet = validator.ValidatorSetState{
-			BlockNumber:          0,
-			EpochID:              0,
-			UpdatedAtBlockNumber: 0,
-			Validators:           validator.NewValidatorStakeMap(validators),
-		}
-
-		if err = s.state.insertFullValidatorSet(validatorSet, dbTx); err != nil {
-			return validator.ValidatorSetState{}, err
-		}
-	}
-
-	return validatorSet, nil
+	return nil
 }
 
 func (s *stakeManager) updateWithReceipts(
@@ -230,19 +170,64 @@ func (s *stakeManager) updateWithReceipts(
 	return nil
 }
 
+// Get Active Validator from StakeManager smart contract
+func (s *stakeManager) getActiveValidators() (validator.ValidatorStakeMap, error) {
+	provider, err := s.blockchain.GetStateProviderForBlock(s.blockchain.CurrentHeader())
+	if err != nil {
+		return nil, err
+	}
+
+	stakeManagerContract := contract.NewContract(
+		ethgo.Address(s.stakeManagerContractAddr),
+		contractsapi.StakeManager.Abi,
+		contract.WithProvider(provider),
+	)
+
+	res, err := stakeManagerContract.Call("getActiveValidators", ethgo.Latest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call getActiveValidators: %w", err)
+	}
+
+	type ActiveValidator struct {
+		Address types.Address `json:"addr" mapstructure:"addr"`
+		Stake   *big.Int      `json:"stake" mapstructure:"stake"`
+		BlsKey  [4]*big.Int   `json:"blsKey" mapstructure:"blsKey"`
+	}
+
+	var decodedValidators []ActiveValidator
+	err = mapstructure.Decode(res["0"], &decodedValidators)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode getActiveValidators response: %w", err)
+	}
+
+	validatorSet := make(validator.ValidatorStakeMap, len(decodedValidators))
+	for _, v := range decodedValidators {
+		publicKey, err := bls.UnmarshalPublicKeyFromBigInt(v.BlsKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal BLS public key: %w", err)
+		}
+
+		validatorSet[v.Address] = &validator.ValidatorMetadata{
+			Address:     v.Address,
+			VotingPower: v.Stake,
+			BlsKey:      publicKey,
+			IsActive:    true,
+		}
+	}
+
+	return validatorSet, nil
+}
+
 // UpdateValidatorSet returns an updated validator set
 // based on stake change (transfer) events from ValidatorSet contract
 func (s *stakeManager) UpdateValidatorSet(epoch uint64, maxValidatorSetSize uint64,
 	oldValidatorSet validator.AccountSet) (*validator.ValidatorSetDelta, error) {
 	s.logger.Info("Calculating validators set update...", "epoch", epoch)
 
-	fullValidatorSet, err := s.state.getFullValidatorSet(nil)
+	stakeMap, err := s.getActiveValidators()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get full validators set. Epoch: %d. Error: %w", epoch, err)
+		return nil, fmt.Errorf("could not get active validators: %w", err)
 	}
-
-	// stake map that holds stakes for all validators
-	stakeMap := fullValidatorSet.Validators
 
 	// slice of all validator set
 	newValidatorSet := stakeMap.GetSorted(int(maxValidatorSetSize))
@@ -347,58 +332,11 @@ func (s *stakeManager) getBlsKey(address types.Address) (*bls.PublicKey, error) 
 // and the value is a slice of signatures of events we want to get.
 // This function is the implementation of EventSubscriber interface
 func (s *stakeManager) GetLogFilters() map[types.Address][]types.Hash {
-	return map[types.Address][]types.Hash{
-		s.stakeManagerContractAddr: {
-			types.Hash(new(contractsapi.StakeAddedEvent).Sig()),
-			types.Hash(new(contractsapi.StakeRemovedEvent).Sig()),
-		},
-	}
+	return map[types.Address][]types.Hash{}
 }
 
 // ProcessLog is the implementation of EventSubscriber interface,
 // used to handle a log defined in GetLogFilters, provided by event provider
 func (s *stakeManager) ProcessLog(header *types.Header, log *ethgo.Log, dbTx *bolt.Tx) error {
-	var (
-		stakeAddedEvent   contractsapi.StakeAddedEvent
-		stakeRemovedEvent contractsapi.StakeRemovedEvent
-		stakeEvents       = make([]contractsapi.EventAbi, 1)
-	)
-
-	switch log.Topics[0] {
-	case stakeAddedEvent.Sig():
-		doesMatch, err := stakeAddedEvent.ParseLog(log)
-		if err != nil {
-			return err
-		}
-
-		if !doesMatch {
-			return nil
-		}
-
-		stakeEvents[0] = &stakeAddedEvent
-	case stakeRemovedEvent.Sig():
-		doesMatch, err := stakeRemovedEvent.ParseLog(log)
-		if err != nil {
-			return err
-		}
-
-		if !doesMatch {
-			return nil
-		}
-
-		stakeEvents[0] = &stakeRemovedEvent
-	default:
-		return errUnknownStakeManagerEvent
-	}
-
-	fullValidatorSet, err := s.getOrInitValidatorSet(dbTx)
-	if err != nil {
-		return err
-	}
-
-	if err := s.updateWithReceipts(&fullValidatorSet, stakeEvents, header.Number); err != nil {
-		return err
-	}
-
-	return s.state.insertFullValidatorSet(fullValidatorSet, dbTx)
+	return nil
 }
