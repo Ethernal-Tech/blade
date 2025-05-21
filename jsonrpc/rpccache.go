@@ -18,11 +18,11 @@ type blockCache struct {
 type rpcCache struct {
 	blockCache *ttlcache.Cache[uint64, *blockCache]
 
-	store  JSONRPCStore
+	store  ethStore
 	logger hclog.Logger
 }
 
-func initRPCCache(store JSONRPCStore, logger hclog.Logger) *rpcCache {
+func initRPCCache(store ethStore, logger hclog.Logger) *rpcCache {
 	cache := ttlcache.New[uint64, *blockCache](
 		ttlcache.WithTTL[uint64, *blockCache](3*time.Minute),
 		ttlcache.WithCapacity[uint64, *blockCache](50),

@@ -288,7 +288,7 @@ func TestEth_TxnType(t *testing.T) {
 
 func newTestEthEndpoint(store testStore) *Eth {
 	return &Eth{
-		hclog.NewNullLogger(), store, 100, nil, 0, nil, nil,
+		hclog.NewNullLogger(), store, 100, nil, 0, nil, initRPCCache(store, hclog.NewNullLogger()),
 	}
 }
 
