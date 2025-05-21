@@ -302,7 +302,7 @@ jobs:
       environment: ${{ inputs.environment }}
       description: "Load Test ${{ inputs.type }} Ended"
     secrets:
-      MONITORING_SLACK_WEBHOOK_URL: ${{ secrets.MONITORING_SLACK_WEBHOOK_URL }}K_URL }}
+      MONITORING_SLACK_WEBHOOK_URL: ${{ secrets.MONITORING_SLACK_WEBHOOK_URL }}
   notification:
     name: Load Test Notification
     needs: [load_test, txpool_status]
