@@ -86,6 +86,10 @@ on: # yamllint disable-line rule:truthy
         description: Notification
         type: boolean
         required: true
+      monitoring:
+        description: Monitoring
+        type: boolean
+        required: true
     outputs:
       load_test_output:
         description: Load Test output
@@ -152,6 +156,20 @@ permissions:
   security-events: write
 
 jobs:
+  inputs_check:
+    name: Inputs Check
+    runs-on: ubuntu-latest
+    outputs:
+      monitoring: ${{ steps.monitoring_input_check.outputs.monitoring }}
+    steps:
+      - name: Monitoring Input Check
+        id: monitoring_input_check
+        run: |
+          if [[ "${{ inputs.monitoring }}" == "" ]]; then
+            echo "monitoring=${{ inputs.notification }}" >> $GITHUB_OUTPUT
+          else
+            echo "monitoring=${{ inputs.monitoring }}" >> $GITHUB_OUTPUT
+          fi
   check_network:
     name: Check if the network is already deployed
     runs-on: ubuntu-latest
@@ -175,8 +193,8 @@ jobs:
         run: echo "url=$(cat state.json | jq -r '.outputs.aws_lb_ext_domain.value // empty')" >> $GITHUB_OUTPUT
   notification_before_load_test:
     name: Notification Before Load Test
-    needs: check_network
-    if: (needs.check_network.outputs.rpc_url != '' && (inputs.notification || github.event_name != 'workflow_dispatch'))
+    needs: [inputs_check, check_network]
+    if: (needs.check_network.outputs.rpc_url != '' && needs.inputs_check.outputs.monitoring == 'true')
     uses: ./.github/workflows/notification.yml
     with:
       environment: ${{ inputs.environment }}
@@ -277,8 +295,8 @@ jobs:
           echo "txpool_queued=$(echo $txpool_status | jq -r '.queued')" >> $GITHUB_OUTPUT
   notification_after_load_test:
     name: Notification After Load Test
-    needs: [load_test, txpool_status]
-    if: (inputs.notification || github.event_name != 'workflow_dispatch')
+    needs: [inputs_check, load_test, txpool_status]
+    if: needs.inputs_check.outputs.monitoring == 'true'
     uses: ./.github/workflows/notification.yml
     with:
       environment: ${{ inputs.environment }}

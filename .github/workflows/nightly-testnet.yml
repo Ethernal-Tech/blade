@@ -42,6 +42,7 @@ jobs:
       receipts_timeout: "5m0s"
       batch_size: "1000"
       notification: false
+      monitoring: true
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
@@ -67,6 +68,7 @@ jobs:
       receipts_timeout: "2m0s"
       batch_size: "1000"
       notification: false
+      monitoring: true
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
@@ -92,6 +94,7 @@ jobs:
       receipts_timeout: "2m0s"
       batch_size: "1000"
       notification: false
+      monitoring: true
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
@@ -117,6 +120,7 @@ jobs:
       receipts_timeout: "2m0s"
       batch_size: "1000"
       notification: false
+      monitoring: true
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
@@ -142,6 +146,7 @@ jobs:
       receipts_timeout: "2m0s"
       batch_size: "1000"
       notification: false
+      monitoring: true
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
@@ -167,6 +172,7 @@ jobs:
       receipts_timeout: "2m0s"
       batch_size: "1000"
       notification: false
+      monitoring: true
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
