@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/types"
+	"github.com/hashicorp/go-hclog"
 	"github.com/jellydator/ttlcache/v3"
 )
 
@@ -17,10 +18,11 @@ type blockCache struct {
 type rpcCache struct {
 	blockCache *ttlcache.Cache[uint64, *blockCache]
 
-	store JSONRPCStore
+	store  JSONRPCStore
+	logger hclog.Logger
 }
 
-func initRPCCache(store JSONRPCStore) *rpcCache {
+func initRPCCache(store JSONRPCStore, logger hclog.Logger) *rpcCache {
 	cache := ttlcache.New[uint64, *blockCache](
 		ttlcache.WithTTL[uint64, *blockCache](3*time.Minute),
 		ttlcache.WithCapacity[uint64, *blockCache](50),
@@ -28,10 +30,12 @@ func initRPCCache(store JSONRPCStore) *rpcCache {
 
 	go cache.Start() // starts automatic expired item deletion
 
-	return &rpcCache{blockCache: cache, store: store}
+	return &rpcCache{blockCache: cache, store: store, logger: logger}
 }
 
 func (r *rpcCache) getBlockCache(num uint64) *blockCache {
+	r.logger.Debug("rpccache", "getBlockCache called with block number", num)
+
 	if r.blockCache.Has(num) {
 		return r.blockCache.Get(num).Value()
 	}
@@ -71,6 +75,7 @@ func (r *rpcCache) getBlockCache(num uint64) *blockCache {
 	retVal.logIndex = logIndex
 
 	r.blockCache.Set(num, retVal, ttlcache.DefaultTTL)
+	r.logger.Debug("rpccache", "added to cache block with number", num)
 
 	return retVal
 }
