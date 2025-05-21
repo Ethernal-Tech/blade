@@ -490,6 +490,11 @@ func (e *Eth) GetTransactionReceipt(hash types.Hash) (interface{}, error) {
 	}
 
 	logIndex := blockCache.getLogIndex(txIndex)
+	if logIndex == -1 {
+		// this can't happen
+		return nil, nil
+	}
+
 	raw := receipts[txIndex]
 	logs := toLogs(raw.Logs, uint64(logIndex), uint64(txIndex), block.Header, hash)
 
