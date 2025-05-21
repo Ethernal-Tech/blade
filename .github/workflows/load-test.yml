@@ -143,6 +143,8 @@ on: # yamllint disable-line rule:truthy
         required: true
       SLACK_WEBHOOK_URL:
         required: true
+      MONITORING_SLACK_WEBHOOK_URL:
+        required: true
 
 permissions:
   id-token: write
