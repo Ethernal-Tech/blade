@@ -17,7 +17,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4.1.1
       - name: Setup Go
-        uses: actions/setup-go@v5.0.0
+        uses: actions/setup-go@v5.5.0
         with:
           go-version: ${{ vars.GOLANG_VERSION }}
       - name: Run Fuzz Test
