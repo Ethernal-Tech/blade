@@ -176,7 +176,7 @@ jobs:
   notification_before_load_test:
     name: Notification Before Load Test
     needs: check_network
-    if: (needs.check_network.outputs.rpc_url != '' && (inputs.notification || github.event_name == 'schedule'))
+    if: (needs.check_network.outputs.rpc_url != '' && (inputs.notification || github.event_name != 'workflow_dispatch'))
     uses: ./.github/workflows/notification.yml
     with:
       environment: ${{ inputs.environment }}
@@ -278,7 +278,7 @@ jobs:
   notification_after_load_test:
     name: Notification After Load Test
     needs: [load_test, txpool_status]
-    if: (inputs.notification || github.event_name == 'schedule')
+    if: (inputs.notification || github.event_name != 'workflow_dispatch')
     uses: ./.github/workflows/notification.yml
     with:
       environment: ${{ inputs.environment }}
