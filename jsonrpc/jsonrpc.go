@@ -57,6 +57,9 @@ type Config struct {
 	TLSCertFile             string
 	TLSKeyFile              string
 	SecretsManager          secrets.SecretsManager
+
+	BlockCacheTTL      time.Duration
+	BlockCacheCapacity uint64
 }
 
 // NewJSONRPC returns the JSONRPC http server
@@ -71,6 +74,8 @@ func NewJSONRPC(logger hclog.Logger, config *Config, manager accounts.AccountMan
 			jsonRPCBatchLengthLimit: config.BatchLengthLimit,
 			blockRangeLimit:         config.BlockRangeLimit,
 			concurrentRequestsDebug: config.ConcurrentRequestsDebug,
+			blockCacheTTL:           config.BlockCacheTTL,
+			blockCacheCapacity:      config.BlockCacheCapacity,
 		},
 		manager,
 	)

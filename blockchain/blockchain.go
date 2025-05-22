@@ -438,14 +438,9 @@ func (b *Blockchain) GetTD(hash types.Hash) (*big.Int, bool) {
 	return b.readTotalDifficulty(hash)
 }
 
-// GetReceiptsByHash returns the receipts by block hash
-func (b *Blockchain) GetReceiptsByHash(hash types.Hash) ([]*types.Receipt, error) {
-	n, err := b.db.ReadBlockLookup(hash)
-	if err != nil {
-		return nil, err
-	}
-
-	return b.db.ReadReceipts(n, hash)
+// GetReceiptsByHash returns the receipts by block number and hash
+func (b *Blockchain) GetReceiptsByHash(num uint64, hash types.Hash) ([]*types.Receipt, error) {
+	return b.db.ReadReceipts(num, hash)
 }
 
 // GetBodyByHash returns the body by their hash

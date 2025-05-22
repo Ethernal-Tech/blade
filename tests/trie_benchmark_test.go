@@ -56,7 +56,7 @@ func BenchmarkTriePebbleDb(b *testing.B) {
 
 	startProfiler()
 
-	executeTrieDbTest(b, PebbleDB, 5)
+	executeTrieDbTest(b, PebbleDB, 6)
 }
 
 func BenchmarkTrieLevelDb(b *testing.B) {

@@ -97,13 +97,11 @@ func createBlock(b *testing.B) *types.FullBlock {
 func updateBlock(b *testing.B, num uint64, fb *types.FullBlock) *types.FullBlock {
 	b.Helper()
 
-	var addr types.Address
-
 	fb.Block.Header.Number = num
 	fb.Block.Header.ParentHash = types.StringToHash(randStringBytes(b, 12))
 
 	for i := range fb.Block.Transactions {
-		addr = types.StringToAddress(randStringBytes(b, 8))
+		addr := types.StringToAddress(randStringBytes(b, 8))
 		fb.Block.Transactions[i].SetTo(&addr)
 		fb.Block.Transactions[i].ComputeHash()
 		fb.Receipts[i].TxHash = fb.Block.Transactions[i].Hash()

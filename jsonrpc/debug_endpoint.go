@@ -47,8 +47,8 @@ type debugBlockchainStore interface {
 	// GetHeaderByNumber gets a header using the provided number
 	GetHeaderByNumber(uint64) (*types.Header, bool)
 
-	// GetReceiptsByHash returns the receipts by block hash
-	GetReceiptsByHash(types.Hash) ([]*types.Receipt, error)
+	// GetReceiptsByHash returns the receipts by block number and hash
+	GetReceiptsByHash(uint64, types.Hash) ([]*types.Receipt, error)
 
 	// ReadTxLookup returns a block hash in which a given txn was mined
 	ReadTxLookup(txnHash types.Hash) (uint64, bool)
@@ -680,7 +680,7 @@ func (d *Debug) GetRawReceipts(filter BlockNumberOrHash) (interface{}, error) {
 				return nil, err
 			}
 
-			receipts, err := d.store.GetReceiptsByHash(header.Hash)
+			receipts, err := d.store.GetReceiptsByHash(header.Number, header.Hash)
 			if err != nil {
 				return nil, err
 			}

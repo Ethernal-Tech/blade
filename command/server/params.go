@@ -44,6 +44,8 @@ const (
 	gossipMessageSizeFlag        = "gossip-msg-size"
 	txGossipBatchSizeFlag        = "tx-gossip-batch-size"
 	journalRotateSizeFlag        = "journal-rotate-size"
+	blockCacheTTLFlag            = "block-cache-ttl"
+	blockCacheCapacityFlag       = "block-cache-capacity"
 
 	relayerFlag = "relayer"
 
@@ -197,6 +199,8 @@ func (p *serverParams) generateConfig() *server.Config {
 		TLSCertFile:        p.rawConfig.TLSCertFile,
 		TLSKeyFile:         p.rawConfig.TLSKeyFile,
 		DBEngine:           p.rawConfig.DBEngine,
+		BlockCacheTTL:      p.rawConfig.BlockCacheTTL,
+		BlockCacheCapacity: p.rawConfig.BlockCacheCapacity,
 
 		Relayer:         p.relayer,
 		MetricsInterval: p.rawConfig.MetricsInterval,

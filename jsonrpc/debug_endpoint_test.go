@@ -20,7 +20,7 @@ import (
 type debugEndpointMockStore struct {
 	headerFn              func() *types.Header
 	getHeaderByNumberFn   func(uint64) (*types.Header, bool)
-	getReceiptsByHashFn   func(types.Hash) ([]*types.Receipt, error)
+	getReceiptsByHashFn   func(uint64, types.Hash) ([]*types.Receipt, error)
 	readTxLookupFn        func(types.Hash) (uint64, bool)
 	getPendingTxFn        func(types.Hash) (*types.Transaction, bool)
 	hasFn                 func(types.Hash) bool
@@ -51,8 +51,8 @@ func (s *debugEndpointMockStore) GetHeaderByNumber(num uint64) (*types.Header, b
 	return s.getHeaderByNumberFn(num)
 }
 
-func (s *debugEndpointMockStore) GetReceiptsByHash(hash types.Hash) ([]*types.Receipt, error) {
-	return s.getReceiptsByHashFn(hash)
+func (s *debugEndpointMockStore) GetReceiptsByHash(num uint64, hash types.Hash) ([]*types.Receipt, error) {
+	return s.getReceiptsByHashFn(num, hash)
 }
 
 func (s *debugEndpointMockStore) ReadTxLookup(txnHash types.Hash) (uint64, bool) {
@@ -1231,7 +1231,7 @@ func TestGetRawReceipts(t *testing.T) {
 				getBlockByHashFn: func(hash types.Hash, full bool) (*types.Block, bool) {
 					return testLatestBlock, true
 				},
-				getReceiptsByHashFn: func(hash types.Hash) ([]*types.Receipt, error) {
+				getReceiptsByHashFn: func(num uint64, hash types.Hash) ([]*types.Receipt, error) {
 					return nil, fmt.Errorf("receipts not found")
 				},
 			},
@@ -1252,7 +1252,7 @@ func TestGetRawReceipts(t *testing.T) {
 					return testLatestBlock, true
 				},
 
-				getReceiptsByHashFn: func(hash types.Hash) ([]*types.Receipt, error) {
+				getReceiptsByHashFn: func(num uint64, hash types.Hash) ([]*types.Receipt, error) {
 					return receipts, nil
 				},
 			},

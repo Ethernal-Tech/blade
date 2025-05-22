@@ -64,8 +64,8 @@ type blockchainBackend interface {
 	// GetChainID returns chain id of the current blockchain
 	GetChainID() uint64
 
-	// GetReceiptsByHash retrieves receipts by hash
-	GetReceiptsByHash(hash types.Hash) ([]*types.Receipt, error)
+	// GetReceiptsByHash retrieves receipts by block number and hash
+	GetReceiptsByHash(num uint64, hash types.Hash) ([]*types.Receipt, error)
 }
 
 var _ blockchainBackend = &blockchainWrapper{}
@@ -188,8 +188,8 @@ func (p *blockchainWrapper) GetChainID() uint64 {
 	return uint64(p.blockchain.Config().ChainID)
 }
 
-func (p *blockchainWrapper) GetReceiptsByHash(hash types.Hash) ([]*types.Receipt, error) {
-	return p.blockchain.GetReceiptsByHash(hash)
+func (p *blockchainWrapper) GetReceiptsByHash(num uint64, hash types.Hash) ([]*types.Receipt, error) {
+	return p.blockchain.GetReceiptsByHash(num, hash)
 }
 
 var _ contract.Provider = &stateProvider{}

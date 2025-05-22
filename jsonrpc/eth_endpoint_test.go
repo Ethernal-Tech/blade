@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/hashicorp/go-hclog"
@@ -288,13 +289,13 @@ func TestEth_TxnType(t *testing.T) {
 
 func newTestEthEndpoint(store testStore) *Eth {
 	return &Eth{
-		hclog.NewNullLogger(), store, 100, nil, 0, nil,
+		hclog.NewNullLogger(), store, 100, nil, 0, nil, initRPCCache(store, hclog.NewNullLogger(), time.Minute, 10),
 	}
 }
 
 func newTestEthEndpointWithPriceLimit(store testStore, priceLimit uint64) *Eth {
 	return &Eth{
-		hclog.NewNullLogger(), store, 100, nil, priceLimit, nil,
+		hclog.NewNullLogger(), store, 100, nil, priceLimit, nil, nil,
 	}
 }
 
