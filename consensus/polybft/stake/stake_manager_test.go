@@ -21,6 +21,7 @@ import (
 
 func TestStakeManager_UpdateValidatorSet(t *testing.T) {
 	const num = 5
+
 	var (
 		epoch               = uint64(1)
 		maxValidatorSetSize = uint64(10)
@@ -30,6 +31,7 @@ func TestStakeManager_UpdateValidatorSet(t *testing.T) {
 	require.NoError(t, err)
 
 	abiType := abi.MustNewType("tuple(address addr,uint256[4] blsKey,uint256 stake)[]")
+
 	type ActiveValidator struct {
 		Address types.Address `abi:"addr"`
 		BlsKey  [4]*big.Int   `abi:"blsKey"`
@@ -61,7 +63,7 @@ func TestStakeManager_UpdateValidatorSet(t *testing.T) {
 	enc, err := abiType.Encode(activeValidators)
 	require.NoError(t, err)
 
-	offset := make([]byte, 32)
+	offset := make([]byte, 32, 32)
 	offset[31] = 0x20
 
 	enc = append(offset, enc...)
@@ -82,6 +84,7 @@ func TestStakeManager_UpdateValidatorSet(t *testing.T) {
 	require.NoError(t, err)
 
 	accountSet := validator.AccountSet(validatorsMetadata)
+
 	t.Run("UpdateValidatorSet - only update", func(t *testing.T) {
 		accSet := accountSet.Copy()
 		validatorToUpdate := accSet[0]
@@ -99,15 +102,18 @@ func TestStakeManager_UpdateValidatorSet(t *testing.T) {
 
 	t.Run("UpdateValidatorSet - one unstake", func(t *testing.T) {
 		accSet := accountSet.Copy()
+
+		added := []*validator.ValidatorMetadata{
+			{
+				Address:     types.StringToAddress("0x0002"),
+				BlsKey:      blsKeys[1].PublicKey(),
+				VotingPower: big.NewInt(10),
+				IsActive:    true,
+			},
+		}
+
 		accSet, err := accSet.ApplyDelta(&validator.ValidatorSetDelta{
-			Added: validator.AccountSet([]*validator.ValidatorMetadata{
-				&validator.ValidatorMetadata{
-					Address:     types.StringToAddress("0x0002"),
-					BlsKey:      blsKeys[1].PublicKey(),
-					VotingPower: big.NewInt(10),
-					IsActive:    true,
-				}, &validator.ValidatorMetadata{},
-			}),
+			Added: added,
 		})
 		require.NoError(t, err)
 
@@ -150,14 +156,14 @@ func TestStakeManager_UpdateValidatorSet(t *testing.T) {
 	t.Run("UpdateValidatorSet - remove validator", func(t *testing.T) {
 		accSet := accountSet.Copy()
 		accSet, err = accSet.ApplyDelta(&validator.ValidatorSetDelta{
-			Added: validator.AccountSet([]*validator.ValidatorMetadata{
-				&validator.ValidatorMetadata{
+			Added: []*validator.ValidatorMetadata{
+				{
 					Address:     types.StringToAddress("0x0002"),
 					BlsKey:      blsKeys[1].PublicKey(),
 					VotingPower: big.NewInt(10),
 					IsActive:    true,
 				},
-			}),
+			},
 		})
 		require.NoError(t, err)
 

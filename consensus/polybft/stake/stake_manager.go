@@ -88,7 +88,6 @@ func NewStakeManager(
 	blockchain polychain.Blockchain,
 	polybftBackend polytypes.Polybft,
 ) (StakeManager, error) {
-
 	return newStakeManager(logger, stakeManagerAddr, blockchain, polybftBackend)
 }
 
@@ -195,12 +194,13 @@ func (s *stakeManager) getActiveValidators() (validator.ValidatorStakeMap, error
 	}
 
 	var decodedValidators []ActiveValidator
-	err = mapstructure.Decode(res["0"], &decodedValidators)
-	if err != nil {
+
+	if err = mapstructure.Decode(res["0"], &decodedValidators); err != nil {
 		return nil, fmt.Errorf("failed to decode getActiveValidators response: %w", err)
 	}
 
 	validatorSet := make(validator.ValidatorStakeMap, len(decodedValidators))
+
 	for _, v := range decodedValidators {
 		publicKey, err := bls.UnmarshalPublicKeyFromBigInt(v.BlsKey)
 		if err != nil {
