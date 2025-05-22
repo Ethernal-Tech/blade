@@ -190,8 +190,8 @@ func (s *stakeManager) getActiveValidators() (validator.ValidatorStakeMap, error
 
 	type ActiveValidator struct {
 		Address types.Address `json:"addr" mapstructure:"addr"`
-		Stake   *big.Int      `json:"stake" mapstructure:"stake"`
 		BlsKey  [4]*big.Int   `json:"blsKey" mapstructure:"blsKey"`
+		Stake   *big.Int      `json:"stake" mapstructure:"stake"`
 	}
 
 	var decodedValidators []ActiveValidator
@@ -297,12 +297,12 @@ func (s *stakeManager) getBlsKey(address types.Address) (*bls.PublicKey, error) 
 		return nil, err
 	}
 
-	stakeManagerContractContract := contract.NewContract(
+	stakeManagerContract := contract.NewContract(
 		ethgo.Address(s.stakeManagerContractAddr),
 		contractsapi.StakeManager.Abi, contract.WithProvider(provider),
 	)
 
-	rawResult, err := stakeManagerContractContract.Call("getValidator", ethgo.Latest, address)
+	rawResult, err := stakeManagerContract.Call("getValidator", ethgo.Latest, address)
 	if err != nil {
 		return nil, err
 	}
