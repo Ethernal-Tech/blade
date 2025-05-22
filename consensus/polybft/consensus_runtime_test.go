@@ -423,7 +423,7 @@ func Test_NewConsensusRuntime(t *testing.T) {
 	blockchainMock.On("GetHeaderByNumber", uint64(1)).Return(&types.Header{Number: 1, ExtraData: polytypes.CreateTestExtraForAccounts(t, 1, validators, nil)})
 
 	polybftBackendMock := polytypes.NewPolybftMock(t)
-	polybftBackendMock.On("GetValidatorsWithTx", mock.Anything, mock.Anything, mock.Anything).Return(validators, nil).Times(4)
+	polybftBackendMock.On("GetValidatorsWithTx", mock.Anything, mock.Anything, mock.Anything).Return(validators, nil).Times(3)
 	polybftBackendMock.On("SetBlockTime", mock.Anything).Once()
 
 	tmpDir := t.TempDir()
