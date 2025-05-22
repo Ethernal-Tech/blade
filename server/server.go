@@ -1149,6 +1149,8 @@ func (s *Server) setupJSONRPC() error {
 		TLSCertFile:              s.config.TLSCertFile,
 		TLSKeyFile:               s.config.TLSKeyFile,
 		SecretsManager:           s.secretsManager,
+		BlockCacheTTL:            s.config.BlockCacheTTL,
+		BlockCacheCapacity:       s.config.BlockCacheCapacity,
 	}
 
 	srv, err := jsonrpc.NewJSONRPC(s.logger, conf, s.accManager)

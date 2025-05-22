@@ -22,10 +22,10 @@ type rpcCache struct {
 	logger hclog.Logger
 }
 
-func initRPCCache(store ethStore, logger hclog.Logger) *rpcCache {
+func initRPCCache(store ethStore, logger hclog.Logger, ttl time.Duration, capacity uint64) *rpcCache {
 	cache := ttlcache.New[uint64, *blockCache](
-		ttlcache.WithTTL[uint64, *blockCache](3*time.Minute),
-		ttlcache.WithCapacity[uint64, *blockCache](50),
+		ttlcache.WithTTL[uint64, *blockCache](ttl),
+		ttlcache.WithCapacity[uint64, *blockCache](capacity),
 	)
 
 	go cache.Start() // starts automatic expired item deletion
