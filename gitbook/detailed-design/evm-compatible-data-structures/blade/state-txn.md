@@ -26,4 +26,4 @@ When updating a `Txn`:
 
 An example structure of the **iradix trie** used within `state.Txn` is shown in the following image:
 
-<figure><img src="../../../.gitbook/assets/state-txn3.png" alt=""><figcaption><p>iRadix trie example.</p></figcaption></figure>
+<figure><img src="../../../.gitbook/assets/itrieexample.png" alt=""><figcaption><p>iRadix trie example.</p></figcaption></figure>

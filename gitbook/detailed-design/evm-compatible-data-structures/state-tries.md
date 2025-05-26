@@ -1,6 +1,6 @@
 # State Tries
 
-## World State Trie
+World State Trie
 
 The **World State Trie** (WST), also called the **State Trie** or **Global State Trie**, is a critical data structure that represents the current state of all accounts on the Ethereum network.
 
@@ -23,6 +23,8 @@ More details:
 * The storage trie is specific to a single contract and is **separate from the World State Trie**, which stores the global state of all accounts.
 * The **root hash** of the Account Storage Trie is stored in the `storageRoot` field of the contract's account state (in the World State Trie).
 
+<figure><img src="../../.gitbook/assets/account-storage-trie.png" alt=""><figcaption><p>Account storage trie example.</p></figcaption></figure>
+
 ***
 
 ## Transaction Trie
@@ -32,6 +34,8 @@ In the context of Ethereum, the **Transaction Trie** is a data structure used to
 * Each block contains a Transaction Trie that holds all the transactions in that block.
 * The transactions are indexed by their position in the block and are RLP-encoded.
 * The root hash of this trie is stored in the block header (`transactionsRoot` field).
+
+<figure><img src="../../.gitbook/assets/transaction-trie.png" alt=""><figcaption><p>Transaction trie example.</p></figcaption></figure>
 
 ***
 
@@ -47,3 +51,5 @@ The **Transaction Receipt Trie** records the **receipts (outcomes)** of transact
   * **Contract address** (if a new contract was created)
   * Other execution metadata
 * Like the Transaction Trie, this is a Merkle Patricia Trie whose root hash is stored in the block header (`receiptsRoot` field).
+
+<figure><img src="../../.gitbook/assets/receipt-trie.png" alt=""><figcaption><p>Transaction receipt trie example.</p></figcaption></figure>
