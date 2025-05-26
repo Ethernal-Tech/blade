@@ -19,6 +19,43 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var activeValidatorAbiType = abi.MustNewType("tuple(address addr,uint256[4] blsKey,uint256 stake)[]")
+
+type activeValidator struct {
+	Address types.Address `abi:"addr"`
+	BlsKey  [4]*big.Int   `abi:"blsKey"`
+	Stake   *big.Int      `abi:"stake"`
+}
+
+func (a *activeValidator) Copy() *activeValidator {
+	return &activeValidator{
+		Address: types.Address(a.Address[:]),
+		BlsKey:  a.BlsKey,
+		Stake:   new(big.Int).Set(a.Stake),
+	}
+}
+
+type activeValidatorSet []*activeValidator
+
+func (a activeValidatorSet) Copy() activeValidatorSet {
+	copied := make(activeValidatorSet, len(a))
+	for i, v := range a {
+		copied[i] = v.Copy()
+	}
+
+	return copied
+}
+
+func addValidatorsToMock(t *testing.T, providerMock *ProviderMock, activeValidators activeValidatorSet) {
+	t.Helper()
+
+	enc, err := encodeValidators(activeValidators)
+	require.NoError(t, err)
+
+	t.Logf("active validators: %v", activeValidators)
+	providerMock.On("Call", mock.Anything, mock.Anything, mock.Anything).Return(enc, nil).Once()
+}
+
 func TestStakeManager_UpdateValidatorSet(t *testing.T) {
 	const num = 5
 
@@ -27,49 +64,10 @@ func TestStakeManager_UpdateValidatorSet(t *testing.T) {
 		maxValidatorSetSize = uint64(10)
 	)
 
-	blsKeys, err := bls.CreateRandomBlsKeys(num)
+	accountSet, activeValidators, err := generateValidators(num)
 	require.NoError(t, err)
-
-	abiType := abi.MustNewType("tuple(address addr,uint256[4] blsKey,uint256 stake)[]")
-
-	type ActiveValidator struct {
-		Address types.Address `abi:"addr"`
-		BlsKey  [4]*big.Int   `abi:"blsKey"`
-		Stake   *big.Int      `abi:"stake"`
-	}
-
-	activeValidators := make([]ActiveValidator, num)
-	validatorsMetadata := make([]*validator.ValidatorMetadata, num)
-
-	for i := 0; i < num; i++ {
-		key, err := crypto.GenerateECDSAKey()
-		require.NoError(t, err)
-
-		addr := key.Address()
-		activeValidators[i] = ActiveValidator{
-			Address: addr,
-			BlsKey:  blsKeys[i].PublicKey().ToBigInt(),
-			Stake:   big.NewInt(10),
-		}
-
-		validatorsMetadata[i] = &validator.ValidatorMetadata{
-			Address:     addr,
-			BlsKey:      blsKeys[i].PublicKey(),
-			VotingPower: big.NewInt(10),
-			IsActive:    true,
-		}
-	}
-
-	enc, err := abiType.Encode(activeValidators)
-	require.NoError(t, err)
-
-	offset := make([]byte, 32, 32)
-	offset[31] = 0x20
-
-	enc = append(offset, enc...)
 
 	providerMock := new(ProviderMock)
-	providerMock.On("Call", mock.Anything, mock.Anything, mock.Anything).Return(enc, nil)
 
 	bcMock := new(blockchain.BlockchainMock)
 	bcMock.On("CurrentHeader").Return(&types.Header{Number: 0}, true)
@@ -83,42 +81,31 @@ func TestStakeManager_UpdateValidatorSet(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	accountSet := validator.AccountSet(validatorsMetadata)
-
 	t.Run("UpdateValidatorSet - only update", func(t *testing.T) {
-		accSet := accountSet.Copy()
-		validatorToUpdate := accSet[0]
-		validatorToUpdate.VotingPower = big.NewInt(11)
+		fullValidatorSet := activeValidators.Copy()
+		validatorToUpdate := fullValidatorSet[0]
+		validatorToUpdate.Stake = big.NewInt(11)
+
+		addValidatorsToMock(t, providerMock, fullValidatorSet)
 
 		updateDelta, err := stakeManager.UpdateValidatorSet(epoch, maxValidatorSetSize,
-			accSet)
+			accountSet)
 		require.NoError(t, err)
 
 		require.Len(t, updateDelta.Added, 0)
 		require.Len(t, updateDelta.Updated, 1)
 		require.Len(t, updateDelta.Removed, 0)
 		require.Equal(t, updateDelta.Updated[0].Address, validatorToUpdate.Address)
+		require.Equal(t, updateDelta.Updated[0].VotingPower.Uint64(), validatorToUpdate.Stake.Uint64())
 	})
 
 	t.Run("UpdateValidatorSet - one unstake", func(t *testing.T) {
-		accSet := accountSet.Copy()
+		fullValidatorSet := activeValidators.Copy()[1:]
 
-		added := []*validator.ValidatorMetadata{
-			{
-				Address:     types.StringToAddress("0x0002"),
-				BlsKey:      blsKeys[1].PublicKey(),
-				VotingPower: big.NewInt(10),
-				IsActive:    true,
-			},
-		}
+		addValidatorsToMock(t, providerMock, fullValidatorSet)
 
-		accSet, err := accSet.ApplyDelta(&validator.ValidatorSetDelta{
-			Added: added,
-		})
-		require.NoError(t, err)
-
-		updateDelta, err := stakeManager.UpdateValidatorSet(epoch, maxValidatorSetSize,
-			accSet)
+		updateDelta, err := stakeManager.UpdateValidatorSet(epoch+1, maxValidatorSetSize,
+			accountSet)
 
 		require.NoError(t, err)
 		require.Len(t, updateDelta.Added, 0)
@@ -127,10 +114,10 @@ func TestStakeManager_UpdateValidatorSet(t *testing.T) {
 	})
 
 	t.Run("UpdateValidatorSet - one new validator", func(t *testing.T) {
-		accSet := accountSet.Copy()[1:]
+		addValidatorsToMock(t, providerMock, activeValidators)
 
-		updateDelta, err := stakeManager.UpdateValidatorSet(epoch, maxValidatorSetSize,
-			accSet)
+		updateDelta, err := stakeManager.UpdateValidatorSet(epoch+2, maxValidatorSetSize,
+			accountSet[1:])
 
 		require.NoError(t, err)
 		require.Len(t, updateDelta.Added, 1)
@@ -139,42 +126,121 @@ func TestStakeManager_UpdateValidatorSet(t *testing.T) {
 		require.Equal(t, accountSet[0].Address, updateDelta.Added[0].Address)
 		require.Equal(t, accountSet[0].VotingPower, updateDelta.Added[0].VotingPower)
 	})
+
 	t.Run("UpdateValidatorSet - remove some stake", func(t *testing.T) {
-		accSet := accountSet.Copy()
-		validatorToUpdate := accSet[2]
-		validatorToUpdate.VotingPower = big.NewInt(15)
+		fullValidatorSet := activeValidators.Copy()
+		validatorToUpdate := fullValidatorSet[2]
+		validatorToUpdate.Stake = big.NewInt(5)
+
+		addValidatorsToMock(t, providerMock, fullValidatorSet)
 
 		updateDelta, err := stakeManager.UpdateValidatorSet(epoch+3, maxValidatorSetSize,
-			accSet)
+			accountSet)
 
 		require.NoError(t, err)
 		require.Len(t, updateDelta.Added, 0)
 		require.Len(t, updateDelta.Updated, 1)
 		require.Len(t, updateDelta.Removed, 0)
 		require.Equal(t, updateDelta.Updated[0].Address, validatorToUpdate.Address)
+		require.Equal(t, updateDelta.Updated[0].VotingPower.Uint64(), validatorToUpdate.Stake.Uint64())
 	})
-	t.Run("UpdateValidatorSet - remove validator", func(t *testing.T) {
-		accSet := accountSet.Copy()
-		accSet, err = accSet.ApplyDelta(&validator.ValidatorSetDelta{
-			Added: []*validator.ValidatorMetadata{
-				{
-					Address:     types.StringToAddress("0x0002"),
-					BlsKey:      blsKeys[1].PublicKey(),
-					VotingPower: big.NewInt(10),
-					IsActive:    true,
-				},
-			},
-		})
-		require.NoError(t, err)
 
-		updateDelta, err := stakeManager.UpdateValidatorSet(epoch+4, maxValidatorSetSize,
-			accSet)
+	t.Run("UpdateValidatorSet - remove entire stake", func(t *testing.T) {
+		fullValidatorSet := activeValidators.Copy()
+		validatorsToUpdate := fullValidatorSet[4]
+		validatorsToUpdate.Stake = bigZero
+
+		addValidatorsToMock(t, providerMock, fullValidatorSet)
+
+		updateDelta, err := stakeManager.UpdateValidatorSet(epoch+5, maxValidatorSetSize,
+			accountSet)
 
 		require.NoError(t, err)
 		require.Len(t, updateDelta.Added, 0)
 		require.Len(t, updateDelta.Updated, 0)
 		require.Len(t, updateDelta.Removed, 1)
 	})
+
+	t.Run("UpdateValidatorSet - voting power negative", func(t *testing.T) {
+		fullValidatorSet := activeValidators.Copy()
+		validatorsToUpdate := fullValidatorSet[4]
+		validatorsToUpdate.Stake = bigZero
+
+		addValidatorsToMock(t, providerMock, fullValidatorSet)
+
+		updateDelta, err := stakeManager.UpdateValidatorSet(epoch+5, maxValidatorSetSize,
+			accountSet)
+		require.NoError(t, err)
+		require.Len(t, updateDelta.Added, 0)
+		require.Len(t, updateDelta.Updated, 0)
+		require.Len(t, updateDelta.Removed, 1)
+	})
+
+	t.Run("UpdateValidatorSet - max validator set size reached", func(t *testing.T) {
+		// because we now have 5 validators, and the new validator has more stake
+		fullValidatorSet := activeValidators.Copy()
+		validatorToAdd := fullValidatorSet[0]
+		validatorToAdd.Stake = big.NewInt(11)
+
+		addValidatorsToMock(t, providerMock, fullValidatorSet)
+
+		updateDelta, err := stakeManager.UpdateValidatorSet(epoch+6, 4,
+			accountSet[1:])
+
+		require.NoError(t, err)
+		require.Len(t, updateDelta.Added, 1)
+		require.Len(t, updateDelta.Updated, 0)
+		require.Len(t, updateDelta.Removed, 1)
+		require.Equal(t, validatorToAdd.Address, updateDelta.Added[0].Address)
+		require.Equal(t, validatorToAdd.Stake.Uint64(), updateDelta.Added[0].VotingPower.Uint64())
+	})
+}
+
+func encodeValidators(activeValidator activeValidatorSet) ([]byte, error) {
+	enc, err := activeValidatorAbiType.Encode(activeValidator)
+	if err != nil {
+		return nil, err
+	}
+
+	offset := make([]byte, 32, 32)
+	offset[31] = 0x20
+
+	enc = append(offset, enc...)
+
+	return enc, nil
+}
+
+func generateValidators(num int) (validator.AccountSet, activeValidatorSet, error) {
+	activeValidators := make([]*activeValidator, num)
+	validatorsMetadata := make([]*validator.ValidatorMetadata, num)
+
+	blsKeys, err := bls.CreateRandomBlsKeys(num)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for i := 0; i < num; i++ {
+		key, err := crypto.GenerateECDSAKey()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		addr := key.Address()
+		activeValidators[i] = &activeValidator{
+			Address: addr,
+			BlsKey:  blsKeys[i].PublicKey().ToBigInt(),
+			Stake:   big.NewInt(10),
+		}
+
+		validatorsMetadata[i] = &validator.ValidatorMetadata{
+			Address:     addr,
+			BlsKey:      blsKeys[i].PublicKey(),
+			VotingPower: big.NewInt(10),
+			IsActive:    true,
+		}
+	}
+
+	return validator.AccountSet(validatorsMetadata), activeValidators, nil
 }
 
 func TestStakeCounter_ShouldBeDeterministic(t *testing.T) {
