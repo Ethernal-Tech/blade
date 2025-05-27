@@ -26,3 +26,23 @@
     * [Consensus Backend](detailed-design/consensus-mechanism/ibft-2.0-consensus-algorithm/backend.md)
 * [Synchronization](detailed-design/synchronization.md)
 * [Networking](detailed-design/networking.md)
+
+## Bridge
+
+* [Overview](bridge/overview.md)
+* [High-Level Architecture](bridge/high-level-architecture.md)
+* [Components](bridge/components/README.md)
+  * [BridgeStorage](bridge/components/bridgestorage.md)
+  * [Gateway](bridge/components/gateway.md)
+  * [Predicate contracts](bridge/components/predicate-contracts.md)
+  * [ValidatorSetStorage](bridge/components/validatorsetstorage.md)
+  * [Validator](bridge/components/validator/README.md)
+    * [Building the Bridge Batch](bridge/components/validator/building-the-bridge-batch.md)
+    * [Batch Voting](bridge/components/validator/batch-voting.md)
+    * [Bridge Transaction](bridge/components/validator/bridge-transaction.md)
+  * [Relayer](bridge/components/relayer.md)
+* [Asset Transfer Workflow](bridge/asset-transfer-workflow.md)
+* [Retry Mechanism](bridge/retry-mechanism.md)
+* [Rollback Mechanism](bridge/rollback-mechanism.md)
+* [Data Structures](bridge/data-structures.md)
+* [Process of Token Transfer via Bridge](bridge/process-of-token-transfer-via-bridge.md)
