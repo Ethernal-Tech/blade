@@ -121,3 +121,14 @@ func (s *StateProviderMock) Call(ethgo.Address, []byte, *contract.CallOpts) ([]b
 func (s *StateProviderMock) Txn(ethgo.Address, ethgo.Key, []byte) (contract.Txn, error) {
 	return nil, nil
 }
+
+type ProviderMock struct {
+	mock.Mock
+	contract.Provider
+}
+
+func (m *ProviderMock) Call(addr ethgo.Address, input []byte, opts *contract.CallOpts) ([]byte, error) {
+	args := m.Called(addr, input, opts)
+
+	return args.Get(0).([]byte), args.Error(1)
+}

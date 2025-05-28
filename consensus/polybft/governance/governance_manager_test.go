@@ -9,26 +9,14 @@ import (
 	polycfg "github.com/0xPolygon/polygon-edge/consensus/polybft/config"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/oracle"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/state"
+	systemstate "github.com/0xPolygon/polygon-edge/consensus/polybft/system_state"
 	"github.com/0xPolygon/polygon-edge/forkmanager"
 	"github.com/0xPolygon/polygon-edge/types"
-	"github.com/Ethernal-Tech/ethgo"
 	"github.com/Ethernal-Tech/ethgo/abi"
-	"github.com/Ethernal-Tech/ethgo/contract"
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
-
-type providerMock struct {
-	mock.Mock
-	contract.Provider
-}
-
-func (m *providerMock) Call(addr ethgo.Address, input []byte, opts *contract.CallOpts) ([]byte, error) {
-	args := m.Called(addr, input, opts)
-
-	return args.Get(0).([]byte), args.Error(1)
-}
 
 var networkParamsAbiType = abi.MustNewType(`tuple(uint256 checkpointBlockInterval, uint256 epochSize, uint256 epochReward, uint256 sprintSize, 
 	uint256 minValidatorSetSize, uint256 maxValidatorSetSize, uint256 withdrawalWaitPeriod, uint256 blockTime, 
@@ -99,7 +87,7 @@ func TestGovernanceManager_PostEpoch(t *testing.T) {
 	encoded, err := networkParams.Encode()
 	require.NoError(t, err)
 
-	providerMock := new(providerMock)
+	providerMock := new(systemstate.StateProviderMock)
 	providerMock.On("Call", mock.Anything, mock.Anything, mock.Anything).Return(encoded, nil)
 
 	blockchain := new(polychain.BlockchainMock)
@@ -170,7 +158,7 @@ func TestGovernanceManager_PostBlock(t *testing.T) {
 		enc, err := forkParamsTest.Encode()
 		require.NoError(t, err)
 
-		providerMock := new(providerMock)
+		providerMock := new(systemstate.StateProviderMock)
 		providerMock.On("Call", mock.Anything, mock.Anything, mock.Anything).Return(enc, nil)
 
 		blockchainMock := new(polychain.BlockchainMock)
@@ -210,7 +198,7 @@ func TestGovernanceManager_PostBlock(t *testing.T) {
 		enc, err := forkParamsTest.Encode()
 		require.NoError(t, err)
 
-		providerMock := new(providerMock)
+		providerMock := new(systemstate.StateProviderMock)
 		providerMock.On("Call", mock.Anything, mock.Anything, mock.Anything).Return(enc, nil).Once()
 
 		blockchainMock := new(polychain.BlockchainMock)
