@@ -7,30 +7,114 @@ import (
 	"github.com/0xPolygon/polygon-edge/chain"
 	polychain "github.com/0xPolygon/polygon-edge/consensus/polybft/blockchain"
 	polycfg "github.com/0xPolygon/polygon-edge/consensus/polybft/config"
-	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/oracle"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/state"
 	"github.com/0xPolygon/polygon-edge/forkmanager"
 	"github.com/0xPolygon/polygon-edge/types"
+	"github.com/Ethernal-Tech/ethgo"
+	"github.com/Ethernal-Tech/ethgo/abi"
+	"github.com/Ethernal-Tech/ethgo/contract"
 	"github.com/hashicorp/go-hclog"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
+
+type providerMock struct {
+	mock.Mock
+	contract.Provider
+}
+
+func (m *providerMock) Call(addr ethgo.Address, input []byte, opts *contract.CallOpts) ([]byte, error) {
+	args := m.Called(addr, input, opts)
+
+	return args.Get(0).([]byte), args.Error(1)
+}
+
+var networkParamsAbiType = abi.MustNewType(`tuple(uint256 checkpointBlockInterval, uint256 epochSize, uint256 epochReward, uint256 sprintSize, 
+	uint256 minValidatorSetSize, uint256 maxValidatorSetSize, uint256 withdrawalWaitPeriod, uint256 blockTime, 
+	uint256 blockTimeDrift, uint256 votingDelay, uint256 votingPeriod, uint256 proposalThreshold, uint256 baseFeeChangeDenom)`)
+
+type networkParamsTest struct {
+	CheckpointBlockInterval *big.Int `abi:"checkpointBlockInterval"`
+	EpochSize               *big.Int `abi:"epochSize"`
+	EpochReward             *big.Int `abi:"epochReward"`
+	SprintSize              *big.Int `abi:"sprintSize"`
+	MinValidatorSetSize     *big.Int `abi:"minValidatorSetSize"`
+	MaxValidatorSetSize     *big.Int `abi:"maxValidatorSetSize"`
+	WithdrawalWaitPeriod    *big.Int `abi:"withdrawalWaitPeriod"`
+	BlockTime               *big.Int `abi:"blockTime"`
+	BlockTimeDrift          *big.Int `abi:"blockTimeDrift"`
+	VotingDelay             *big.Int `abi:"votingDelay"`
+	VotingPeriod            *big.Int `abi:"votingPeriod"`
+	ProposalThreshold       *big.Int `abi:"proposalThreshold"`
+	BaseFeeChangeDenom      *big.Int `abi:"baseFeeChangeDenom"`
+}
+
+func (n *networkParamsTest) Encode() ([]byte, error) {
+	return networkParamsAbiType.Encode(n)
+}
+
+var forkParamsTestAbiType = abi.MustNewType(`tuple(address feature, uint256 block)[]`)
+
+type forkParamTest struct {
+	Feature     types.Hash `abi:"feature"`
+	BlockNumber *big.Int   `abi:"block"`
+}
+
+type forkParamsTest []*forkParamTest
+
+func (f forkParamsTest) Encode() ([]byte, error) {
+	encoded, err := forkParamsTestAbiType.Encode(f)
+	if err != nil {
+		return nil, err
+	}
+
+	offset := make([]byte, 32, 32)
+	offset[31] = 0x20
+
+	encoded = append(offset, encoded...)
+
+	return encoded, nil
+}
 
 func TestGovernanceManager_PostEpoch(t *testing.T) {
 	t.Parallel()
 
-	state := newTestState(t)
-	governanceManager := &governanceManager{
-		state:  state,
-		logger: hclog.NewNullLogger(),
+	networkParams := &networkParamsTest{
+		CheckpointBlockInterval: big.NewInt(100),
+		EpochSize:               big.NewInt(10),
+		EpochReward:             big.NewInt(10000),
+		SprintSize:              big.NewInt(5),
+		MinValidatorSetSize:     big.NewInt(10),
+		MaxValidatorSetSize:     big.NewInt(100),
+		WithdrawalWaitPeriod:    big.NewInt(100),
+		BlockTime:               big.NewInt(2),
+		BlockTimeDrift:          big.NewInt(1),
+		VotingDelay:             big.NewInt(10),
+		VotingPeriod:            big.NewInt(100),
+		ProposalThreshold:       big.NewInt(1000),
+		BaseFeeChangeDenom:      big.NewInt(100),
 	}
 
-	// insert some governance event
-	baseFeeChangeDenomEvent := &contractsapi.NewBaseFeeChangeDenomEvent{BaseFeeChangeDenom: big.NewInt(100)}
-	epochRewardEvent := &contractsapi.NewEpochRewardEvent{Reward: big.NewInt(10000)}
+	encoded, err := networkParams.Encode()
+	require.NoError(t, err)
 
-	require.NoError(t, state.insertGovernanceEvent(1, baseFeeChangeDenomEvent, nil))
-	require.NoError(t, state.insertGovernanceEvent(1, epochRewardEvent, nil))
+	providerMock := new(providerMock)
+	providerMock.On("Call", mock.Anything, mock.Anything, mock.Anything).Return(encoded, nil)
+
+	blockchain := new(polychain.BlockchainMock)
+	blockchain.On("CurrentHeader").Return(&types.Header{
+		Number: 0,
+	})
+
+	blockchain.On("GetStateProviderForBlock", mock.Anything).Return(providerMock, nil)
+
+	state := newTestState(t)
+	governanceManager := &governanceManager{
+		state:      state,
+		logger:     hclog.NewNullLogger(),
+		blockchain: blockchain,
+	}
 
 	// no initial config was saved, so we expect an error
 	require.ErrorIs(t, governanceManager.PostEpoch(&oracle.PostEpochRequest{
@@ -57,12 +141,12 @@ func TestGovernanceManager_PostEpoch(t *testing.T) {
 
 	updatedConfig, err := state.getClientConfig(nil)
 	require.NoError(t, err)
-	require.Equal(t, baseFeeChangeDenomEvent.BaseFeeChangeDenom.Uint64(), updatedConfig.BaseFeeChangeDenom)
+	require.Equal(t, networkParams.BaseFeeChangeDenom.Uint64(), updatedConfig.BaseFeeChangeDenom)
 
 	pbftConfig, err := polycfg.GetPolyBFTConfig(updatedConfig)
 	require.NoError(t, err)
 
-	require.Equal(t, epochRewardEvent.Reward.Uint64(), pbftConfig.EpochReward)
+	require.Equal(t, networkParams.EpochReward.Uint64(), pbftConfig.EpochReward)
 }
 
 func TestGovernanceManager_PostBlock(t *testing.T) {
@@ -70,7 +154,7 @@ func TestGovernanceManager_PostBlock(t *testing.T) {
 
 	genesisPolybftConfig := createTestPolybftConfig()
 
-	t.Run("Has no events in block", func(t *testing.T) {
+	t.Run("Has no new forks", func(t *testing.T) {
 		t.Parallel()
 
 		// no governance events in receipts
@@ -82,10 +166,18 @@ func TestGovernanceManager_PostBlock(t *testing.T) {
 			Forks: &chain.Forks{chain.Governance: chain.NewFork(0)},
 		}
 
+		var forkParamsTest forkParamsTest
+		enc, err := forkParamsTest.Encode()
+		require.NoError(t, err)
+
+		providerMock := new(providerMock)
+		providerMock.On("Call", mock.Anything, mock.Anything, mock.Anything).Return(enc, nil)
+
 		blockchainMock := new(polychain.BlockchainMock)
 		blockchainMock.On("CurrentHeader").Return(&types.Header{
 			Number: 0,
 		})
+		blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(providerMock, nil)
 
 		chainParams := &chain.Params{Engine: map[string]interface{}{polycfg.ConsensusName: genesisPolybftConfig}}
 		gm, err := NewGovernanceManager(chainParams,
@@ -95,9 +187,8 @@ func TestGovernanceManager_PostBlock(t *testing.T) {
 		require.NoError(t, gm.PostBlock(req))
 
 		governanceManager := gm.(*governanceManager)
-		eventsRaw, err := governanceManager.state.getNetworkParamsEvents(1, nil)
-		require.NoError(t, err)
-		require.Len(t, eventsRaw, 0)
+		// 13 from chain.AllForksEnabled
+		require.Equal(t, 13, len(governanceManager.allForksHashes))
 	})
 
 	t.Run("Has new fork", func(t *testing.T) {
@@ -115,10 +206,18 @@ func TestGovernanceManager_PostBlock(t *testing.T) {
 			Forks:     &chain.Forks{chain.Governance: chain.NewFork(0)},
 		}
 
+		var forkParamsTest forkParamsTest
+		enc, err := forkParamsTest.Encode()
+		require.NoError(t, err)
+
+		providerMock := new(providerMock)
+		providerMock.On("Call", mock.Anything, mock.Anything, mock.Anything).Return(enc, nil).Once()
+
 		blockchainMock := new(polychain.BlockchainMock)
 		blockchainMock.On("CurrentHeader").Return(&types.Header{
-			Number: 4,
+			Number: 0,
 		})
+		blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(providerMock, nil)
 
 		chainParams := &chain.Params{Engine: map[string]interface{}{polycfg.ConsensusName: genesisPolybftConfig}}
 		gm, err := NewGovernanceManager(chainParams,
@@ -127,17 +226,21 @@ func TestGovernanceManager_PostBlock(t *testing.T) {
 
 		governanceManager := gm.(*governanceManager)
 
+		forkParamsTest = append(forkParamsTest, &forkParamTest{
+			Feature:     newForkHash,
+			BlockNumber: newForkBlock,
+		})
+		enc, err = forkParamsTest.Encode()
+		require.NoError(t, err)
+
+		providerMock.On("Call", mock.Anything, mock.Anything, mock.Anything).Return(enc, nil).Once()
 		// this cheats that we have this fork in code
 		governanceManager.allForksHashes[newForkHash] = newForkName
-
-		require.NoError(t, governanceManager.state.insertGovernanceEvent(1,
-			&contractsapi.NewFeatureEvent{
-				Feature: newForkHash, Block: newForkBlock,
-			}, nil))
 
 		// new fork should not be registered and enabled before PostBlock
 		require.False(t, forkmanager.GetInstance().IsForkEnabled(newForkName, newForkBlock.Uint64()))
 
+		require.Equal(t, 14, len(governanceManager.allForksHashes))
 		require.NoError(t, governanceManager.PostBlock(req))
 
 		// new fork should be registered and enabled before PostBlock

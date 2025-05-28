@@ -312,6 +312,7 @@ func main() {
 				"setNewSprintSize",
 				"setNewBaseFeeChangeDenom",
 				"setNewBlockTime",
+				"getNetworkParams",
 			},
 			[]string{
 				"NewCheckpointBlockInterval",
@@ -335,6 +336,8 @@ func main() {
 			false,
 			[]string{
 				"initialize",
+				"addNewFeature",
+				"getAllFeatures",
 			},
 			[]string{
 				"NewFeature",

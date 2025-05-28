@@ -10,7 +10,6 @@ import (
 
 	"github.com/0xPolygon/polygon-edge/chain"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/config"
-	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/validator"
 	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/helper/common"
@@ -47,90 +46,6 @@ func newTestState(tb testing.TB) *GovernanceStore {
 	}
 
 	return governanceStore
-}
-
-func TestGovernanceStore_InsertAndGetEvents(t *testing.T) {
-	t.Parallel()
-
-	epoch := uint64(11)
-	state := newTestState(t)
-
-	// NetworkParams events
-	checkpointIntervalEvent := &contractsapi.NewCheckpointBlockIntervalEvent{CheckpointInterval: big.NewInt(900)}
-	epochSizeEvent := &contractsapi.NewEpochSizeEvent{Size: big.NewInt(10)}
-	epochRewardEvent := &contractsapi.NewEpochRewardEvent{Reward: big.NewInt(1000)}
-	minValidatorSetSizeEvent := &contractsapi.NewMinValidatorSetSizeEvent{MinValidatorSet: big.NewInt(4)}
-	maxValidatorSetSizeEvent := &contractsapi.NewMaxValidatorSetSizeEvent{MaxValidatorSet: big.NewInt(100)}
-	withdrawalPeriodEvent := &contractsapi.NewWithdrawalWaitPeriodEvent{WithdrawalPeriod: big.NewInt(1)}
-	blockTimeEvent := &contractsapi.NewBlockTimeEvent{BlockTime: big.NewInt(2)}
-	blockTimeDriftEvent := &contractsapi.NewBlockTimeDriftEvent{BlockTimeDrift: big.NewInt(10)}
-	votingDelayEvent := &contractsapi.NewVotingDelayEvent{VotingDelay: big.NewInt(1000)}
-	votingPeriodEvent := &contractsapi.NewVotingPeriodEvent{VotingPeriod: big.NewInt(10_000)}
-	proposalThresholdEvent := &contractsapi.NewProposalThresholdEvent{ProposalThreshold: big.NewInt(1000)}
-	sprintSizeEvent := &contractsapi.NewSprintSizeEvent{Size: big.NewInt(7)}
-	// ForkParams events
-	newFeatureEvent := &contractsapi.NewFeatureEvent{Feature: types.BytesToHash([]byte("OxSomeFeature1")),
-		Block: big.NewInt(100_000)}
-	updateFeatureEvent := &contractsapi.UpdatedFeatureEvent{Feature: types.BytesToHash([]byte("OxSomeFeature2")),
-		Block: big.NewInt(150_000)}
-
-	networkParamsEvents := []contractsapi.EventAbi{
-		checkpointIntervalEvent,
-		epochSizeEvent,
-		epochRewardEvent,
-		minValidatorSetSizeEvent,
-		maxValidatorSetSizeEvent,
-		withdrawalPeriodEvent,
-		blockTimeEvent,
-		blockTimeDriftEvent,
-		votingDelayEvent,
-		votingPeriodEvent,
-		proposalThresholdEvent,
-	}
-
-	forkParamsEvents := []contractsapi.EventAbi{newFeatureEvent, updateFeatureEvent}
-
-	allEvents := make([]contractsapi.EventAbi, 0)
-	allEvents = append(allEvents, networkParamsEvents...)
-	allEvents = append(allEvents, forkParamsEvents...)
-
-	for _, e := range allEvents {
-		require.NoError(t, state.insertGovernanceEvent(epoch, e, nil))
-	}
-
-	// test for an epoch that didn't have any events
-	eventsRaw, err := state.getNetworkParamsEvents(10, nil)
-	require.NoError(t, err)
-	require.Len(t, eventsRaw, 0)
-
-	// fork events are not saved per epoch so we should have 2
-	forksInDB, err := state.getAllForkEvents(nil)
-	require.NoError(t, err)
-	require.Len(t, forksInDB, len(forkParamsEvents))
-
-	// test for the epoch that had events
-	eventsRaw, err = state.getNetworkParamsEvents(epoch, nil)
-	require.NoError(t, err)
-	require.Len(t, eventsRaw, len(networkParamsEvents))
-
-	forksInDB, err = state.getAllForkEvents(nil)
-	require.NoError(t, err)
-	require.Len(t, forksInDB, len(forkParamsEvents))
-
-	// insert some more events for current epoch
-	newFeatureEventTwo := &contractsapi.UpdatedFeatureEvent{Feature: types.BytesToHash([]byte("OxSomeFeature3")),
-		Block: big.NewInt(130_000)}
-
-	require.NoError(t, state.insertGovernanceEvent(epoch, sprintSizeEvent, nil))
-	require.NoError(t, state.insertGovernanceEvent(epoch, newFeatureEventTwo, nil))
-
-	eventsRaw, err = state.getNetworkParamsEvents(epoch, nil)
-	require.NoError(t, err)
-	require.Len(t, eventsRaw, len(networkParamsEvents)+1)
-
-	forksInDB, err = state.getAllForkEvents(nil)
-	require.NoError(t, err)
-	require.Len(t, forksInDB, len(forkParamsEvents)+1)
 }
 
 func TestGovernanceStore_InsertAndGetClientConfig(t *testing.T) {

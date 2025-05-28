@@ -1344,6 +1344,21 @@ func (s *SetNewBlockTimeNetworkParamsFn) DecodeAbi(buf []byte) error {
 	return decodeMethod(NetworkParams.Abi.Methods["setNewBlockTime"], buf, s)
 }
 
+type GetNetworkParamsNetworkParamsFn struct {
+}
+
+func (g *GetNetworkParamsNetworkParamsFn) Sig() []byte {
+	return NetworkParams.Abi.Methods["getNetworkParams"].ID()
+}
+
+func (g *GetNetworkParamsNetworkParamsFn) EncodeAbi() ([]byte, error) {
+	return NetworkParams.Abi.Methods["getNetworkParams"].Encode(g)
+}
+
+func (g *GetNetworkParamsNetworkParamsFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(NetworkParams.Abi.Methods["getNetworkParams"], buf, g)
+}
+
 type NewCheckpointBlockIntervalEvent struct {
 	CheckpointInterval *big.Int `abi:"checkpointInterval"`
 }
@@ -1670,6 +1685,38 @@ func (i *InitializeForkParamsFn) EncodeAbi() ([]byte, error) {
 
 func (i *InitializeForkParamsFn) DecodeAbi(buf []byte) error {
 	return decodeMethod(ForkParams.Abi.Methods["initialize"], buf, i)
+}
+
+type AddNewFeatureForkParamsFn struct {
+	BlockNumber *big.Int `abi:"blockNumber"`
+	Feature     string   `abi:"feature"`
+}
+
+func (a *AddNewFeatureForkParamsFn) Sig() []byte {
+	return ForkParams.Abi.Methods["addNewFeature"].ID()
+}
+
+func (a *AddNewFeatureForkParamsFn) EncodeAbi() ([]byte, error) {
+	return ForkParams.Abi.Methods["addNewFeature"].Encode(a)
+}
+
+func (a *AddNewFeatureForkParamsFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(ForkParams.Abi.Methods["addNewFeature"], buf, a)
+}
+
+type GetAllFeaturesForkParamsFn struct {
+}
+
+func (g *GetAllFeaturesForkParamsFn) Sig() []byte {
+	return ForkParams.Abi.Methods["getAllFeatures"].ID()
+}
+
+func (g *GetAllFeaturesForkParamsFn) EncodeAbi() ([]byte, error) {
+	return ForkParams.Abi.Methods["getAllFeatures"].Encode(g)
+}
+
+func (g *GetAllFeaturesForkParamsFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(ForkParams.Abi.Methods["getAllFeatures"], buf, g)
 }
 
 type NewFeatureEvent struct {
