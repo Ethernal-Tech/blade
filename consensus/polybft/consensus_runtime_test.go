@@ -495,8 +495,8 @@ func Test_NewConsensusRuntime(t *testing.T) {
 	assert.Equal(t, uint64(10), runtime.config.GenesisConfig.SprintSize)
 	assert.Equal(t, uint64(10), runtime.config.GenesisConfig.EpochSize)
 	assert.Equal(t, "0x0000000000000000000000000000000000000101", contracts.EpochManagerContract.String())
-	// blockchainMock.AssertExpectations(t)
-	// polybftBackendMock.AssertExpectations(t)
+	blockchainMock.AssertExpectations(t)
+	polybftBackendMock.AssertExpectations(t)
 }
 
 func TestConsensusRuntime_restartEpoch_SameEpochNumberAsTheLastOne(t *testing.T) {

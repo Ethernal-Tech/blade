@@ -87,7 +87,7 @@ func TestGovernanceManager_PostEpoch(t *testing.T) {
 	encoded, err := networkParams.Encode()
 	require.NoError(t, err)
 
-	providerMock := new(systemstate.StateProviderMock)
+	providerMock := new(systemstate.ProviderMock)
 	providerMock.On("Call", mock.Anything, mock.Anything, mock.Anything).Return(encoded, nil)
 
 	blockchain := new(polychain.BlockchainMock)
@@ -158,7 +158,7 @@ func TestGovernanceManager_PostBlock(t *testing.T) {
 		enc, err := forkParamsTest.Encode()
 		require.NoError(t, err)
 
-		providerMock := new(systemstate.StateProviderMock)
+		providerMock := new(systemstate.ProviderMock)
 		providerMock.On("Call", mock.Anything, mock.Anything, mock.Anything).Return(enc, nil)
 
 		blockchainMock := new(polychain.BlockchainMock)
