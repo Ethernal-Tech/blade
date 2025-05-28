@@ -219,6 +219,7 @@ func (g *governanceManager) PostEpoch(req *oracle.PostEpochRequest) error {
 	latestPolybftConfig.WithdrawalWaitPeriod = networkParams.WithdrawalWaitPeriod.Uint64()
 	latestPolybftConfig.BlockTime = common.Duration{Duration: time.Duration(networkParams.BlockTime.Int64()) * time.Second}
 	latestPolybftConfig.BlockTimeDrift = networkParams.BlockTimeDrift.Uint64()
+
 	if latestPolybftConfig.GovernanceConfig == nil {
 		latestPolybftConfig.GovernanceConfig = &config.Governance{}
 	}
