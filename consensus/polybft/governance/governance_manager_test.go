@@ -198,7 +198,7 @@ func TestGovernanceManager_PostBlock(t *testing.T) {
 		enc, err := forkParamsTest.Encode()
 		require.NoError(t, err)
 
-		providerMock := new(systemstate.StateProviderMock)
+		providerMock := new(systemstate.ProviderMock)
 		providerMock.On("Call", mock.Anything, mock.Anything, mock.Anything).Return(enc, nil).Once()
 
 		blockchainMock := new(polychain.BlockchainMock)
