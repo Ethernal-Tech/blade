@@ -250,8 +250,8 @@ func TestConsensusRuntime_OnBlockInserted_EndOfEpoch(t *testing.T) {
 		stakeManager:   &stake.DummyStakeManager{},
 		eventProvider:  state.NewEventProvider(blockchainMock),
 		governanceManager: &governance.DummyGovernanceManager{
-			GetClientConfigFn: func() (*chain.Params, error) {
-				return config.ChainParams, nil
+			GetClientConfigFn: func() *chain.Params {
+				return config.ChainParams
 			}},
 	}
 

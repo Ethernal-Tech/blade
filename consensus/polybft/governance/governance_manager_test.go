@@ -3,6 +3,7 @@ package governance
 import (
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/0xPolygon/polygon-edge/chain"
 	polychain "github.com/0xPolygon/polygon-edge/consensus/polybft/blockchain"
@@ -10,7 +11,10 @@ import (
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/oracle"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/state"
 	systemstate "github.com/0xPolygon/polygon-edge/consensus/polybft/system_state"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/validator"
+	"github.com/0xPolygon/polygon-edge/contracts"
 	"github.com/0xPolygon/polygon-edge/forkmanager"
+	"github.com/0xPolygon/polygon-edge/helper/common"
 	"github.com/0xPolygon/polygon-edge/types"
 	"github.com/Ethernal-Tech/ethgo/abi"
 	"github.com/hashicorp/go-hclog"
@@ -97,9 +101,8 @@ func TestGovernanceManager_PostEpoch(t *testing.T) {
 
 	blockchain.On("GetStateProviderForBlock", mock.Anything).Return(providerMock, nil)
 
-	state := newTestState(t)
 	governanceManager := &governanceManager{
-		state:      state,
+		state:      nil,
 		logger:     hclog.NewNullLogger(),
 		blockchain: blockchain,
 	}
@@ -110,15 +113,14 @@ func TestGovernanceManager_PostEpoch(t *testing.T) {
 		FirstBlockOfEpoch: 21,
 		Forks:             &chain.Forks{chain.Governance: chain.NewFork(0)},
 	}),
-		errClientConfigNotFound)
+		errStateNil)
 
 	params := &chain.Params{
 		BaseFeeChangeDenom: 8,
 		Engine:             map[string]interface{}{polycfg.ConsensusName: createTestPolybftConfig()},
 	}
 
-	// insert initial config
-	require.NoError(t, state.insertClientConfig(params, nil))
+	governanceManager.state = params
 
 	// PostEpoch will now update config with new epoch reward value
 	require.NoError(t, governanceManager.PostEpoch(&oracle.PostEpochRequest{
@@ -127,8 +129,7 @@ func TestGovernanceManager_PostEpoch(t *testing.T) {
 		Forks:             &chain.Forks{chain.Governance: chain.NewFork(0)},
 	}))
 
-	updatedConfig, err := state.getClientConfig(nil)
-	require.NoError(t, err)
+	updatedConfig := governanceManager.state
 	require.Equal(t, networkParams.BaseFeeChangeDenom.Uint64(), updatedConfig.BaseFeeChangeDenom)
 
 	pbftConfig, err := polycfg.GetPolyBFTConfig(updatedConfig)
@@ -234,4 +235,76 @@ func TestGovernanceManager_PostBlock(t *testing.T) {
 		// new fork should be registered and enabled before PostBlock
 		require.True(t, forkmanager.GetInstance().IsForkEnabled(newForkName, newForkBlock.Uint64()))
 	})
+}
+
+func createTestPolybftConfig() *polycfg.PolyBFT {
+	return &polycfg.PolyBFT{
+		InitialValidatorSet: []*validator.GenesisValidator{
+			{
+				Address: types.BytesToAddress([]byte{0, 1, 2}),
+				Stake:   big.NewInt(100),
+			},
+			{
+				Address: types.BytesToAddress([]byte{3, 4, 5}),
+				Stake:   big.NewInt(100),
+			},
+			{
+				Address: types.BytesToAddress([]byte{6, 7, 8}),
+				Stake:   big.NewInt(100),
+			},
+			{
+				Address: types.BytesToAddress([]byte{9, 10, 11}),
+				Stake:   big.NewInt(100),
+			},
+		},
+		Bridge: map[uint64]*polycfg.Bridge{0: {
+			ExternalGatewayAddr:                  types.StringToAddress("0xGatewayAddr"),
+			ExternalERC20PredicateAddr:           types.StringToAddress("0xRootERC20PredicateAddr"),
+			ExternalMintableERC20PredicateAddr:   types.StringToAddress("0xChildMintableERC20PredicateAddr"),
+			ExternalERC721PredicateAddr:          types.StringToAddress("0xRootERC721PredicateAddr"),
+			ExternalMintableERC721PredicateAddr:  types.StringToAddress("0xChildMintableERC721PredicateAddr"),
+			ExternalERC1155PredicateAddr:         types.StringToAddress("0xRootERC1155PredicateAddr"),
+			ExternalMintableERC1155PredicateAddr: types.StringToAddress("0xChildMintableERC1155PredicateAddr"),
+			ExternalERC20Addr:                    types.StringToAddress("0xChildERC20Addr"),
+			ExternalERC721Addr:                   types.StringToAddress("0xChildERC721Addr"),
+			ExternalERC1155Addr:                  types.StringToAddress("0xChildERC1155Addr"),
+			BLSAddress:                           types.StringToAddress("0xBLSAddress"),
+			BN256G2Address:                       types.StringToAddress("0xBN256G2Address"),
+			JSONRPCEndpoint:                      "http://mumbai-rpc.com",
+			EventTrackerStartBlocks: map[types.Address]uint64{
+				types.StringToAddress("SomeRootAddress"): 365_000,
+			}},
+		},
+		EpochSize:           10,
+		EpochReward:         1000,
+		SprintSize:          5,
+		BlockTime:           common.Duration{Duration: 2 * time.Second},
+		MinValidatorSetSize: 4,
+		MaxValidatorSetSize: 100,
+		CheckpointInterval:  900,
+		BlockTimeDrift:      10,
+		Governance:          types.ZeroAddress,
+		NativeTokenConfig: &polycfg.Token{
+			Name:     "Polygon_MATIC",
+			Symbol:   "MATIC",
+			Decimals: 18,
+		},
+		InitialTrieRoot:      types.ZeroHash,
+		WithdrawalWaitPeriod: 1,
+		RewardConfig: &polycfg.Rewards{
+			TokenAddress:  types.StringToAddress("0xRewardTokenAddr"),
+			WalletAddress: types.StringToAddress("0xRewardWalletAddr"),
+			WalletAmount:  big.NewInt(1_000_000),
+		},
+		GovernanceConfig: &polycfg.Governance{
+			VotingDelay:              big.NewInt(1000),
+			VotingPeriod:             big.NewInt(10_0000),
+			ProposalThreshold:        big.NewInt(1000),
+			ProposalQuorumPercentage: 67,
+			ChildGovernorAddr:        contracts.ChildGovernorContract,
+			ChildTimelockAddr:        contracts.ChildTimelockContract,
+			NetworkParamsAddr:        contracts.NetworkParamsContract,
+			ForkParamsAddr:           contracts.ForkParamsContract,
+		},
+	}
 }

@@ -495,10 +495,7 @@ func (c *consensusRuntime) restartEpoch(header *types.Header, dbTx *bolt.Tx) (*e
 		return nil, err
 	}
 
-	currentParams, err := c.governanceManager.GetClientConfig(dbTx)
-	if err != nil {
-		return nil, err
-	}
+	currentParams := c.governanceManager.GetClientConfig()
 
 	currentPolyConfig, err := config.GetPolyBFTConfig(currentParams)
 	if err != nil {

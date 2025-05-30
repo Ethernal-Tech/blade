@@ -30,6 +30,7 @@ import (
 var (
 	errUnknownGovernanceEvent = errors.New("unknown event from governance")
 	stringABIType             = abi.MustNewType("tuple(string)")
+	errStateNil               = errors.New("could not get latest chain params (nil)")
 )
 
 // GovernanceManager interface provides functions for handling governance events
@@ -37,7 +38,7 @@ var (
 type GovernanceManager interface {
 	state.EventSubscriber
 	oracle.ReadOnlyOracle
-	GetClientConfig(dbTx *bolt.Tx) (*chain.Params, error)
+	GetClientConfig() *chain.Params
 }
 
 var _ GovernanceManager = (*DummyGovernanceManager)(nil)
@@ -45,18 +46,18 @@ var _ GovernanceManager = (*DummyGovernanceManager)(nil)
 // dummyStakeManager is a dummy implementation of GovernanceManager interface
 // used only for unit testing
 type DummyGovernanceManager struct {
-	GetClientConfigFn func() (*chain.Params, error)
+	GetClientConfigFn func() *chain.Params
 }
 
 func (d *DummyGovernanceManager) Close()                                       {}
 func (d *DummyGovernanceManager) PostBlock(req *oracle.PostBlockRequest) error { return nil }
 func (d *DummyGovernanceManager) PostEpoch(req *oracle.PostEpochRequest) error { return nil }
-func (d *DummyGovernanceManager) GetClientConfig(dbTx *bolt.Tx) (*chain.Params, error) {
+func (d *DummyGovernanceManager) GetClientConfig() *chain.Params {
 	if d.GetClientConfigFn != nil {
 		return d.GetClientConfigFn()
 	}
 
-	return nil, nil
+	return nil
 }
 
 // EventSubscriber implementation
@@ -74,7 +75,7 @@ var _ GovernanceManager = (*governanceManager)(nil)
 // and updates the client configuration based on executed governance proposals
 type governanceManager struct {
 	logger         hclog.Logger
-	state          *GovernanceStore
+	state          *chain.Params
 	allForksHashes map[types.Hash]string
 	blockchain     polychain.Blockchain
 }
@@ -85,21 +86,6 @@ func NewGovernanceManager(genesisParams *chain.Params,
 	state *state.State,
 	blockhain polychain.Blockchain,
 	dbTx *bolt.Tx) (GovernanceManager, error) {
-	store, err := newGovernanceStore(state.DB(), dbTx)
-	if err != nil {
-		return nil, fmt.Errorf("could not create governance store. Error: %w", err)
-	}
-
-	config, err := store.getClientConfig(dbTx)
-	if config == nil || errors.Is(err, errClientConfigNotFound) {
-		// insert initial config to db if not already inserted
-		if err = store.insertClientConfig(genesisParams, dbTx); err != nil {
-			return nil, err
-		}
-	} else if err != nil {
-		return nil, err
-	}
-
 	// cache all fork name hashes that we have in code
 	allForkNameHashes := map[types.Hash]string{}
 
@@ -115,9 +101,22 @@ func NewGovernanceManager(genesisParams *chain.Params,
 
 	g := &governanceManager{
 		logger:         logger,
-		state:          store,
+		state:          genesisParams,
 		allForksHashes: allForkNameHashes,
 		blockchain:     blockhain,
+	}
+
+	lastBuiltBlock := blockhain.CurrentHeader().Number
+	if lastBuiltBlock >= 1 {
+		networkParams, err := g.getNetworkParams()
+		if err == nil && networkParams != nil {
+			var cfg config.PolyBFT
+
+			paramsToConfig(&cfg, networkParams)
+
+			g.state.BaseFeeChangeDenom = networkParams.BaseFeeChangeDenom.Uint64()
+			g.state.Engine[config.ConsensusName] = cfg
+		}
 	}
 
 	// get all features from contract
@@ -125,8 +124,6 @@ func NewGovernanceManager(genesisParams *chain.Params,
 	if err != nil {
 		return nil, fmt.Errorf("could not activate forks from db on startup. Error: %w", err)
 	}
-
-	lastBuiltBlock := blockhain.CurrentHeader().Number
 
 	if err := g.activateNewForks(lastBuiltBlock, featuresFromContract); err != nil {
 		return nil, err
@@ -136,8 +133,8 @@ func NewGovernanceManager(genesisParams *chain.Params,
 }
 
 // GetClientConfig returns latest client configuration from boltdb
-func (g *governanceManager) GetClientConfig(dbTx *bolt.Tx) (*chain.Params, error) {
-	return g.state.getClientConfig(dbTx)
+func (g *governanceManager) GetClientConfig() *chain.Params {
+	return g.state
 }
 
 // Close closes the governance manager
@@ -202,9 +199,9 @@ func (g *governanceManager) PostEpoch(req *oracle.PostEpochRequest) error {
 	}
 
 	// get last saved config
-	latestChainParams, err := g.state.getClientConfig(req.DBTx)
-	if err != nil {
-		return err
+	latestChainParams := g.state
+	if latestChainParams == nil {
+		return errStateNil
 	}
 
 	latestPolybftConfig, err := config.GetPolyBFTConfig(latestChainParams)
@@ -212,6 +209,17 @@ func (g *governanceManager) PostEpoch(req *oracle.PostEpochRequest) error {
 		return err
 	}
 
+	paramsToConfig(&latestPolybftConfig, networkParams)
+
+	latestChainParams.BaseFeeChangeDenom = networkParams.BaseFeeChangeDenom.Uint64()
+	latestChainParams.Engine[config.ConsensusName] = latestPolybftConfig
+
+	g.state = latestChainParams
+
+	return nil
+}
+
+func paramsToConfig(latestPolybftConfig *config.PolyBFT, networkParams *networkParams) {
 	latestPolybftConfig.CheckpointInterval = networkParams.CheckpointBlockInterval.Uint64()
 	latestPolybftConfig.SprintSize = networkParams.SprintSize.Uint64()
 	latestPolybftConfig.EpochSize = networkParams.EpochSize.Uint64()
@@ -229,12 +237,6 @@ func (g *governanceManager) PostEpoch(req *oracle.PostEpochRequest) error {
 	latestPolybftConfig.GovernanceConfig.ProposalThreshold = networkParams.ProposalThreshold
 	latestPolybftConfig.MinValidatorSetSize = networkParams.MinValidatorSetSize.Uint64()
 	latestPolybftConfig.MaxValidatorSetSize = networkParams.MaxValidatorSetSize.Uint64()
-
-	latestChainParams.BaseFeeChangeDenom = networkParams.BaseFeeChangeDenom.Uint64()
-	latestChainParams.Engine[config.ConsensusName] = latestPolybftConfig
-
-	// save updated config to db
-	return g.state.insertClientConfig(latestChainParams, req.DBTx)
 }
 
 func (g *governanceManager) getAllFeatures() (map[types.Hash]*big.Int, error) {

@@ -761,7 +761,7 @@ func (p *Polybft) PreCommitState(block *types.Block, _ *state.Transition) error 
 // GetLatestChainConfig returns the latest chain configuration
 func (p *Polybft) GetLatestChainConfig() (*chain.Params, error) {
 	if p.runtime != nil {
-		return p.runtime.governanceManager.GetClientConfig(nil)
+		return p.runtime.governanceManager.GetClientConfig(), nil
 	}
 
 	return nil, nil
