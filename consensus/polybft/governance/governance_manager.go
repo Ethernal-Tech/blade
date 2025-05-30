@@ -107,16 +107,15 @@ func NewGovernanceManager(genesisParams *chain.Params,
 	}
 
 	lastBuiltBlock := blockhain.CurrentHeader().Number
-	if lastBuiltBlock >= 1 {
-		networkParams, err := g.getNetworkParams()
-		if err == nil && networkParams != nil {
-			var cfg config.PolyBFT
+	networkParams, err := g.getNetworkParams()
 
-			paramsToConfig(&cfg, networkParams)
+	if err == nil && networkParams != nil && networkParams.BlockTime.Uint64() != 0 {
+		var cfg config.PolyBFT
 
-			g.state.BaseFeeChangeDenom = networkParams.BaseFeeChangeDenom.Uint64()
-			g.state.Engine[config.ConsensusName] = cfg
-		}
+		paramsToConfig(&cfg, networkParams)
+
+		g.state.BaseFeeChangeDenom = networkParams.BaseFeeChangeDenom.Uint64()
+		g.state.Engine[config.ConsensusName] = cfg
 	}
 
 	// get all features from contract

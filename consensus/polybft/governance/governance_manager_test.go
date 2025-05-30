@@ -200,7 +200,7 @@ func TestGovernanceManager_PostBlock(t *testing.T) {
 		require.NoError(t, err)
 
 		providerMock := new(systemstate.ProviderMock)
-		providerMock.On("Call", mock.Anything, mock.Anything, mock.Anything).Return(enc, nil).Once()
+		providerMock.On("Call", mock.Anything, mock.Anything, mock.Anything).Return(enc, nil).Times(2)
 
 		blockchainMock := new(polychain.BlockchainMock)
 		blockchainMock.On("CurrentHeader").Return(&types.Header{
