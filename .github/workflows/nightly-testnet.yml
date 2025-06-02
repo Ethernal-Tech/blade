@@ -27,10 +27,20 @@ jobs:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
       AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
+  governance_tests:
+    name: Governance Test
+    uses: ./.github/workflows/governance-test.yml
+    needs: [availability_tests, sanity_check_tests]
+    with:
+      environment: testnet
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
+      AWS_LOADTESTRUNNER_MNEMONIC: ${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}
   load_test_perf:
     name: Load Test PERFORMANCE CONTRACT
     uses: ./.github/workflows/load-test.yml
-    needs: [availability_tests, sanity_check_tests]
+    needs: [availability_tests, sanity_check_tests, governance_tests]
     with:
       environment: testnet
       type: PERF-CONTRACT
@@ -56,7 +66,7 @@ jobs:
   load_test_eoa:
     name: Load Test EOA
     uses: ./.github/workflows/load-test.yml
-    needs: [availability_tests, sanity_check_tests, load_test_perf]
+    needs: [availability_tests, sanity_check_tests, governance_tests, load_test_perf]
     with:
       environment: testnet
       type: EOA
@@ -82,7 +92,7 @@ jobs:
   load_test_erc20:
     name: Load Test ERC20
     uses: ./.github/workflows/load-test.yml
-    needs: [availability_tests, sanity_check_tests, load_test_perf, load_test_eoa]
+    needs: [availability_tests, sanity_check_tests, governance_tests, load_test_perf, load_test_eoa]
     with:
       environment: testnet
       type: ERC20
@@ -108,7 +118,7 @@ jobs:
   load_test_erc721:
     name: Load Test ERC721
     uses: ./.github/workflows/load-test.yml
-    needs: [availability_tests, sanity_check_tests, load_test_perf, load_test_eoa, load_test_erc20]
+    needs: [availability_tests, sanity_check_tests, governance_tests, load_test_perf, load_test_eoa, load_test_erc20]
     with:
       environment: testnet
       type: ERC721
@@ -134,7 +144,7 @@ jobs:
   load_test_mixed:
     name: Load Test MIXED
     uses: ./.github/workflows/load-test.yml
-    needs: [availability_tests, sanity_check_tests, load_test_perf, load_test_eoa, load_test_erc20, load_test_erc721]
+    needs: [availability_tests, sanity_check_tests, governance_tests, load_test_perf, load_test_eoa, load_test_erc20, load_test_erc721]
     with:
       environment: testnet
       type: MIXED
@@ -160,7 +170,7 @@ jobs:
   load_test_erc1155:
     name: Load Test ERC1155
     uses: ./.github/workflows/load-test.yml
-    needs: [availability_tests, sanity_check_tests, load_test_perf, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed]
+    needs: [availability_tests, sanity_check_tests, governance_tests, load_test_perf, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed]
     with:
       environment: testnet
       type: ERC1155
@@ -186,7 +196,7 @@ jobs:
   sync_fullnode_test:
     name: Sync Fullnode Test
     uses: ./.github/workflows/sync-test.yml
-    needs: [availability_tests, sanity_check_tests, load_test_perf, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed, load_test_erc1155]
+    needs: [availability_tests, sanity_check_tests, governance_tests, load_test_perf, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed, load_test_erc1155]
     with:
       environment: testnet
     secrets:
@@ -197,7 +207,7 @@ jobs:
   testnet_notification:
     name: Testnet Nightly Notification
     uses: ./.github/workflows/notification-testnet.yml
-    needs: [availability_tests, sanity_check_tests, load_test_perf, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed, load_test_erc1155, sync_fullnode_test]
+    needs: [availability_tests, sanity_check_tests, governance_tests, load_test_perf, load_test_eoa, load_test_erc20, load_test_erc721, load_test_mixed, load_test_erc1155, sync_fullnode_test]
     if: success() || failure()
     with:
       availability_test_status: ${{ needs.availability_tests.outputs.availability_test_status }}
@@ -208,6 +218,10 @@ jobs:
       withdraw_rewards_test_output: ${{ needs.sanity_check_tests.outputs.withdraw_rewards_test_output }}
       unstake_all_test_output: ${{ needs.sanity_check_tests.outputs.unstake_all_test_output }}
       results_artifact_id: ${{ needs.sanity_check_tests.outputs.results_artifact_id }}
+      governance_tests_output: ${{ needs.governance_tests.outputs.governance_tests_output }}
+      block_time_test_output: ${{ needs.governance_tests.outputs.block_time_test_output }}
+      epoch_size_test_output: ${{ needs.governance_tests.outputs.epoch_size_test_output }}
+      base_fee_denom_test_output: ${{ needs.governance_tests.outputs.base_fee_denom_test_output }}
       load_test_perf_output: ${{ needs.load_test_perf.outputs.load_test_output }}
       load_test_perf_txpool_pending_output: ${{ needs.load_test_perf.outputs.txpool_pending }}
       load_test_perf_txpool_queued_output: ${{ needs.load_test_perf.outputs.txpool_queued }}

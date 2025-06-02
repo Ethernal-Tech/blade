@@ -14,16 +14,16 @@
             type: string
             required: true
         outputs:
-          sanity_check_tests_output:
+          governance_tests_output:
             description: Governance Tests output
             value: ${{ jobs.governance_tests.outputs.test_output_success }}
-          stake_test_output:
+          block_time_test_output:
             description: Block Time Test output
             value: ${{ jobs.governance_tests.outputs.block_time_test }}
-          unstake_test_output:
+          epoch_size_test_output:
             description: Epoch Size Test output
             value: ${{ jobs.governance_tests.outputs.epoch_size_test }}
-          base_fee_denom_output:
+          base_fee_denom_test_output:
             description: Base Fee Denom Test output
             value: ${{ jobs.governance_tests.outputs.base_fee_denom }}
         secrets:
@@ -68,10 +68,10 @@
         environment: ${{ inputs.environment }}
         if: needs.check_network.outputs.rpc_url != ''
         outputs:
-          test_output_success: ${{ steps.sanity_check_tests_results.outputs.test_output }}
-          block_time_test: ${{ steps.sanity_check_tests_results.outputs.block_time_test }}
-          epoch_size_test: ${{ steps.sanity_check_tests_results.outputs.epoch_size_test }}
-          base_fee_denom: ${{ steps.sanity_check_tests_results.outputs.base_fee_denom }}
+          test_output_success: ${{ steps.governance_tests_results.outputs.test_output }}
+          block_time_test: ${{ steps.governance_tests_results.outputs.block_time_test }}
+          epoch_size_test: ${{ steps.governance_tests_results.outputs.epoch_size_test }}
+          base_fee_denom: ${{ steps.governance_tests_results.outputs.base_fee_denom }}
         steps:
           - name: Checkout code
             uses: actions/checkout@v4.1.1
@@ -88,8 +88,8 @@
               role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           - name: Get validator keys
             run: aws ssm get-parameters --names `aws ec2 describe-instances --filters "Name=tag:BaseDN,Values=${{ inputs.environment }}${{ vars.BASEDN_SUFIX }}" "Name=tag:Role,Values=validator" "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].Tags[?Key=='Name'].Value[]" --region ${{ vars.AWS_REGION }} --output text | sed 's/.*/\/${{ inputs.environment }}\/&\/validator-key/'` --with-decryption --region ${{ vars.AWS_REGION }} > keys.json
-          - name: Start Sanity Check Test
-            id: sanity_check_tests_results
+          - name: Start Governance Test
+            id: governance_tests_results
             run: |
               ./blade governance --jsonrpc "http://${{ needs.check_network.outputs.rpc_url }}" --mnemonic "${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}" --receipts-timeout 2m --validator-keys "`cat keys.json | jq -r '.Parameters[].Value' | tr '\n' ',' | sed 's/,$//'`" --to-json
               echo "test_output=`cat governance_test_results.json | jq 'map(select(.Result != "PASSED")) | length == 0'`" >> $GITHUB_OUTPUT

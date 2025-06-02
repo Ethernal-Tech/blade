@@ -33,6 +33,22 @@ on: # yamllint disable-line rule:truthy
       results_artifact_id:
         type: string
         required: true
+      governance_tests_output:
+        description: Governance Tests output
+        type: string
+        required: true
+      block_time_test_output:
+        description: Governance Block Time Test output
+        type: string
+        required: true
+      epoch_size_test_output:
+        description: Governance Epoch Size Test output
+        type: string
+        required: true
+      base_fee_denom_test_output:
+        description: Governance Base Fee Denom Test output
+        type: string
+        required: true
       load_test_perf_output:
         description: Load Test PERFORMANCE CONTRACT output
         type: string
@@ -162,6 +178,15 @@ jobs:
                       },
                       "style": "${{ inputs.sanity_check_tests_output == 'true' && env.succeed_bnt || env.failed_bnt }}",
                       "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ inputs.results_artifact_id }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "Governance Test Results"
+                      },
+                      "style": "${{ inputs.governance_tests_output == 'true' && env.succeed_bnt || env.failed_bnt }}",
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                     }
                   ]
                 },
@@ -200,6 +225,26 @@ jobs:
                     {
                       "type": "mrkdwn",
                       "text": "${{ inputs.unstake_all_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Unstake All Test*"
+                    }
+                  ]
+                },
+                {
+                  "type": "divider"
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.block_time_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Block Time Test*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.epoch_size_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Epoch Size Test*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.base_fee_denom_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Base Fee Denom Test*"
                     }
                   ]
                 },

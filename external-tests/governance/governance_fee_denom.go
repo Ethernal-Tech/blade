@@ -68,22 +68,6 @@ func (t *ChangeBaseFeeDenom) Run() error {
 
 	t.executeSuccessfulProposalCycle(proposalInput, privKey, proposalDescription, "baseFeeChangeDenom", newBaseFeeDenom)
 
-	networkParamsResponse, err = ABICall(t.txrelayer,
-		contractsapi.NetworkParams, contracts.NetworkParamsContract,
-		types.ZeroAddress, "baseFeeChangeDenom")
-	if err != nil {
-		return err
-	}
-
-	baseFeeDenom, err := common.ParseUint256orHex(&networkParamsResponse)
-	if err != nil {
-		return err
-	}
-
-	if baseFeeDenom.Uint64() != newBaseFeeDenom.Uint64() {
-		return fmt.Errorf("base fee denom didnt change")
-	}
-
 	setOldBaseFeeDenomFn := &contractsapi.SetNewBaseFeeChangeDenomNetworkParamsFn{
 		NewBaseFeeChangeDenom: oldBaseFeeDenom,
 	}
@@ -94,22 +78,6 @@ func (t *ChangeBaseFeeDenom) Run() error {
 	}
 
 	t.executeSuccessfulProposalCycle(proposalInput, privKey, proposalDescription, "baseFeeChangeDenom", oldBaseFeeDenom)
-
-	networkParamsResponse, err = ABICall(t.txrelayer,
-		contractsapi.NetworkParams, contracts.NetworkParamsContract,
-		types.ZeroAddress, "baseFeeChangeDenom")
-	if err != nil {
-		return err
-	}
-
-	baseFeeDenom, err = common.ParseUint256orHex(&networkParamsResponse)
-	if err != nil {
-		return err
-	}
-
-	if baseFeeDenom.Uint64() != oldBaseFeeDenom.Uint64() {
-		return fmt.Errorf("base fee denom didnt change")
-	}
 
 	return nil
 }
