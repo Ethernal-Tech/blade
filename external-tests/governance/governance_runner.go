@@ -101,8 +101,14 @@ func registerTests(cfg *GovernanceTestConfig,
 		return nil, err
 	}
 
+	newEpochSizeTest, err := NewEpochSizeTest(cfg, testAccountKey, client)
+	if err != nil {
+		return nil, err
+	}
+
 	return []GovernanceTest{
 		newBlockTimeTest,
+		newEpochSizeTest,
 	}, nil
 }
 
@@ -114,7 +120,7 @@ func (r *GovernanceTestRunner) Close() error {
 
 // Run executes the sanity check test based on the provided SanityCheckTestConfig.
 func (r *GovernanceTestRunner) Run() error {
-	fmt.Println("Running sanity check tests")
+	fmt.Println("Running Governance tests")
 
 	results := make([]GovernanceTestResult, 0, len(r.tests))
 
@@ -141,7 +147,7 @@ func (r *GovernanceTestRunner) Run() error {
 	printUxSeparator()
 
 	if !r.config.ResultsToJSON {
-		fmt.Println("Sanity check results:")
+		fmt.Println("Governance tests results:")
 
 		for _, result := range results {
 			fmt.Println(result.String())
@@ -150,7 +156,7 @@ func (r *GovernanceTestRunner) Run() error {
 		return nil
 	}
 
-	return saveResultsToFile(results, "sanity_check_results.json")
+	return saveResultsToFile(results, "governance_test_results.json")
 }
 
 // saveResultsToFile saves the sanity check tests results to a JSON file.

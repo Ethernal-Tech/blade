@@ -238,7 +238,7 @@ func TestE2E_Governance_ProposeAndExecuteSimpleProposal(t *testing.T) {
 		proposalInput, err := setNewBaseFeeDenomFn.EncodeAbi()
 		require.NoError(t, err)
 
-		proposalDescription := fmt.Sprintf("Change epoch size from %d to %d", oldEpochSize, newEpochSize)
+		proposalDescription := fmt.Sprintf("Change base fee denom")
 
 		executeSuccessfulProposalCycle(t, proposalInput, proposalDescription, "baseFeeChangeDenom", newBaseFeeChangeDenom)
 	})
