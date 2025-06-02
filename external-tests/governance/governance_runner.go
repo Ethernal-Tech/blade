@@ -106,9 +106,15 @@ func registerTests(cfg *GovernanceTestConfig,
 		return nil, err
 	}
 
+	newBaseFeeDenomTest, err := NewBaseFeeDenomTest(cfg, testAccountKey, client)
+	if err != nil {
+		return nil, err
+	}
+
 	return []GovernanceTest{
 		newBlockTimeTest,
 		newEpochSizeTest,
+		newBaseFeeDenomTest,
 	}, nil
 }
 
