@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"reflect"
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
@@ -50,7 +51,7 @@ type BaseGovernanceTest struct {
 	txrelayer txrelayer.TxRelayer
 }
 
-// NewBaseGovernanceTest creates a new Governance
+// NewBaseGovernanceTest creates a new Governance test instance.
 func NewBaseGovernanceTest(cfg *GovernanceTestConfig,
 	testAccountKey *crypto.ECDSAKey, client *jsonrpc.EthClient) (*BaseGovernanceTest, error) {
 	txRelayer, err := txrelayer.NewTxRelayer(
@@ -79,6 +80,7 @@ func decodePrivateKey(privateKeyRaw string) (*crypto.ECDSAKey, error) {
 	return crypto.NewECDSAKeyFromRawPrivECDSA(raw)
 }
 
+// sendQueueProposalTransaction sends a queue proposal to the ChildGovernor contract.
 func (b *BaseGovernanceTest) sendQueueProposalTransaction(
 	senderKey crypto.Key,
 	input []byte, description string) error {
@@ -112,6 +114,8 @@ func (b *BaseGovernanceTest) sendQueueProposalTransaction(
 	return nil
 }
 
+// sendProposalTransaction submits a proposal to the ChildGovernor contract
+// and returns the created proposal ID.
 func (b *BaseGovernanceTest) sendProposalTransaction(
 	senderKey crypto.Key,
 	input []byte, description string) (*big.Int, error) {
@@ -139,7 +143,7 @@ func (b *BaseGovernanceTest) sendProposalTransaction(
 	}
 
 	if uint64(types.ReceiptSuccess) != receipt.Status {
-		return nil, fmt.Errorf("proposal transaction receipt status failed")
+		return nil, fmt.Errorf("send proposal transaction receipt status == failed")
 	}
 
 	var proposalCreatedEvent contractsapi.ProposalCreatedEvent
@@ -154,11 +158,15 @@ func (b *BaseGovernanceTest) sendProposalTransaction(
 		}
 	}
 
-	//TO DO: it's neccessary to add check for prposal created event...
+	if reflect.DeepEqual(proposalCreatedEvent, contractsapi.ProposalCreatedEvent{}) {
+		return nil, fmt.Errorf("proposal event empty")
+	}
 
 	return proposalCreatedEvent.ProposalID, nil
 }
 
+// executeSuccessfulProposalCycle runs the full governance proposal lifecycle and
+// verifies the updated network parameter.
 func (b *BaseGovernanceTest) executeSuccessfulProposalCycle(
 	proposalInput []byte, proposerAcc *crypto.ECDSAKey,
 	proposalDescription, fieldName string, expectedValue *big.Int) error {
@@ -240,6 +248,7 @@ func (b *BaseGovernanceTest) executeSuccessfulProposalCycle(
 	return nil
 }
 
+// getProposalState returns the current state of the given proposal by calling the ChildGovernor contract.
 func (b *BaseGovernanceTest) getProposalState(proposalID *big.Int) (ProposalState, error) {
 	stateFn := &contractsapi.StateChildGovernorFn{
 		ProposalID: proposalID,
@@ -267,6 +276,7 @@ func (b *BaseGovernanceTest) getProposalState(proposalID *big.Int) (ProposalStat
 	return ProposalState(converted), nil
 }
 
+// sendVoteTransaction submits a vote on the given proposal to the ChildGovernor contract.
 func (b *BaseGovernanceTest) sendVoteTransaction(proposalID *big.Int, vote VoteType,
 	senderKey crypto.Key) error {
 	castVoteFn := &contractsapi.CastVoteChildGovernorFn{
@@ -290,12 +300,14 @@ func (b *BaseGovernanceTest) sendVoteTransaction(proposalID *big.Int, vote VoteT
 	}
 
 	if uint64(types.ReceiptSuccess) != receipt.Status {
-		return fmt.Errorf("receipt failed")
+		return fmt.Errorf("send vote transaction receipt status == failed")
 	}
 
 	return nil
 }
 
+// sendExecuteProposalTransaction executes a successful proposal on the ChildGovernor contract
+// using the given calldata and description.
 func (b *BaseGovernanceTest) sendExecuteProposalTransaction(
 	senderKey crypto.Key, input []byte,
 	description string) error {
