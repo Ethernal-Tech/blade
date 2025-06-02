@@ -36,7 +36,7 @@ require (
 	github.com/json-iterator/go v1.1.12
 	github.com/libp2p/go-libp2p v0.41.1
 	github.com/libp2p/go-libp2p-kbucket v0.7.0
-	github.com/libp2p/go-libp2p-pubsub v0.13.1
+	github.com/libp2p/go-libp2p-pubsub v0.14.0
 	github.com/multiformats/go-multiaddr v0.15.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/prometheus/client_golang v1.22.0
