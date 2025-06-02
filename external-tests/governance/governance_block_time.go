@@ -37,7 +37,7 @@ func (t *ChangeBlockTime) Run() error {
 	fmt.Println("Running", t.Name())
 	defer fmt.Println("Finished", t.Name())
 
-	setTime := func(newBlockTime *big.Int) error {
+	setTime := func(newBlockTime *big.Int, oldBlockTime *big.Int) error {
 		setNewBlockTime := contractsapi.SetNewBlockTimeNetworkParamsFn{
 			NewBlockTime: newBlockTime,
 		}
@@ -54,10 +54,11 @@ func (t *ChangeBlockTime) Run() error {
 			return err
 		}
 
-		executeSuccssfulProposalCycle(t.config,
-			t.txrelayer, proposalInput,
+		if err := t.executeSuccessfulProposalCycle(proposalInput,
 			privKey, proposalDescription,
-			"blockTime", newBlockTime)
+			"blockTime", newBlockTime); err != nil {
+			return err
+		}
 
 		networkParamsResponse, err := ABICall(t.txrelayer,
 			contractsapi.NetworkParams, contracts.NetworkParamsContract,
@@ -80,7 +81,7 @@ func (t *ChangeBlockTime) Run() error {
 
 		endOfEpoch := (currentBlockNumber/epochSize.Uint64() + 1) * epochSize.Uint64()
 
-		if err := waitForBlock(int64(endOfEpoch)+5, 3*time.Minute); err != nil {
+		if err := waitForBlock(endOfEpoch+5, 3*time.Minute, t.txrelayer); err != nil {
 			return err
 		}
 
@@ -103,16 +104,14 @@ func (t *ChangeBlockTime) Run() error {
 		return nil
 	}
 
+	oldBlockTime := big.NewInt(2) // 2 seconds
 	newBlockTime := big.NewInt(5) // 5 seconds
 
-	if err := setTime(newBlockTime); err != nil {
+	if err := setTime(newBlockTime, oldBlockTime); err != nil {
 		return err
 	}
 
-	// it's neccessary to set old block time on test network.
-	oldBlockTime := big.NewInt(2) // 2 seconds
-
-	if err := setTime(oldBlockTime); err != nil {
+	if err := setTime(oldBlockTime, newBlockTime); err != nil {
 		return err
 	}
 

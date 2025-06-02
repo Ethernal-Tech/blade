@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/contracts"
-	"github.com/0xPolygon/polygon-edge/jsonrpc"
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
 )
@@ -32,7 +31,7 @@ func waitUntil(timeout time.Duration, pollFrequency time.Duration, handler func(
 	}
 }
 
-func waitForBlock(n int64, timeout time.Duration) error {
+func waitForBlock(n uint64, timeout time.Duration, relayer txrelayer.TxRelayer) error {
 	timer := time.NewTicker(2 * time.Minute)
 	ticker := time.NewTicker(2 * time.Second)
 
@@ -45,10 +44,13 @@ func waitForBlock(n int64, timeout time.Duration) error {
 	for {
 		select {
 		case <-timer.C:
-			return fmt.Errorf("timed out waiting for block")
+			return fmt.Errorf("governance timed out waiting for block")
 		case <-ticker.C:
-			rpcBlock := jsonrpc.LatestBlockNumber
-			if rpcBlock >= jsonrpc.BlockNumber(n) {
+			blockNumber, err := relayer.Client().BlockNumber()
+			if err != nil {
+				return err
+			}
+			if blockNumber >= n {
 				return nil
 			}
 		}

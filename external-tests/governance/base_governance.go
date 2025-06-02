@@ -79,8 +79,8 @@ func decodePrivateKey(privateKeyRaw string) (*crypto.ECDSAKey, error) {
 	return crypto.NewECDSAKeyFromRawPrivECDSA(raw)
 }
 
-func sendQueueProposalTransaction(
-	txRelayer txrelayer.TxRelayer, senderKey crypto.Key,
+func (b *BaseGovernanceTest) sendQueueProposalTransaction(
+	senderKey crypto.Key,
 	input []byte, description string) error {
 
 	queueFn := contractsapi.QueueChildGovernorFn{
@@ -100,7 +100,7 @@ func sendQueueProposalTransaction(
 		types.WithInput(input),
 	))
 
-	receipt, err := txRelayer.SendTransaction(txn, senderKey)
+	receipt, err := b.txrelayer.SendTransaction(txn, senderKey)
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func sendQueueProposalTransaction(
 	return nil
 }
 
-func sendProposalTransaction(txRelayer txrelayer.TxRelayer,
+func (b *BaseGovernanceTest) sendProposalTransaction(
 	senderKey crypto.Key,
 	input []byte, description string) (*big.Int, error) {
 
@@ -133,20 +133,20 @@ func sendProposalTransaction(txRelayer txrelayer.TxRelayer,
 		types.WithInput(input),
 	))
 
-	receipt, err := txRelayer.SendTransaction(txn, senderKey)
+	receipt, err := b.txrelayer.SendTransaction(txn, senderKey)
 	if err != nil {
 		return nil, err
 	}
 
-	if uint64(types.ReceiptSuccess) == receipt.Status {
-		return nil, fmt.Errorf("receipt status failed")
+	if uint64(types.ReceiptSuccess) != receipt.Status {
+		return nil, fmt.Errorf("proposal transaction receipt status failed")
 	}
 
-	var proposalCreatedEvent *contractsapi.ProposalCreatedEvent
+	var proposalCreatedEvent contractsapi.ProposalCreatedEvent
 	for _, log := range receipt.Logs {
 		doesMatch, err := proposalCreatedEvent.ParseLog(log)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("parsing log error:%w", err)
 		}
 
 		if doesMatch {
@@ -154,78 +154,76 @@ func sendProposalTransaction(txRelayer txrelayer.TxRelayer,
 		}
 	}
 
-	if proposalCreatedEvent == nil {
-		return nil, fmt.Errorf("proposal event is nil")
-	}
+	//TO DO: it's neccessary to add check for prposal created event...
 
 	return proposalCreatedEvent.ProposalID, nil
 }
 
-func executeSuccssfulProposalCycle(cfg *GovernanceTestConfig, relayer txrelayer.TxRelayer,
+func (b *BaseGovernanceTest) executeSuccessfulProposalCycle(
 	proposalInput []byte, proposerAcc *crypto.ECDSAKey,
-	proposalDescription, fieldname string, expectedValue *big.Int) error {
-	proposalID, err := sendProposalTransaction(relayer, proposerAcc,
+	proposalDescription, fieldName string, expectedValue *big.Int) error {
+	proposalID, err := b.sendProposalTransaction(proposerAcc,
 		proposalInput, proposalDescription)
 	if err != nil {
 		return err
 	}
 
 	if err := waitUntil(3*time.Minute, 2*time.Second, func() (bool, error) {
-		proposalState, err := getProposalState(proposalID, relayer)
+		proposalState, err := b.getProposalState(proposalID)
 
 		return proposalState == Active, err
 	}); err != nil {
 		return err
 	}
 
-	for _, key := range cfg.ValidatorKeys {
+	for _, key := range b.config.ValidatorKeys {
 		privKey, err := decodePrivateKey(key)
 		if err != nil {
 			return err
 		}
 
-		if err := sendVoteTransaction(proposalID, For, relayer, privKey); err != nil {
+		if err := b.sendVoteTransaction(proposalID, For, privKey); err != nil {
 			return err
 		}
 	}
 
 	if err := waitUntil(3*time.Minute, 2*time.Second, func() (bool, error) {
-		proposalState, err := getProposalState(proposalID, relayer)
+		proposalState, err := b.getProposalState(proposalID)
 
 		return proposalState == Succeeded, err
 	}); err != nil {
 		return err
 	}
 
-	if err := sendQueueProposalTransaction(relayer,
+	if err := b.sendQueueProposalTransaction(
 		proposerAcc, proposalInput, proposalDescription); err != nil {
 		return err
 	}
 
 	if err := waitUntil(3*time.Minute, 2*time.Second, func() (bool, error) {
-		proposalState, err := getProposalState(proposalID, relayer)
+		proposalState, err := b.getProposalState(proposalID)
 
 		return proposalState == Queued, err
 	}); err != nil {
 		return err
 	}
 
-	currentBlockNumber, err := relayer.Client().BlockNumber()
+	currentBlockNumber, err := b.txrelayer.Client().BlockNumber()
 	if err != nil {
 		return err
 	}
 
-	if err := waitForBlock(int64(currentBlockNumber+2), 10*time.Second); err != nil {
+	if err := waitForBlock(currentBlockNumber+2, 10*time.Second, b.txrelayer); err != nil {
 		return err
 	}
 
-	if err := sendExecuteProposalTransaction(
-		relayer, proposerAcc, proposalInput, proposalDescription); err != nil {
+	if err := b.sendExecuteProposalTransaction(
+		proposerAcc, proposalInput, proposalDescription); err != nil {
 		return err
 	}
 
-	networkParamsRespons, err := ABICall(relayer, contractsapi.NetworkParams,
-		contracts.NetworkParamsContract, types.ZeroAddress, fieldname)
+	networkParamsRespons, err := ABICall(b.txrelayer, contractsapi.NetworkParams,
+		contracts.NetworkParamsContract, types.ZeroAddress, fieldName)
 	if err != nil {
 		return err
 	}
@@ -242,8 +240,7 @@ func executeSuccssfulProposalCycle(cfg *GovernanceTestConfig, relayer txrelayer.
 	return nil
 }
 
-func getProposalState(proposalID *big.Int, txRelayer txrelayer.TxRelayer) (ProposalState, error) {
-
+func (b *BaseGovernanceTest) getProposalState(proposalID *big.Int) (ProposalState, error) {
 	stateFn := &contractsapi.StateChildGovernorFn{
 		ProposalID: proposalID,
 	}
@@ -253,12 +250,12 @@ func getProposalState(proposalID *big.Int, txRelayer txrelayer.TxRelayer) (Propo
 		return 0, err
 	}
 
-	response, err := txRelayer.Call(types.ZeroAddress, contracts.ChildGovernorContract, input)
+	response, err := b.txrelayer.Call(types.ZeroAddress, contracts.ChildGovernorContract, input)
 	if err != nil {
 		return 0, err
 	}
 
-	if "0x" != response {
+	if "0x" == response {
 		return 0, fmt.Errorf("response not equal to 0x")
 	}
 
@@ -270,8 +267,8 @@ func getProposalState(proposalID *big.Int, txRelayer txrelayer.TxRelayer) (Propo
 	return ProposalState(converted), nil
 }
 
-func sendVoteTransaction(proposalID *big.Int, vote VoteType,
-	txRelayer txrelayer.TxRelayer, senderKey crypto.Key) error {
+func (b *BaseGovernanceTest) sendVoteTransaction(proposalID *big.Int, vote VoteType,
+	senderKey crypto.Key) error {
 	castVoteFn := &contractsapi.CastVoteChildGovernorFn{
 		ProposalID: proposalID,
 		Support:    uint8(vote),
@@ -287,7 +284,7 @@ func sendVoteTransaction(proposalID *big.Int, vote VoteType,
 		types.WithInput(input),
 	))
 
-	receipt, err := txRelayer.SendTransaction(txn, senderKey)
+	receipt, err := b.txrelayer.SendTransaction(txn, senderKey)
 	if err != nil {
 		return err
 	}
@@ -299,7 +296,7 @@ func sendVoteTransaction(proposalID *big.Int, vote VoteType,
 	return nil
 }
 
-func sendExecuteProposalTransaction(txRelayer txrelayer.TxRelayer,
+func (b *BaseGovernanceTest) sendExecuteProposalTransaction(
 	senderKey crypto.Key, input []byte,
 	description string) error {
 	executeFn := &contractsapi.ExecuteChildGovernorFn{
@@ -319,13 +316,13 @@ func sendExecuteProposalTransaction(txRelayer txrelayer.TxRelayer,
 		types.WithInput(input),
 	))
 
-	receipt, err := txRelayer.SendTransaction(txn, senderKey)
+	receipt, err := b.txrelayer.SendTransaction(txn, senderKey)
 	if err != nil {
 		return err
 	}
 
 	if uint64(types.ReceiptSuccess) != receipt.Status {
-		return fmt.Errorf("receipt status failed")
+		return fmt.Errorf("execute proposal receipt status failed")
 	}
 
 	return nil
