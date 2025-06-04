@@ -857,7 +857,7 @@ func (r *BaseLoadTestRunner) printNodeInfos(nodesResult *NodeInfoResult) error {
 		fmt.Println("Node information:")
 
 		table := tablewriter.NewWriter(os.Stdout)
-		table.SetHeader([]string{"Node URL", "Block Number"})
+		table.Header([]string{"Node URL", "Block Number"})
 
 		for _, nodeInfo := range nodesResult.NodeInfos {
 			table.Append([]string{nodeInfo.URL, fmt.Sprint(nodeInfo.BlockNumber)})
@@ -1431,7 +1431,7 @@ func printResults(totalTxs int, totalTime float64, totalGasUsed *big.Int,
 	minGasUtilization, maxGasUtilization, avgGasUtilization float64,
 	blockInfos []*BlockInfo) error {
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{
+	table.Header([]string{
 		"Block Number",
 		"Block Time (s)",
 		"Num Txs",
@@ -1456,7 +1456,7 @@ func printResults(totalTxs int, totalTime float64, totalGasUsed *big.Int,
 	table.Render()
 
 	table = tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{
+	table.Header([]string{
 		"Total Blocks",
 		"Total Txs",
 		"Total Time To Mine (s)",

@@ -91,7 +91,7 @@ func (r *ResultCollector) PrintResults() {
 	fmt.Println("VUs transaction count:")
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"VU", "Num of Sent Transactions"})
+	table.Header([]string{"VU", "Num of Sent Transactions"})
 
 	for vu, txCount := range r.VUTxns {
 		table.Append([]string{vu, fmt.Sprintf("%d", txCount)})
