@@ -91,13 +91,17 @@ func (r *ResultCollector) PrintResults() {
 	fmt.Println("VUs transaction count:")
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"VU", "Num of Sent Transactions"})
+	table.Header([]string{"VU", "Num of Sent Transactions"})
 
 	for vu, txCount := range r.VUTxns {
-		table.Append([]string{vu, fmt.Sprintf("%d", txCount)})
+		if err := table.Append([]string{vu, fmt.Sprintf("%d", txCount)}); err != nil {
+			fmt.Println("table append error", err)
+		}
 	}
 
-	table.Render()
+	if err := table.Render(); err != nil {
+		fmt.Println("table render error", err)
+	}
 
 	fmt.Println("=============================================================")
 	fmt.Println("Total balance read count:", r.BalanceReadCount)

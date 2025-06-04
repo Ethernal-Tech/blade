@@ -857,13 +857,17 @@ func (r *BaseLoadTestRunner) printNodeInfos(nodesResult *NodeInfoResult) error {
 		fmt.Println("Node information:")
 
 		table := tablewriter.NewWriter(os.Stdout)
-		table.SetHeader([]string{"Node URL", "Block Number"})
+		table.Header([]string{"Node URL", "Block Number"})
 
 		for _, nodeInfo := range nodesResult.NodeInfos {
-			table.Append([]string{nodeInfo.URL, fmt.Sprint(nodeInfo.BlockNumber)})
+			if err := table.Append([]string{nodeInfo.URL, fmt.Sprint(nodeInfo.BlockNumber)}); err != nil {
+				return err
+			}
 		}
 
-		table.Render()
+		if err := table.Render(); err != nil {
+			return err
+		}
 
 		if len(nodesResult.OutOfSync) > 0 {
 			fmt.Println("Nodes out of sync:")
@@ -1431,7 +1435,7 @@ func printResults(totalTxs int, totalTime float64, totalGasUsed *big.Int,
 	minGasUtilization, maxGasUtilization, avgGasUtilization float64,
 	blockInfos []*BlockInfo) error {
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{
+	table.Header([]string{
 		"Block Number",
 		"Block Time (s)",
 		"Num Txs",
@@ -1442,7 +1446,7 @@ func printResults(totalTxs int, totalTime float64, totalGasUsed *big.Int,
 	})
 
 	for _, blockInfo := range blockInfos {
-		table.Append([]string{
+		if err := table.Append([]string{
 			fmt.Sprintf("%d", blockInfo.Number),
 			fmt.Sprintf("%.2f", blockInfo.BlockTime),
 			fmt.Sprintf("%d", blockInfo.NumTxs),
@@ -1450,13 +1454,17 @@ func printResults(totalTxs int, totalTime float64, totalGasUsed *big.Int,
 			fmt.Sprintf("%d", blockInfo.GasLimit.Uint64()),
 			fmt.Sprintf("%.2f", blockInfo.GasUtilization),
 			fmt.Sprintf("%.2f", blockInfo.TPS),
-		})
+		}); err != nil {
+			return err
+		}
 	}
 
-	table.Render()
+	if err := table.Render(); err != nil {
+		return err
+	}
 
 	table = tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{
+	table.Header([]string{
 		"Total Blocks",
 		"Total Txs",
 		"Total Time To Mine (s)",
@@ -1469,7 +1477,8 @@ func printResults(totalTxs int, totalTime float64, totalGasUsed *big.Int,
 		"Max Gas Utilization",
 		"Average Gas Utilization",
 	})
-	table.Append([]string{
+
+	if err := table.Append([]string{
 		fmt.Sprintf("%d", len(blockInfos)),
 		fmt.Sprintf("%d", totalTxs),
 		fmt.Sprintf("%.2f", totalTime),
@@ -1481,9 +1490,13 @@ func printResults(totalTxs int, totalTime float64, totalGasUsed *big.Int,
 		fmt.Sprintf("%.2f", minGasUtilization),
 		fmt.Sprintf("%.2f", maxGasUtilization),
 		fmt.Sprintf("%.2f", avgGasUtilization),
-	})
+	}); err != nil {
+		return err
+	}
 
-	table.Render()
+	if err := table.Render(); err != nil {
+		return err
+	}
 
 	return nil
 }
