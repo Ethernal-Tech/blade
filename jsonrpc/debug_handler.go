@@ -127,6 +127,21 @@ func (debug *DebugHandler) StopGoTrace() error {
 	return nil
 }
 
+// MemTrace prints current heap allocation within blade into the file.
+// The file can be later analysed with go tool pprof.
+func (*DebugHandler) MemTrace(file string) error {
+	f, err := os.Create(expandHomeDirectory(file))
+	if err != nil {
+		return err
+	}
+
+	if err := pprof.Lookup("heap").WriteTo(f, 0); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Stacks returns a printed representation of the stacks of all goroutines. It
 // also permits the following optional filters to be used:
 //   - filter: boolean expression of packages to filter for
