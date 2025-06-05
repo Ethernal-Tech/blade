@@ -135,11 +135,7 @@ func (*DebugHandler) MemTrace(file string) error {
 		return err
 	}
 
-	if err := pprof.Lookup("heap").WriteTo(f, 0); err != nil {
-		return err
-	}
-
-	return nil
+	return pprof.Lookup("heap").WriteTo(f, 0)
 }
 
 // Stacks returns a printed representation of the stacks of all goroutines. It
