@@ -338,6 +338,26 @@ func (d *Debug) GoTrace(file string, nsec int64) (interface{}, error) {
 	)
 }
 
+// MemTrace prints current heap allocation within blade into the file.
+// The file can be later analysed with go tool pprof.
+func (d *Debug) MemTrace(file string) (interface{}, error) {
+	return d.throttling.AttemptRequest(
+		context.Background(),
+		func() (interface{}, error) {
+			if err := d.handler.MemTrace(file); err != nil {
+				return nil, err
+			}
+
+			absPath, err := filepath.Abs(file)
+			if err != nil {
+				return nil, err
+			}
+
+			return absPath, nil
+		},
+	)
+}
+
 // PrintBlock retrieves a block and returns its pretty printed form.
 func (d *Debug) PrintBlock(number uint64) (interface{}, error) {
 	return d.throttling.AttemptRequest(
