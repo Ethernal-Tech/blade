@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/Ethernal-Tech/ethgo"
 	"github.com/docker/docker/api/types/container"
@@ -39,6 +40,7 @@ const (
 	Erc20TokenFlag          = "erc20-token" //nolint:gosec
 	BladeManagerFlag        = "blade-manager"
 	BladeManagerFlagDesc    = "address of blade manager contract on a rootchain"
+	RootChainDockerPath     = ":/eth1data"
 )
 
 var (
@@ -127,6 +129,31 @@ func ReadRootchainIP() (string, error) {
 	}
 
 	return fmt.Sprintf("http://%s:%s", ports[0].HostIP, ports[0].HostPort), nil
+}
+
+func ReadRootchainDirectoryBinding() (string, error) {
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		return "", fmt.Errorf("rootchain directory error: %w", err)
+	}
+
+	contID, err := GetRootchainID()
+	if err != nil {
+		return "", err
+	}
+
+	inspect, err := cli.ContainerInspect(context.Background(), contID)
+	if err != nil {
+		return "", fmt.Errorf("rootchain directory error: %w", err)
+	}
+
+	for _, x := range inspect.HostConfig.Binds {
+		if strings.HasSuffix(x, RootChainDockerPath) {
+			return strings.TrimSuffix(strings.TrimSuffix(x, RootChainDockerPath), ":"), nil
+		}
+	}
+
+	return "", fmt.Errorf("rootchain directory - there is no binds")
 }
 
 // GetECDSAKey returns the key based on provided parameters

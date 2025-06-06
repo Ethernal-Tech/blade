@@ -17,10 +17,10 @@ import (
 )
 
 type PerfContractResultsCollector struct {
-	ConfirmedBatchesCountCh chan int
-	ConfirmedBatchesErrCh   chan error
-	ConfirmedBatchesCount   int
-	ConfirmedBatchesErrors  []error
+	ConfirmedBatchLastIDCh chan uint64
+	ConfirmedBatchesErrCh  chan error
+	ConfirmedBatchLastID   uint64
+	ConfirmedBatchesErrors []error
 
 	HashesCountCh chan *big.Int
 	HashesErrCh   chan error
@@ -36,14 +36,14 @@ type PerfContractResultsCollector struct {
 // NewPerfContractResultsCollector creates a new PerfContractResultsCollector instance.
 func NewPerfContractResultsCollector() *PerfContractResultsCollector {
 	return &PerfContractResultsCollector{
-		ConfirmedBatchesCountCh: make(chan int, 3000),
-		ConfirmedBatchesErrCh:   make(chan error, 3000),
-		HashesCountCh:           make(chan *big.Int, 3000),
-		HashesErrCh:             make(chan error, 3000),
-		LastBatchIDCh:           make(chan *big.Int, 3000),
-		LastBatchIDErrCh:        make(chan error, 3000),
-		LastBatchID:             new(big.Int),
-		HashesCount:             new(big.Int),
+		ConfirmedBatchLastIDCh: make(chan uint64, 3000),
+		ConfirmedBatchesErrCh:  make(chan error, 3000),
+		HashesCountCh:          make(chan *big.Int, 3000),
+		HashesErrCh:            make(chan error, 3000),
+		LastBatchIDCh:          make(chan *big.Int, 3000),
+		LastBatchIDErrCh:       make(chan error, 3000),
+		LastBatchID:            new(big.Int),
+		HashesCount:            new(big.Int),
 	}
 }
 
@@ -53,8 +53,8 @@ func (p *PerfContractResultsCollector) CollectResults(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case count := <-p.ConfirmedBatchesCountCh:
-			p.ConfirmedBatchesCount = count
+		case count := <-p.ConfirmedBatchLastIDCh:
+			p.ConfirmedBatchLastID = count
 		case err := <-p.ConfirmedBatchesErrCh:
 			p.ConfirmedBatchesErrors = append(p.ConfirmedBatchesErrors, err)
 		case count := <-p.HashesCountCh:
@@ -76,7 +76,7 @@ func (p *PerfContractResultsCollector) CollectResults(ctx context.Context) {
 // PrintResults prints the results of the load test.
 func (p *PerfContractResultsCollector) PrintResults() {
 	fmt.Println("====================================")
-	fmt.Println("Total number of confirmed batches", p.ConfirmedBatchesCount)
+	fmt.Println("Last batch ID", p.ConfirmedBatchLastID)
 	fmt.Println("Total number of hashes", p.HashesCount.String())
 	fmt.Println("Last batch ID", p.LastBatchID.String())
 
@@ -221,7 +221,7 @@ func (p *PerfContractRunner) Run(ctx context.Context) error {
 // createPerfContractTransaction creates a performance test contract transaction.
 func (p *PerfContractRunner) createPerfContractTransaction(
 	account *account, feeData *feeData, chainID *big.Int) (*types.Transaction, error) {
-	rawTx := make([]byte, 4_096)
+	rawTx := make([]byte, 2_048)
 	binary.LittleEndian.PutUint64(rawTx, account.nonce)
 
 	input := &contractsapi.SubmitSignedBatchTestPerformanceFn{
@@ -247,6 +247,7 @@ func (p *PerfContractRunner) createPerfContractTransaction(
 			types.WithGasTipCap(feeData.gasTipCap),
 			types.WithChainID(chainID),
 			types.WithInput(txInput),
+			types.WithGas(8_000_000),
 		)), nil
 	}
 
@@ -256,6 +257,7 @@ func (p *PerfContractRunner) createPerfContractTransaction(
 		types.WithGasPrice(feeData.gasPrice),
 		types.WithFrom(account.key.Address()),
 		types.WithInput(txInput),
+		types.WithGas(8_000_000),
 	)), nil
 }
 
@@ -356,7 +358,7 @@ func (p *PerfContractRunner) readState(ctx context.Context) {
 				default:
 					// read non stop the state of the accounts and contracts
 					p.readBasicState(client, contractMap)
-					p.readConfirmedBatchesCount(client)
+					p.readLastConfirmedBatchID(client)
 					p.readHashesCount(client)
 					p.readLastBatchID(client)
 				}
@@ -407,8 +409,8 @@ func (p *PerfContractRunner) readHashesCount(client *jsonrpc.EthClient) {
 	p.perfResultCollector.HashesCountCh <- count
 }
 
-// readConfirmedBatchesCount reads the number of confirmed batches from the performance test contract.
-func (p *PerfContractRunner) readConfirmedBatchesCount(client *jsonrpc.EthClient) {
+// readLastConfirmedBatchID reads the number of confirmed batches from the performance test contract.
+func (p *PerfContractRunner) readLastConfirmedBatchID(client *jsonrpc.EthClient) {
 	response, err := client.Call(&jsonrpc.CallMsg{
 		From: p.loadTestAccount.key.Address(),
 		To:   &p.contractAddr,
@@ -425,7 +427,7 @@ func (p *PerfContractRunner) readConfirmedBatchesCount(client *jsonrpc.EthClient
 		p.perfResultCollector.ConfirmedBatchesErrCh <- fmt.Errorf("unable to decode hex response, %w", err)
 	}
 
-	decoded, err := p.contractArtifact.Abi.Methods["getConfirmedBatches"].Outputs.Decode(byteResponse)
+	decoded, err := p.contractArtifact.Abi.Methods["getConfirmedBatch"].Outputs.Decode(byteResponse)
 	if err != nil {
 		p.perfResultCollector.ConfirmedBatchesErrCh <- fmt.Errorf("failed to decode getConfirmedBatches response, %w", err)
 	}
@@ -439,10 +441,17 @@ func (p *PerfContractRunner) readConfirmedBatchesCount(client *jsonrpc.EthClient
 		return
 	}
 
-	decodedBatches, ok := decodedMap["0"].([]map[string]interface{})
+	type confirmedBatch struct {
+		BatchID    *big.Int `abi:"batchID"`
+		Bitmap     *big.Int `abi:"bitmap"`
+		RawTx      []byte   `abi:"rawTx"`
+		Signatures [][]byte `abi:"signatures"`
+	}
+
+	decodedBatchMap, ok := decodedMap["0"].(map[string]interface{})
 	if !ok {
 		p.perfResultCollector.ConfirmedBatchesErrCh <- fmt.Errorf("failed to convert decoded batches to map, %w", err)
 	}
 
-	p.perfResultCollector.ConfirmedBatchesCountCh <- len(decodedBatches)
+	p.perfResultCollector.LastBatchIDCh <- decodedBatchMap["batchID"].(*big.Int)
 }

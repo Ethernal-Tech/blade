@@ -11,14 +11,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xPolygon/polygon-edge/command/bridge/helper"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/wallet"
+	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/e2e-polybft/framework"
 	"github.com/0xPolygon/polygon-edge/helper/common"
 	"github.com/0xPolygon/polygon-edge/helper/hex"
 	"github.com/0xPolygon/polygon-edge/jsonrpc"
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
+	"github.com/Ethernal-Tech/ethgo"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,6 +59,14 @@ func TestE2E_ApexBridge_TestPerformance(t *testing.T) {
 	admin, err := wallet.GenerateAccount()
 	require.NoError(t, err)
 
+	// default premined account for geth in --dev mode
+	privateKey, err := crypto.HexToECDSA(helper.TestAccountPrivKey)
+	require.NoError(t, err)
+
+	admin.Ecdsa = crypto.NewECDSAKey(privateKey)
+
+	fmt.Printf("Admin address: %s\n", admin.Address())
+
 	cluster := framework.NewTestCluster(
 		t, 4,
 		framework.WithBlockGasLimit(16_000_000),
@@ -63,7 +74,13 @@ func TestE2E_ApexBridge_TestPerformance(t *testing.T) {
 
 	cluster.WaitForReady(t)
 
-	testPerformance(t, "blade pebble", cluster.Servers[0].JSONRPC(), admin, cluster.Config.TmpDir)
+	defer func() {
+		cluster.Stop()
+	}()
+
+	testPerformance(
+		t, "blade pebble", cluster.Servers[0].JSONRPC(), admin,
+		filepath.Join(cluster.Config.TmpDir, "test-chain-1", "trie"), false)
 
 	cluster.Stop()
 
@@ -75,13 +92,34 @@ func TestE2E_ApexBridge_TestPerformance(t *testing.T) {
 
 	cluster.WaitForReady(t)
 
-	testPerformance(t, "blade leveldb", cluster.Servers[0].JSONRPC(), admin, cluster.Config.TmpDir)
+	testPerformance(
+		t, "blade leveldb", cluster.Servers[0].JSONRPC(), admin,
+		filepath.Join(cluster.Config.TmpDir, "test-chain-1", "trie"), false)
 
 	cluster.Stop()
+
+	testBridge, err := framework.NewTestBridge(t, cluster.Config)
+	require.NoError(t, err)
+
+	testBridgeClient, err := jsonrpc.NewEthClient(testBridge.JSONRPCAddr())
+	require.NoError(t, err)
+
+	testBridge.Start()
+
+	defer testBridge.Stop()
+
+	rootChainDirectoryBinding, err := helper.ReadRootchainDirectoryBinding()
+	require.NoError(t, err)
+
+	fmt.Printf("rootchain directory: %s\n", rootChainDirectoryBinding)
+
+	testPerformance(
+		t, "geth", testBridgeClient, admin, rootChainDirectoryBinding, true)
 }
 
 func testPerformance(
-	t *testing.T, testName string, client *jsonrpc.EthClient, admin *wallet.Account, basePath string,
+	t *testing.T, testName string, client *jsonrpc.EthClient,
+	admin *wallet.Account, triePath string, geth bool,
 ) {
 	t.Helper()
 
@@ -91,7 +129,7 @@ func testPerformance(
 		checkBatchID                       = true
 		deleteTemporaryMappingsAfterQuorum = true
 		batchesCount                       = 6
-		txSize                             = 12_384
+		txSize                             = 8192
 		waitForConsolidation               = time.Second * 60 * 5
 	)
 
@@ -107,12 +145,25 @@ func testPerformance(
 	txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(client))
 	require.NoError(t, err)
 
+	if geth {
+		amount := ethgo.Ether(100)
+
+		for _, acc := range append([]*wallet.Account{admin}, validators...) {
+			receipt, err := txRelayer.SendTransactionLocal(
+				types.NewTx(types.NewLegacyTx(
+					types.WithTo(acc.Address().Ptr()),
+					types.WithValue(amount),
+				)))
+			require.NoError(t, err)
+			require.Equal(t, uint64(types.ReceiptSuccess), receipt.Status)
+		}
+	}
+
 	input, err := contractsapi.TestPerformance.Abi.Constructor.Inputs.Encode([]interface{}{
 		big.NewInt(quorumCnt), checkBatchID, deleteTemporaryMappingsAfterQuorum,
 	})
 	require.NoError(t, err)
 
-	// deploy contract
 	receipt, err := txRelayer.SendTransaction(
 		types.NewTx(types.NewLegacyTx(
 			types.WithFrom(admin.Ecdsa.Address()),
@@ -121,13 +172,16 @@ func testPerformance(
 		)),
 		admin.Ecdsa)
 	require.NoError(t, err)
+	require.Equal(t, uint64(types.ReceiptSuccess), receipt.Status)
 
 	contractAddr := types.Address(receipt.ContractAddress)
 
 	getTotalTrieSize := func(t *testing.T) (total int64) {
 		t.Helper()
 
-		triePath := filepath.Join(basePath, "test-chain-1", "trie")
+		if geth {
+			return 0
+		}
 
 		err := filepath.Walk(triePath, func(_ string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -172,7 +226,7 @@ func testPerformance(
 			types.WithFrom(validatorAcc.Address()),
 			types.WithTo(&contractAddr),
 			types.WithInput(input),
-			types.WithGas(12_242_880),
+			types.WithGas(8_000_000),
 		))
 
 		receipt, err = txRelayer.SendTransaction(txn, validatorAcc.Ecdsa)

@@ -161,10 +161,10 @@ func runRootchain(ctx context.Context, outputter command.OutputFormatter, closeC
 	args = append(args, "--dev.period", "2")
 
 	// add data dir
-	args = append(args, "--datadir", "/eth1data")
+	args = append(args, "--datadir", helper.RootChainDockerPath)
 
 	// add ipcpath
-	args = append(args, "--ipcpath", "/eth1data/geth.ipc")
+	args = append(args, "--ipcpath", filepath.Join(helper.RootChainDockerPath, "geth.ipc"))
 
 	// enable rpc
 	args = append(args, "--http", "--http.addr", "0.0.0.0", "--http.api", "eth,net,web3,debug")
@@ -197,7 +197,7 @@ func runRootchain(ctx context.Context, outputter command.OutputFormatter, closeC
 	port := nat.Port(fmt.Sprintf("%s/tcp", defaultHostPort))
 	hostConfig := &container.HostConfig{
 		Binds: []string{
-			mountDir + ":/eth1data",
+			fmt.Sprintf("%s:%s", mountDir, helper.RootChainDockerPath),
 		},
 		PortBindings: nat.PortMap{
 			port: []nat.PortBinding{
