@@ -71,7 +71,7 @@ func TestE2E_ApexBridge_TestPerformance(t *testing.T) {
 		t, 4,
 		framework.WithBlockGasLimit(16_000_000),
 		framework.WithBladeAdmin(admin.Address().String()),
-		framework.WithDbEngine("leveldb"))
+		framework.WithDBEngine("leveldb"))
 
 	cluster.WaitForReady(t)
 

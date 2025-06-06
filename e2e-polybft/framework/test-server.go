@@ -42,7 +42,7 @@ type TestServerConfig struct {
 	UseTLS                bool
 	TLSCertFile           string
 	TLSKeyFile            string
-	DbEngine              string
+	DBEngine              string
 }
 
 type TestServerConfigCallback func(*TestServerConfig)
@@ -193,8 +193,8 @@ func (t *TestServer) Start() {
 		args = append(args, "--use-tls")
 	}
 
-	if config.DbEngine != "" {
-		args = append(args, "--db-engine", config.DbEngine)
+	if config.DBEngine != "" {
+		args = append(args, "--db-engine", config.DBEngine)
 	}
 
 	// Start the server

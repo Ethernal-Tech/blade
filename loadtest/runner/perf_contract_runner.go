@@ -222,7 +222,7 @@ func (p *PerfContractRunner) Run(ctx context.Context) error {
 func (p *PerfContractRunner) createPerfContractTransaction(
 	account *account, feeData *feeData, chainID *big.Int) (*types.Transaction, error) {
 	rawTx := make([]byte, 4_096)
-	binary.LittleEndian.PutUint64(rawTx[:], account.nonce)
+	binary.LittleEndian.PutUint64(rawTx, account.nonce)
 
 	input := &contractsapi.SubmitSignedBatchTestPerformanceFn{
 		SignedBatch: &contractsapi.SignedBatch{
@@ -416,6 +416,7 @@ func (p *PerfContractRunner) readConfirmedBatchesCount(client *jsonrpc.EthClient
 	}, jsonrpc.LatestBlockNumber, nil)
 	if err != nil {
 		p.perfResultCollector.ConfirmedBatchesErrCh <- err
+
 		return
 	}
 

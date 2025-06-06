@@ -151,7 +151,7 @@ type TestClusterConfig struct {
 	TLSCertFile string
 	TLSKeyFile  string
 
-	DbEngine string
+	DBEngine string
 }
 
 func (c *TestClusterConfig) Dir(name string) string {
@@ -480,9 +480,9 @@ func WithTLSCertificate(certFile string, keyFile string) ClusterOption {
 	}
 }
 
-func WithDbEngine(dbEngine string) ClusterOption {
+func WithDBEngine(dbEngine string) ClusterOption {
 	return func(h *TestClusterConfig) {
-		h.DbEngine = dbEngine
+		h.DBEngine = dbEngine
 	}
 }
 
@@ -831,7 +831,7 @@ func (c *TestCluster) InitTestServer(t *testing.T,
 		config.UseTLS = c.Config.UseTLS
 		config.TLSCertFile = c.Config.TLSCertFile
 		config.TLSKeyFile = c.Config.TLSKeyFile
-		config.DbEngine = c.Config.DbEngine
+		config.DBEngine = c.Config.DBEngine
 	})
 
 	// watch the server for stop signals. It is important to fix the specific
