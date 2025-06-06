@@ -2494,19 +2494,19 @@ func (t *TestPerformanceConstructorFn) DecodeAbi(buf []byte) error {
 	return decodeMethod(TestPerformance.Abi.Constructor, buf, t)
 }
 
-type GetConfirmedBatchesTestPerformanceFn struct {
+type GetConfirmedBatchTestPerformanceFn struct {
 }
 
-func (g *GetConfirmedBatchesTestPerformanceFn) Sig() []byte {
-	return TestPerformance.Abi.Methods["getConfirmedBatches"].ID()
+func (g *GetConfirmedBatchTestPerformanceFn) Sig() []byte {
+	return TestPerformance.Abi.Methods["getConfirmedBatch"].ID()
 }
 
-func (g *GetConfirmedBatchesTestPerformanceFn) EncodeAbi() ([]byte, error) {
-	return TestPerformance.Abi.Methods["getConfirmedBatches"].Encode(g)
+func (g *GetConfirmedBatchTestPerformanceFn) EncodeAbi() ([]byte, error) {
+	return TestPerformance.Abi.Methods["getConfirmedBatch"].Encode(g)
 }
 
-func (g *GetConfirmedBatchesTestPerformanceFn) DecodeAbi(buf []byte) error {
-	return decodeMethod(TestPerformance.Abi.Methods["getConfirmedBatches"], buf, g)
+func (g *GetConfirmedBatchTestPerformanceFn) DecodeAbi(buf []byte) error {
+	return decodeMethod(TestPerformance.Abi.Methods["getConfirmedBatch"], buf, g)
 }
 
 type GetHashesCountTestPerformanceFn struct {
@@ -2541,12 +2541,12 @@ func (g *GetLastBatchIDTestPerformanceFn) DecodeAbi(buf []byte) error {
 
 type SignedBatch struct {
 	BatchID     *big.Int `abi:"batchID"`
-	Counter     *big.Int `abi:"counter"`
 	ValidatorID *big.Int `abi:"validatorID"`
+	RawTx       []byte   `abi:"rawTx"`
 	Signature   []byte   `abi:"signature"`
 }
 
-var SignedBatchABIType = abi.MustNewType("tuple(uint256 batchID,uint256 counter,uint256 validatorID,bytes signature)")
+var SignedBatchABIType = abi.MustNewType("tuple(uint256 batchID,uint256 validatorID,bytes rawTx,bytes signature)")
 
 func (s *SignedBatch) EncodeAbi() ([]byte, error) {
 	return SignedBatchABIType.Encode(s)

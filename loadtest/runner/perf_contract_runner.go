@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 	"time"
@@ -116,9 +117,9 @@ type PerfContractRunner struct {
 	contractAddr     types.Address
 	contractArtifact *contracts.Artifact
 
-	getConfirmedBatchesInput []byte
-	getHashesCountInput      []byte
-	getLastBatchIDInput      []byte
+	getConfirmedBatchInput []byte
+	getHashesCountInput    []byte
+	getLastBatchIDInput    []byte
 }
 
 // NewPerfContractRunner creates a new PerfContractRunner instance with the given LoadTestConfig.
@@ -220,10 +221,13 @@ func (p *PerfContractRunner) Run(ctx context.Context) error {
 // createPerfContractTransaction creates a performance test contract transaction.
 func (p *PerfContractRunner) createPerfContractTransaction(
 	account *account, feeData *feeData, chainID *big.Int) (*types.Transaction, error) {
+	rawTx := make([]byte, 4_096)
+	binary.LittleEndian.PutUint64(rawTx[:], account.nonce)
+
 	input := &contractsapi.SubmitSignedBatchTestPerformanceFn{
 		SignedBatch: &contractsapi.SignedBatch{
 			BatchID:     new(big.Int).SetUint64(account.nonce),
-			Counter:     new(big.Int).SetUint64(account.nonce),
+			RawTx:       rawTx,
 			ValidatorID: new(big.Int).SetUint64(uint64(account.index)),
 			Signature:   []byte(fmt.Sprintf("validator-%d", account.index)),
 		},
@@ -312,7 +316,7 @@ func (p *PerfContractRunner) deployPerfContract() error {
 func (p *PerfContractRunner) getFunctionsInput() error {
 	var err error
 
-	p.getConfirmedBatchesInput, err = (&contractsapi.GetConfirmedBatchesTestPerformanceFn{}).EncodeAbi()
+	p.getConfirmedBatchInput, err = (&contractsapi.GetConfirmedBatchTestPerformanceFn{}).EncodeAbi()
 	if err != nil {
 		return fmt.Errorf("failed to encode getConfirmedBatches function: %w", err)
 	}
@@ -408,11 +412,10 @@ func (p *PerfContractRunner) readConfirmedBatchesCount(client *jsonrpc.EthClient
 	response, err := client.Call(&jsonrpc.CallMsg{
 		From: p.loadTestAccount.key.Address(),
 		To:   &p.contractAddr,
-		Data: p.getConfirmedBatchesInput,
+		Data: p.getConfirmedBatchInput,
 	}, jsonrpc.LatestBlockNumber, nil)
 	if err != nil {
 		p.perfResultCollector.ConfirmedBatchesErrCh <- err
-
 		return
 	}
 

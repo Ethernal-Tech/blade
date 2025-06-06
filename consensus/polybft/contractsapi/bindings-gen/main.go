@@ -488,7 +488,7 @@ func main() {
 			gensc.TestPerformance,
 			true,
 			[]string{
-				"getConfirmedBatches",
+				"getConfirmedBatch",
 				"getHashesCount",
 				"getLastBatchID",
 				"submitSignedBatch",
