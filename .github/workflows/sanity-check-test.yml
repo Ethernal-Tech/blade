@@ -6,7 +6,7 @@ on: # yamllint disable-line rule:truthy
       environment:
         description: The environment to run against
         type: choice
-        options: [dev, test] # nightly should not be initiated manually
+        options: [dev, testnet] # nightly should not be initiated manually
   workflow_call:
     inputs:
       environment:
