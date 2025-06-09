@@ -453,5 +453,5 @@ func (p *PerfContractRunner) readLastConfirmedBatchID(client *jsonrpc.EthClient)
 		p.perfResultCollector.ConfirmedBatchesErrCh <- fmt.Errorf("failed to convert decoded batches to map, %w", err)
 	}
 
-	p.perfResultCollector.LastBatchIDCh <- decodedBatchMap["batchID"].(*big.Int)
+	p.perfResultCollector.LastBatchIDCh <- decodedBatchMap["batchID"].(*big.Int) //nolint
 }

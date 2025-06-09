@@ -104,7 +104,7 @@ func TestE2E_ApexBridge_TestPerformance(t *testing.T) {
 	testBridgeClient, err := jsonrpc.NewEthClient(testBridge.JSONRPCAddr())
 	require.NoError(t, err)
 
-	testBridge.Start()
+	require.NoError(t, testBridge.Start())
 
 	defer testBridge.Stop()
 
@@ -128,9 +128,9 @@ func testPerformance(
 		quorumCnt                          = 4
 		checkBatchID                       = true
 		deleteTemporaryMappingsAfterQuorum = true
-		batchesCount                       = 6
+		batchesCount                       = 30
 		txSize                             = 8192
-		waitForConsolidation               = time.Second * 60 * 5
+		waitForConsolidation               = time.Second * 2 * 5
 	)
 
 	validators := make([]*wallet.Account, validatorsCount)
