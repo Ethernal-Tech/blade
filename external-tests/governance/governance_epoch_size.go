@@ -35,7 +35,7 @@ func (t *ChangeEpochSize) Run() error {
 	defer fmt.Println("Finished", t.Name())
 
 	var (
-		oldEpochSize = uint64(5)
+		oldEpochSize = t.BaseGovernanceTest.config.EpochSize
 		newEpochSize = uint64(10)
 	)
 

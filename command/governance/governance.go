@@ -41,6 +41,20 @@ func setFlags(cmd *cobra.Command) {
 		"saves results to JSON file",
 	)
 
+	cmd.Flags().Uint64Var(
+		&params.epochSize,
+		epochSizeFlag,
+		5,
+		"epoch size on the network for which the governance test is run",
+	)
+
+	cmd.Flags().Uint64Var(
+		&params.blockTime,
+		blockTimeFlag,
+		2,
+		"block time on the network for which the governance test is run",
+	)
+
 	cmd.Flags().StringSliceVar(
 		&params.validatorKeys,
 		validatorKeysFlag,
@@ -58,6 +72,8 @@ func runCommand(cmd *cobra.Command, _ []string) {
 			JSONRPCUrl:    params.jsonRPCAddress,
 			ValidatorKeys: params.validatorKeys,
 			ResultsToJSON: params.toJSON,
+			EpochSize:     params.epochSize,
+			BlockTime:     params.blockTime,
 		},
 	)
 

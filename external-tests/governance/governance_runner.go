@@ -42,6 +42,8 @@ type GovernanceTestConfig struct {
 	ResultsToJSON bool // ResultsToJSON indicates whether the results should be written in JSON format.
 
 	EpochSize uint64 // EpochSize is the size of the epoch.
+
+	BlockTime uint64 // Block time is the time needed to create a new block.
 }
 
 // SanityCheckTestRunner represents a runner for sanity check tests on a test network

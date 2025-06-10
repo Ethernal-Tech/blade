@@ -6,6 +6,7 @@ import (
 
 const (
 	epochSizeFlag     = "epoch-size"
+	blockTimeFlag     = "block-time"
 	validatorKeysFlag = "validator-keys"
 )
 
@@ -15,6 +16,10 @@ var (
 
 // sanityCheckParams holds the parameters for the sanity check command
 type governanceParams struct {
+	epochSize uint64
+
+	blockTime uint64
+
 	jsonRPCAddress string
 
 	toJSON bool

@@ -36,7 +36,7 @@ func (t *ChangeBlockTime) Run() error {
 	fmt.Println("Running", t.Name())
 	defer fmt.Println("Finished", t.Name())
 
-	setTime := func(newBlockTime *big.Int, oldBlockTime *big.Int) error {
+	setTime := func(newBlockTime *big.Int) error {
 		setNewBlockTime := contractsapi.SetNewBlockTimeNetworkParamsFn{
 			NewBlockTime: newBlockTime,
 		}
@@ -103,14 +103,14 @@ func (t *ChangeBlockTime) Run() error {
 		return nil
 	}
 
-	oldBlockTime := big.NewInt(2) // 2 seconds
+	oldBlockTime := new(big.Int).SetUint64(t.BaseGovernanceTest.config.BlockTime)
 	newBlockTime := big.NewInt(5) // 5 seconds
 
-	if err := setTime(newBlockTime, oldBlockTime); err != nil {
+	if err := setTime(newBlockTime); err != nil {
 		return err
 	}
 
-	if err := setTime(oldBlockTime, newBlockTime); err != nil {
+	if err := setTime(oldBlockTime); err != nil {
 		return err
 	}
 
