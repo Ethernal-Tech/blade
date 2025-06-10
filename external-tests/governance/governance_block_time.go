@@ -60,7 +60,7 @@ func (t *ChangeBlockTime) Run() error {
 			return err
 		}
 
-		networkParamsResponse, err := ABICall(t.txrelayer,
+		networkParamsResponse, err := ABICall(t.txRelayer,
 			contractsapi.NetworkParams, contracts.NetworkParamsContract,
 			types.ZeroAddress, "epochSize")
 		if err != nil {
@@ -72,7 +72,7 @@ func (t *ChangeBlockTime) Run() error {
 			return err
 		}
 
-		currentBlockNumber, err := t.txrelayer.Client().BlockNumber()
+		currentBlockNumber, err := t.txRelayer.Client().BlockNumber()
 		if err != nil {
 			return err
 		}
@@ -81,17 +81,17 @@ func (t *ChangeBlockTime) Run() error {
 
 		endOfEpoch := (currentBlockNumber/epochSize.Uint64() + 1) * epochSize.Uint64()
 
-		if err := waitForBlock(endOfEpoch+5, 3*time.Minute, t.txrelayer); err != nil {
+		if err := waitForBlock(endOfEpoch+5, 3*time.Minute, t.txRelayer); err != nil {
 			return err
 		}
 
 		blockToGet := endOfEpoch + 5
-		headerOne, err := t.txrelayer.Client().GetHeaderByNumber(jsonrpc.BlockNumber(blockToGet))
+		headerOne, err := t.txRelayer.Client().GetHeaderByNumber(jsonrpc.BlockNumber(blockToGet))
 		if err != nil {
 			return err
 		}
 
-		headerTwo, err := t.txrelayer.Client().GetHeaderByNumber(jsonrpc.BlockNumber(blockToGet - 1))
+		headerTwo, err := t.txRelayer.Client().GetHeaderByNumber(jsonrpc.BlockNumber(blockToGet - 1))
 		if err != nil {
 			return err
 		}

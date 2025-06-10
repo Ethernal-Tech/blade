@@ -38,7 +38,7 @@ func (t *ChangeBaseFeeDenom) Run() error {
 
 	newBaseFeeDenom := big.NewInt(215)
 
-	networkParamsResponse, err := ABICall(t.txrelayer,
+	networkParamsResponse, err := ABICall(t.txRelayer,
 		contractsapi.NetworkParams, contracts.NetworkParamsContract,
 		types.ZeroAddress, "baseFeeChangeDenom")
 	if err != nil {

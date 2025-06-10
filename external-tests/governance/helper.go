@@ -1,10 +1,12 @@
 package governance
 
 import (
+	"encoding/hex"
 	"fmt"
 	"time"
 
 	"github.com/0xPolygon/polygon-edge/contracts"
+	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/txrelayer"
 	"github.com/0xPolygon/polygon-edge/types"
 )
@@ -64,4 +66,14 @@ func ABICall(relayer txrelayer.TxRelayer, artifact *contracts.Artifact, contract
 	}
 
 	return relayer.Call(senderAddr, contractAddress, input)
+}
+
+// decodePrivateKey decodes the given private key string.
+func decodePrivateKey(privateKeyRaw string) (*crypto.ECDSAKey, error) {
+	raw, err := hex.DecodeString(privateKeyRaw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode private key string '%s': %w", privateKeyRaw, err)
+	}
+
+	return crypto.NewECDSAKeyFromRawPrivECDSA(raw)
 }

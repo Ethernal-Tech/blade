@@ -1,7 +1,6 @@
 package governance
 
 import (
-	"encoding/hex"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -48,7 +47,7 @@ type BaseGovernanceTest struct {
 	testAccountKey *crypto.ECDSAKey
 	client         *jsonrpc.EthClient
 
-	txrelayer txrelayer.TxRelayer
+	txRelayer txrelayer.TxRelayer
 }
 
 // NewBaseGovernanceTest creates a new Governance test instance.
@@ -65,19 +64,9 @@ func NewBaseGovernanceTest(cfg *GovernanceTestConfig,
 	return &BaseGovernanceTest{
 		config:         cfg,
 		client:         client,
-		txrelayer:      txRelayer,
+		txRelayer:      txRelayer,
 		testAccountKey: testAccountKey,
 	}, nil
-}
-
-// decodePrivateKey decodes the given private key string.
-func decodePrivateKey(privateKeyRaw string) (*crypto.ECDSAKey, error) {
-	raw, err := hex.DecodeString(privateKeyRaw)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode private key string '%s': %w", privateKeyRaw, err)
-	}
-
-	return crypto.NewECDSAKeyFromRawPrivECDSA(raw)
 }
 
 // sendQueueProposalTransaction sends a queue proposal to the ChildGovernor contract.
@@ -102,7 +91,7 @@ func (b *BaseGovernanceTest) sendQueueProposalTransaction(
 		types.WithInput(input),
 	))
 
-	receipt, err := b.txrelayer.SendTransaction(txn, senderKey)
+	receipt, err := b.txRelayer.SendTransaction(txn, senderKey)
 	if err != nil {
 		return err
 	}
@@ -137,7 +126,7 @@ func (b *BaseGovernanceTest) sendProposalTransaction(
 		types.WithInput(input),
 	))
 
-	receipt, err := b.txrelayer.SendTransaction(txn, senderKey)
+	receipt, err := b.txRelayer.SendTransaction(txn, senderKey)
 	if err != nil {
 		return nil, err
 	}
@@ -216,12 +205,12 @@ func (b *BaseGovernanceTest) executeSuccessfulProposalCycle(
 		return err
 	}
 
-	currentBlockNumber, err := b.txrelayer.Client().BlockNumber()
+	currentBlockNumber, err := b.txRelayer.Client().BlockNumber()
 	if err != nil {
 		return err
 	}
 
-	if err := waitForBlock(currentBlockNumber+2, 10*time.Second, b.txrelayer); err != nil {
+	if err := waitForBlock(currentBlockNumber+2, 10*time.Second, b.txRelayer); err != nil {
 		return err
 	}
 
@@ -230,7 +219,7 @@ func (b *BaseGovernanceTest) executeSuccessfulProposalCycle(
 		return err
 	}
 
-	networkParamsRespons, err := ABICall(b.txrelayer, contractsapi.NetworkParams,
+	networkParamsRespons, err := ABICall(b.txRelayer, contractsapi.NetworkParams,
 		contracts.NetworkParamsContract, types.ZeroAddress, fieldName)
 	if err != nil {
 		return err
@@ -259,7 +248,7 @@ func (b *BaseGovernanceTest) getProposalState(proposalID *big.Int) (ProposalStat
 		return 0, err
 	}
 
-	response, err := b.txrelayer.Call(types.ZeroAddress, contracts.ChildGovernorContract, input)
+	response, err := b.txRelayer.Call(types.ZeroAddress, contracts.ChildGovernorContract, input)
 	if err != nil {
 		return 0, err
 	}
@@ -294,7 +283,7 @@ func (b *BaseGovernanceTest) sendVoteTransaction(proposalID *big.Int, vote VoteT
 		types.WithInput(input),
 	))
 
-	receipt, err := b.txrelayer.SendTransaction(txn, senderKey)
+	receipt, err := b.txRelayer.SendTransaction(txn, senderKey)
 	if err != nil {
 		return err
 	}
@@ -328,7 +317,7 @@ func (b *BaseGovernanceTest) sendExecuteProposalTransaction(
 		types.WithInput(input),
 	))
 
-	receipt, err := b.txrelayer.SendTransaction(txn, senderKey)
+	receipt, err := b.txRelayer.SendTransaction(txn, senderKey)
 	if err != nil {
 		return err
 	}

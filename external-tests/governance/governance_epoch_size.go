@@ -66,7 +66,7 @@ func (t *ChangeEpochSize) Run() error {
 			"epochSize",
 			newEpochSizeBigInt)
 
-		currentBlockNumber, err := t.txrelayer.Client().BlockNumber()
+		currentBlockNumber, err := t.txRelayer.Client().BlockNumber()
 		if err != nil {
 			return err
 		}
@@ -74,11 +74,11 @@ func (t *ChangeEpochSize) Run() error {
 		endOfPreviousEpoch := (currentBlockNumber/oldEpochSize + 1) * oldEpochSize
 		endOfNewEpoch := endOfPreviousEpoch + newEpochSize
 
-		if err := waitForBlock(endOfNewEpoch, 3*time.Minute, t.txrelayer); err != nil {
+		if err := waitForBlock(endOfNewEpoch, 3*time.Minute, t.txRelayer); err != nil {
 			return err
 		}
 
-		block, err := t.txrelayer.Client().GetBlockByNumber(
+		block, err := t.txRelayer.Client().GetBlockByNumber(
 			jsonrpc.BlockNumber(endOfPreviousEpoch), false)
 		if err != nil {
 			return err
@@ -91,7 +91,7 @@ func (t *ChangeEpochSize) Run() error {
 
 		oldEpoch := extra.Checkpoint.EpochNumber
 
-		block, err = t.txrelayer.Client().GetBlockByNumber(
+		block, err = t.txRelayer.Client().GetBlockByNumber(
 			jsonrpc.BlockNumber(endOfNewEpoch), false)
 		if err != nil {
 			return err
