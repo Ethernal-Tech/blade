@@ -7,7 +7,6 @@ import (
 
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	"github.com/0xPolygon/polygon-edge/contracts"
-	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/helper/common"
 	"github.com/0xPolygon/polygon-edge/jsonrpc"
 	"github.com/0xPolygon/polygon-edge/types"
@@ -18,8 +17,8 @@ type ChangeBlockTime struct {
 }
 
 func NewBlockTimeTest(cfg *GovernanceTestConfig,
-	testAccountKey *crypto.ECDSAKey, client *jsonrpc.EthClient) (*ChangeBlockTime, error) {
-	base, err := NewBaseGovernanceTest(cfg, testAccountKey, client)
+	client *jsonrpc.EthClient) (*ChangeBlockTime, error) {
+	base, err := NewBaseGovernanceTest(cfg, client)
 	if err != nil {
 		return nil, err
 	}

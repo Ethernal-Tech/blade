@@ -1,8 +1,6 @@
 package governance
 
 import (
-	"time"
-
 	"github.com/0xPolygon/polygon-edge/command"
 	"github.com/0xPolygon/polygon-edge/command/helper"
 	"github.com/0xPolygon/polygon-edge/command/loadtest"
@@ -32,31 +30,10 @@ func GetCommand() *cobra.Command {
 func preRunCommand(cmd *cobra.Command, _ []string) error {
 	params.jsonRPCAddress = helper.GetJSONRPCAddress(cmd)
 
-	return params.validateFlags()
+	return nil
 }
 
 func setFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(
-		&params.mnemonic,
-		loadtest.MnemonicFlag,
-		"",
-		"the mnemonic used to fund accounts if needed for the governance test",
-	)
-
-	cmd.Flags().Uint64Var(
-		&params.epochSize,
-		epochSizeFlag,
-		10,
-		"epoch size on the network for which the governance test is run",
-	)
-
-	cmd.Flags().DurationVar(
-		&params.receiptsTimeout,
-		loadtest.ReceiptsTimeoutFlag,
-		30*time.Second,
-		"the timeout for waiting for transaction receipts",
-	)
-
 	cmd.Flags().BoolVar(
 		&params.toJSON,
 		loadtest.SaveToJSONFlag,
@@ -70,8 +47,6 @@ func setFlags(cmd *cobra.Command) {
 		nil,
 		"private keys of validators on the network for which governance tests is run",
 	)
-
-	_ = cmd.MarkFlagRequired(loadtest.MnemonicFlag)
 }
 
 func runCommand(cmd *cobra.Command, _ []string) {
@@ -80,12 +55,9 @@ func runCommand(cmd *cobra.Command, _ []string) {
 
 	governanceRunner, err := governance.NewGovernanceTestRunner(
 		&governance.GovernanceTestConfig{
-			Mnemonic:        params.mnemonic,
-			JSONRPCUrl:      params.jsonRPCAddress,
-			ReceiptsTimeout: params.receiptsTimeout,
-			EpochSize:       params.epochSize,
-			ValidatorKeys:   params.validatorKeys,
-			ResultsToJSON:   params.toJSON,
+			JSONRPCUrl:    params.jsonRPCAddress,
+			ValidatorKeys: params.validatorKeys,
+			ResultsToJSON: params.toJSON,
 		},
 	)
 

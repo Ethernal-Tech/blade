@@ -7,7 +7,6 @@ import (
 
 	"github.com/0xPolygon/polygon-edge/consensus/polybft"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
-	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/jsonrpc"
 )
 
@@ -16,8 +15,8 @@ type ChangeEpochSize struct {
 }
 
 func NewEpochSizeTest(cfg *GovernanceTestConfig,
-	testAccountKey *crypto.ECDSAKey, client *jsonrpc.EthClient) (*ChangeEpochSize, error) {
-	base, err := NewBaseGovernanceTest(cfg, testAccountKey, client)
+	client *jsonrpc.EthClient) (*ChangeEpochSize, error) {
+	base, err := NewBaseGovernanceTest(cfg, client)
 	if err != nil {
 		return nil, err
 	}

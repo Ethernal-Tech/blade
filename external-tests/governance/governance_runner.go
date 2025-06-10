@@ -8,7 +8,6 @@ import (
 	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/helper/common"
 	"github.com/0xPolygon/polygon-edge/jsonrpc"
-	"github.com/Ethernal-Tech/ethgo/wallet"
 )
 
 const (
@@ -36,10 +35,7 @@ func (s GovernanceTestResult) String() string {
 
 // GovernanceTestConfig represents the configuration for sanity check tests.
 type GovernanceTestConfig struct {
-	Mnemonic string // Mnemonnic is the mnemonic phrase used for account funding.
-
-	JSONRPCUrl      string        // JSONRPCUrl is the URL of the JSON-RPC server.
-	ReceiptsTimeout time.Duration // ReceiptsTimeout is the timeout for waiting for transaction receipts.
+	JSONRPCUrl string // JSONRPCUrl is the URL of the JSON-RPC server.
 
 	ValidatorKeys []string // ValidatorKeys is the list of private keys of validators.
 
@@ -60,53 +56,37 @@ type GovernanceTestRunner struct {
 
 // NewSanityCheckTestRunner creates a new GovernanceTestRunner
 func NewGovernanceTestRunner(cfg *GovernanceTestConfig) (*GovernanceTestRunner, error) {
-	key, err := wallet.NewWalletFromMnemonic(cfg.Mnemonic)
-	if err != nil {
-		return nil, err
-	}
-
-	raw, err := key.MarshallPrivateKey()
-	if err != nil {
-		return nil, err
-	}
-
-	ecdsaKey, err := crypto.NewECDSAKeyFromRawPrivECDSA(raw)
-	if err != nil {
-		return nil, err
-	}
-
 	client, err := jsonrpc.NewEthClient(cfg.JSONRPCUrl)
 	if err != nil {
 		return nil, err
 	}
 
-	tests, err := registerTests(cfg, ecdsaKey, client)
+	tests, err := registerTests(cfg, client)
 	if err != nil {
 		return nil, err
 	}
 
 	return &GovernanceTestRunner{
-		config:         cfg,
-		tests:          tests,
-		client:         client,
-		testAccountKey: ecdsaKey,
+		config: cfg,
+		tests:  tests,
+		client: client,
 	}, nil
 }
 
 // registerTests registers the governance tests that will be run by the GovernanceTestRunner.
 func registerTests(cfg *GovernanceTestConfig,
-	testAccountKey *crypto.ECDSAKey, client *jsonrpc.EthClient) ([]GovernanceTest, error) {
-	newBlockTimeTest, err := NewBlockTimeTest(cfg, testAccountKey, client)
+	client *jsonrpc.EthClient) ([]GovernanceTest, error) {
+	newBlockTimeTest, err := NewBlockTimeTest(cfg, client)
 	if err != nil {
 		return nil, err
 	}
 
-	newEpochSizeTest, err := NewEpochSizeTest(cfg, testAccountKey, client)
+	newEpochSizeTest, err := NewEpochSizeTest(cfg, client)
 	if err != nil {
 		return nil, err
 	}
 
-	newBaseFeeDenomTest, err := NewBaseFeeDenomTest(cfg, testAccountKey, client)
+	newBaseFeeDenomTest, err := NewBaseFeeDenomTest(cfg, client)
 	if err != nil {
 		return nil, err
 	}

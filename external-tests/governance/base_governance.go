@@ -44,28 +44,26 @@ type GovernanceTest interface {
 type BaseGovernanceTest struct {
 	config *GovernanceTestConfig
 
-	testAccountKey *crypto.ECDSAKey
-	client         *jsonrpc.EthClient
+	client *jsonrpc.EthClient
 
 	txRelayer txrelayer.TxRelayer
 }
 
 // NewBaseGovernanceTest creates a new Governance test instance.
 func NewBaseGovernanceTest(cfg *GovernanceTestConfig,
-	testAccountKey *crypto.ECDSAKey, client *jsonrpc.EthClient) (*BaseGovernanceTest, error) {
+	client *jsonrpc.EthClient) (*BaseGovernanceTest, error) {
 	txRelayer, err := txrelayer.NewTxRelayer(
 		txrelayer.WithClient(client),
-		txrelayer.WithReceiptsTimeout(cfg.ReceiptsTimeout),
+		txrelayer.WithReceiptsTimeout(2*time.Minute),
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	return &BaseGovernanceTest{
-		config:         cfg,
-		client:         client,
-		txRelayer:      txRelayer,
-		testAccountKey: testAccountKey,
+		config:    cfg,
+		client:    client,
+		txRelayer: txRelayer,
 	}, nil
 }
 

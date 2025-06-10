@@ -2,9 +2,6 @@ package governance
 
 import (
 	"errors"
-	"time"
-
-	"github.com/0xPolygon/polygon-edge/command/loadtest"
 )
 
 const (
@@ -18,26 +15,9 @@ var (
 
 // sanityCheckParams holds the parameters for the sanity check command
 type governanceParams struct {
-	mnemonic       string
 	jsonRPCAddress string
 
-	receiptsTimeout time.Duration
-
-	epochSize uint64
-	toJSON    bool
+	toJSON bool
 
 	validatorKeys []string
-}
-
-// validateFlags checks if the provided flags are valid
-func (scp *governanceParams) validateFlags() error {
-	if scp.mnemonic == "" {
-		return loadtest.ErrNoMnemonicProvided
-	}
-
-	if scp.epochSize == 0 {
-		return errInvalidEpochSize
-	}
-
-	return nil
 }
