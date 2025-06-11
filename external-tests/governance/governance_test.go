@@ -12,7 +12,6 @@ func TestGovernance(t *testing.T) {
 	config := &GovernanceTestConfig{
 		JSONRPCUrl:    "http://localhost:10002",
 		ValidatorKeys: []string{"1a7626c5a1d89030f300ca5f63eecac3bae3e56f14033ea2d9ad471e7c93020e"},
-		EpochSize:     10,
 	}
 
 	runner, err := NewGovernanceTestRunner(config)
