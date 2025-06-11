@@ -48,6 +48,8 @@ func (t *ChangeBlockTime) Run() error {
 		return err
 	}
 
+	newBlockTime := new(big.Int).SetUint64(oldBlockTime.Uint64() * 2)
+
 	setTime := func(newBlockTime *big.Int) error {
 		setNewBlockTime := contractsapi.SetNewBlockTimeNetworkParamsFn{
 			NewBlockTime: newBlockTime,
@@ -114,8 +116,6 @@ func (t *ChangeBlockTime) Run() error {
 
 		return nil
 	}
-
-	newBlockTime := new(big.Int).SetUint64(t.BaseGovernanceTest.config.BlockTime)
 
 	if err := setTime(newBlockTime); err != nil {
 		return err

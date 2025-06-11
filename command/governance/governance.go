@@ -30,7 +30,7 @@ func GetCommand() *cobra.Command {
 func preRunCommand(cmd *cobra.Command, _ []string) error {
 	params.jsonRPCAddress = helper.GetJSONRPCAddress(cmd)
 
-	return params.validateFlags()
+	return nil
 }
 
 func setFlags(cmd *cobra.Command) {
@@ -39,20 +39,6 @@ func setFlags(cmd *cobra.Command) {
 		loadtest.SaveToJSONFlag,
 		false,
 		"saves results to JSON file",
-	)
-
-	cmd.Flags().Uint64Var(
-		&params.epochSize,
-		epochSizeFlag,
-		10,
-		"new epoch size that we want to set on the network",
-	)
-
-	cmd.Flags().Uint64Var(
-		&params.blockTime,
-		blockTimeFlag,
-		5,
-		"new block time that we want to set on the network",
 	)
 
 	cmd.Flags().StringSliceVar(
@@ -72,8 +58,6 @@ func runCommand(cmd *cobra.Command, _ []string) {
 			JSONRPCUrl:    params.jsonRPCAddress,
 			ValidatorKeys: params.validatorKeys,
 			ResultsToJSON: params.toJSON,
-			EpochSize:     params.epochSize,
-			BlockTime:     params.blockTime,
 		},
 	)
 

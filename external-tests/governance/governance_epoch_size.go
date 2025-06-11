@@ -50,7 +50,7 @@ func (t *ChangeEpochSize) Run() error {
 	}
 
 	var (
-		newEpochSize = new(big.Int).SetUint64(t.BaseGovernanceTest.config.EpochSize)
+		newEpochSize = new(big.Int).SetUint64(oldEpochSize.Uint64() * 2)
 	)
 
 	privKey, err := decodePrivateKey(t.config.ValidatorKeys[0])
