@@ -36,6 +36,18 @@ func (t *ChangeBlockTime) Run() error {
 	fmt.Println("Running", t.Name())
 	defer fmt.Println("Finished", t.Name())
 
+	networkParamsResponse, err := ABICall(t.txRelayer,
+		contractsapi.NetworkParams, contracts.NetworkParamsContract,
+		types.ZeroAddress, "blockTime")
+	if err != nil {
+		return err
+	}
+
+	oldBlockTime, err := common.ParseUint256orHex(&networkParamsResponse)
+	if err != nil {
+		return err
+	}
+
 	setTime := func(newBlockTime *big.Int) error {
 		setNewBlockTime := contractsapi.SetNewBlockTimeNetworkParamsFn{
 			NewBlockTime: newBlockTime,
@@ -103,8 +115,7 @@ func (t *ChangeBlockTime) Run() error {
 		return nil
 	}
 
-	oldBlockTime := new(big.Int).SetUint64(t.BaseGovernanceTest.config.BlockTime)
-	newBlockTime := big.NewInt(5) // 5 seconds
+	newBlockTime := new(big.Int).SetUint64(t.BaseGovernanceTest.config.BlockTime)
 
 	if err := setTime(newBlockTime); err != nil {
 		return err

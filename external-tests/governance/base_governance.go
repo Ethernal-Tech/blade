@@ -208,7 +208,7 @@ func (b *BaseGovernanceTest) executeSuccessfulProposalCycle(
 		return err
 	}
 
-	if err := waitForBlock(currentBlockNumber+2, 10*time.Second, b.txRelayer); err != nil {
+	if err := waitForBlock(currentBlockNumber+2, 2*time.Minute, b.txRelayer); err != nil {
 		return err
 	}
 

@@ -7,7 +7,10 @@ import (
 
 	"github.com/0xPolygon/polygon-edge/consensus/polybft"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
+	"github.com/0xPolygon/polygon-edge/contracts"
+	"github.com/0xPolygon/polygon-edge/helper/common"
 	"github.com/0xPolygon/polygon-edge/jsonrpc"
+	"github.com/0xPolygon/polygon-edge/types"
 )
 
 type ChangeEpochSize struct {
@@ -34,9 +37,20 @@ func (t *ChangeEpochSize) Run() error {
 	fmt.Println("Running", t.Name())
 	defer fmt.Println("Finished", t.Name())
 
+	networkParamsResponse, err := ABICall(t.txRelayer,
+		contractsapi.NetworkParams, contracts.NetworkParamsContract,
+		types.ZeroAddress, "epochSize")
+	if err != nil {
+		return err
+	}
+
+	oldEpochSize, err := common.ParseUint256orHex(&networkParamsResponse)
+	if err != nil {
+		return err
+	}
+
 	var (
-		oldEpochSize = t.BaseGovernanceTest.config.EpochSize
-		newEpochSize = uint64(10)
+		newEpochSize = new(big.Int).SetUint64(t.BaseGovernanceTest.config.EpochSize)
 	)
 
 	privKey, err := decodePrivateKey(t.config.ValidatorKeys[0])
@@ -44,12 +58,13 @@ func (t *ChangeEpochSize) Run() error {
 		return err
 	}
 
-	setEpochSize := func(newEpochSize, oldEpochSize uint64) error {
-		newEpochSizeBigInt := big.NewInt(int64(newEpochSize))
+	setEpochSize := func(newEpochSizeBig, oldEpochSizeBig *big.Int) error {
+		oldEpochSize := oldEpochSizeBig.Uint64()
+		newEpochSize := newEpochSizeBig.Uint64()
 
 		// propose a new epoch size
 		setNewEpochSizeFn := &contractsapi.SetNewEpochSizeNetworkParamsFn{
-			NewEpochSize: newEpochSizeBigInt,
+			NewEpochSize: newEpochSizeBig,
 		}
 
 		proposalInput, err := setNewEpochSizeFn.EncodeAbi()
@@ -57,13 +72,14 @@ func (t *ChangeEpochSize) Run() error {
 			return err
 		}
 
-		proposalDescription := fmt.Sprintf("Change epoch size from %d to %d", oldEpochSize, newEpochSize)
+		proposalDescription := fmt.Sprintf("Change epoch size from %d to %d",
+			oldEpochSize, newEpochSize)
 
 		t.executeSuccessfulProposalCycle(proposalInput,
 			privKey,
 			proposalDescription,
 			"epochSize",
-			newEpochSizeBigInt)
+			newEpochSizeBig)
 
 		currentBlockNumber, err := t.txRelayer.Client().BlockNumber()
 		if err != nil {

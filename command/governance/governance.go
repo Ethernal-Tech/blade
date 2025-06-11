@@ -30,7 +30,7 @@ func GetCommand() *cobra.Command {
 func preRunCommand(cmd *cobra.Command, _ []string) error {
 	params.jsonRPCAddress = helper.GetJSONRPCAddress(cmd)
 
-	return nil
+	return params.validateFlags()
 }
 
 func setFlags(cmd *cobra.Command) {
@@ -44,15 +44,15 @@ func setFlags(cmd *cobra.Command) {
 	cmd.Flags().Uint64Var(
 		&params.epochSize,
 		epochSizeFlag,
-		5,
-		"epoch size on the network for which the governance test is run",
+		10,
+		"new epoch size that we want to set on the network",
 	)
 
 	cmd.Flags().Uint64Var(
 		&params.blockTime,
 		blockTimeFlag,
-		2,
-		"block time on the network for which the governance test is run",
+		5,
+		"new block time that we want to set on the network",
 	)
 
 	cmd.Flags().StringSliceVar(
