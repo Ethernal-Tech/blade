@@ -10,6 +10,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/command/backup"
 	"github.com/0xPolygon/polygon-edge/command/bridge"
 	"github.com/0xPolygon/polygon-edge/command/genesis"
+	"github.com/0xPolygon/polygon-edge/command/governance"
 	"github.com/0xPolygon/polygon-edge/command/helper"
 	"github.com/0xPolygon/polygon-edge/command/loadtest"
 	"github.com/0xPolygon/polygon-edge/command/mint"
@@ -60,6 +61,7 @@ func (rc *RootCommand) registerSubCommands() {
 		validator.GetCommand(),
 		loadtest.GetCommand(),
 		sanitycheck.GetCommand(),
+		governance.GetCommand(),
 		accounts.GetCommand(),
 	)
 }

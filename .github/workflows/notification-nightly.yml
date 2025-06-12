@@ -99,7 +99,26 @@ on: # yamllint disable-line rule:truthy
         description: Unstake All Test output
         type: string
         required: true
-      results_artifact_id:
+      sct_results_artifact_id:
+        type: string
+        required: true
+      governance_tests_output:
+        description: Governance Tests output
+        type: string
+        required: true
+      block_time_test_output:
+        description: Governance Block Time Test output
+        type: string
+        required: true
+      epoch_size_test_output:
+        description: Governance Epoch Size Test output
+        type: string
+        required: true
+      base_fee_denom_test_output:
+        description: Governance Base Fee Denom Test output
+        type: string
+        required: true
+      gt_results_artifact_id:
         type: string
         required: true
       deploy_network_terraform_output:
@@ -253,7 +272,16 @@ jobs:
                         "text": "Sanity Check Results"
                       },
                       "style": "${{ inputs.sanity_check_tests_output == 'true' && env.succeed_bnt || env.failed_bnt }}",
-                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ inputs.results_artifact_id }}"
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ inputs.sct_results_artifact_id }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "Governance Test Results"
+                      },
+                      "style": "${{ inputs.governance_tests_output == 'true' && env.succeed_bnt || env.failed_bnt }}",
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ inputs.gt_results_artifact_id }}"
                     }
                   ]
                 },
@@ -397,6 +425,26 @@ jobs:
                     {
                       "type": "mrkdwn",
                       "text": "${{ inputs.unstake_all_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Unstake All Test*"
+                    }
+                  ]
+                },
+                {
+                  "type": "divider"
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.block_time_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Block Time Test*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.epoch_size_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Epoch Size Test*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "${{ inputs.base_fee_denom_test_output == 'PASSED' && env.succeed_job || env.failed_job }} *Base Fee Denom Test*"
                     }
                   ]
                 },

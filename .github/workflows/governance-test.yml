@@ -1,5 +1,5 @@
 ---
-name: Sanity Check Tests
+name: Governance Tests
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:
     inputs:
@@ -14,27 +14,21 @@ on: # yamllint disable-line rule:truthy
         type: string
         required: true
     outputs:
-      sanity_check_tests_output:
-        description: Sanity Check Tests output
-        value: ${{ jobs.sanity_check_tests.outputs.test_output_success }}
-      stake_test_output:
-        description: Stake Test output
-        value: ${{ jobs.sanity_check_tests.outputs.stake_test }}
-      unstake_test_output:
-        description: Unstake Test output
-        value: ${{ jobs.sanity_check_tests.outputs.unstake_test }}
-      register_validator_test_output:
-        description: Register Validator Test output
-        value: ${{ jobs.sanity_check_tests.outputs.register_validator_test }}
-      withdraw_rewards_test_output:
-        description: Withdraw Rewards Test output
-        value: ${{ jobs.sanity_check_tests.outputs.withdraw_rewards_test }}
-      unstake_all_test_output:
-        description: Unstake All Test output
-        value: ${{ jobs.sanity_check_tests.outputs.unstake_all_test }}
+      governance_tests_output:
+        description: Governance Tests output
+        value: ${{ jobs.governance_tests.outputs.test_output_success }}
+      block_time_test_output:
+        description: Block Time Test output
+        value: ${{ jobs.governance_tests.outputs.block_time_test }}
+      epoch_size_test_output:
+        description: Epoch Size Test output
+        value: ${{ jobs.governance_tests.outputs.epoch_size_test }}
+      base_fee_denom_test_output:
+        description: Base Fee Denom Test output
+        value: ${{ jobs.governance_tests.outputs.base_fee_denom }}
       results_artifact_id:
         description: Results Artifact ID
-        value: ${{ jobs.sanity_check_tests.outputs.results_artifact_id }}
+        value: ${{ jobs.governance_tests.outputs.results_artifact_id }}
     secrets:
       AWS_ROLE_ARN:
         required: true
@@ -70,19 +64,17 @@ jobs:
         id: rpc_url
         if: contains(steps.retrieve_state.outputs.retrieve_state_output, 'download')
         run: echo "url=$(cat state.json | jq -r '.outputs.aws_lb_ext_domain.value // empty')" >> $GITHUB_OUTPUT
-  sanity_check_tests:
-    name: Run Sanity Check
+  governance_tests:
+    name: Run Governance Tests
     runs-on: ubuntu-latest
     needs: check_network
     environment: ${{ inputs.environment }}
     if: needs.check_network.outputs.rpc_url != ''
     outputs:
-      test_output_success: ${{ steps.sanity_check_tests_results.outputs.test_output }}
-      stake_test: ${{ steps.sanity_check_tests_results.outputs.stake_test }}
-      unstake_test: ${{ steps.sanity_check_tests_results.outputs.unstake_test }}
-      register_validator_test: ${{ steps.sanity_check_tests_results.outputs.register_validator_test }}
-      withdraw_rewards_test: ${{ steps.sanity_check_tests_results.outputs.withdraw_rewards_test }}
-      unstake_all_test: ${{ steps.sanity_check_tests_results.outputs.unstake_all_test }}
+      test_output_success: ${{ steps.governance_tests_results.outputs.test_output }}
+      block_time_test: ${{ steps.governance_tests_results.outputs.block_time_test }}
+      epoch_size_test: ${{ steps.governance_tests_results.outputs.epoch_size_test }}
+      base_fee_denom: ${{ steps.governance_tests_results.outputs.base_fee_denom }}
       results_artifact_id: ${{ steps.artifact-upload.outputs.artifact-id }}
     steps:
       - name: Checkout code
@@ -100,21 +92,20 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
       - name: Get validator keys
         run: aws ssm get-parameters --names `aws ec2 describe-instances --filters "Name=tag:BaseDN,Values=${{ inputs.environment }}${{ vars.BASEDN_SUFIX }}" "Name=tag:Role,Values=validator" "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].Tags[?Key=='Name'].Value[]" --region ${{ vars.AWS_REGION }} --output text | sed 's/.*/\/${{ inputs.environment }}\/&\/validator-key/'` --with-decryption --region ${{ vars.AWS_REGION }} > keys.json
-      - name: Start Sanity Check Test
-        id: sanity_check_tests_results
+      - name: Start Governance Test
+        id: governance_tests_results
         run: |
-          ./blade sanity-check --jsonrpc "http://${{ needs.check_network.outputs.rpc_url }}" --mnemonic "${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}" --receipts-timeout 2m --validator-keys "`cat keys.json | jq -r '.Parameters[].Value' | tr '\n' ',' | sed 's/,$//'`" --to-json
-          echo "test_output=`cat sanity_check_results.json | jq 'map(select(.Result != "PASSED")) | length == 0'`" >> $GITHUB_OUTPUT
-          echo "stake_test=`cat sanity_check_results.json | jq -r '.[] | select(.Name == "Stake Test") | .Result'`" >> $GITHUB_OUTPUT
-          echo "unstake_test=`cat sanity_check_results.json | jq -r '.[] | select(.Name == "Unstake Test") | .Result'`" >> $GITHUB_OUTPUT
-          echo "register_validator_test=`cat sanity_check_results.json | jq -r '.[] | select(.Name == "Register Validator Test") | .Result'`" >> $GITHUB_OUTPUT
-          echo "withdraw_rewards_test=`cat sanity_check_results.json | jq -r '.[] | select(.Name == "Withdraw Rewards Test") | .Result'`" >> $GITHUB_OUTPUT
-          echo "unstake_all_test=`cat sanity_check_results.json | jq -r '.[] | select(.Name == "Unstake All Test") | .Result'`" >> $GITHUB_OUTPUT
-      - name: Archive Sanity Check Test results
+          ./blade governance --jsonrpc "http://${{ needs.check_network.outputs.rpc_url }}" --mnemonic "${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}" --receipts-timeout 2m --validator-keys "`cat keys.json | jq -r '.Parameters[].Value' | tr '\n' ',' | sed 's/,$//'`" --to-json
+          echo "test_output=`cat governance_test_results.json | jq 'map(select(.Result != "PASSED")) | length == 0'`" >> $GITHUB_OUTPUT
+          echo "block_time_test=`cat governance_test_results.json | jq -r '.[] | select(.Name == "Block Time Test") | .Result'`" >> $GITHUB_OUTPUT
+          echo "epoch_size_test=`cat governance_test_results.json | jq -r '.[] | select(.Name == "Epoch Size test") | .Result'`" >> $GITHUB_OUTPUT
+          echo "base_fee_denom=`cat governance_test_results.json | jq -r '.[] | select(.Name == "Base Fee Denom test") | .Result'`" >> $GITHUB_OUTPUT
+      - name: Archive Governance Test results
         if: always()
         uses: actions/upload-artifact@v4.3.0
         id: artifact-upload
         with:
-          name: sanity-check-results
-          path: sanity_check_results.json
+          name: governance-tests
+          path: governance_test_results.json
           retention-days: 30
+    

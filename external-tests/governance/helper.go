@@ -1,0 +1,79 @@
+package governance
+
+import (
+	"encoding/hex"
+	"fmt"
+	"time"
+
+	"github.com/0xPolygon/polygon-edge/contracts"
+	"github.com/0xPolygon/polygon-edge/crypto"
+	"github.com/0xPolygon/polygon-edge/txrelayer"
+	"github.com/0xPolygon/polygon-edge/types"
+)
+
+func waitUntil(timeout time.Duration, pollFrequency time.Duration, handler func() (bool, error)) error {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-timer.C:
+			return fmt.Errorf("timeout")
+		case <-time.After(pollFrequency):
+		}
+
+		result, err := handler()
+		if err != nil {
+			return err
+		}
+
+		if result {
+			return nil
+		}
+	}
+}
+
+func waitForBlock(n uint64, timeout time.Duration, relayer txrelayer.TxRelayer) error {
+	timer := time.NewTicker(2 * time.Minute)
+	ticker := time.NewTicker(2 * time.Second)
+
+	defer func() {
+		timer.Stop()
+		ticker.Stop()
+		fmt.Println("Waiting for block finished")
+	}()
+
+	for {
+		select {
+		case <-timer.C:
+			return fmt.Errorf("governance timed out waiting for block")
+		case <-ticker.C:
+			blockNumber, err := relayer.Client().BlockNumber()
+			if err != nil {
+				return err
+			}
+			if blockNumber >= n {
+				return nil
+			}
+		}
+	}
+}
+
+func ABICall(relayer txrelayer.TxRelayer, artifact *contracts.Artifact, contractAddress types.Address, senderAddr types.Address, method string, params ...interface{}) (string, error) {
+	input, err := artifact.Abi.GetMethod(method).Encode(params)
+	if err != nil {
+		return "", err
+	}
+
+	return relayer.Call(senderAddr, contractAddress, input)
+}
+
+// decodePrivateKey decodes the given private key string.
+func decodePrivateKey(privateKeyRaw string) (*crypto.ECDSAKey, error) {
+	raw, err := hex.DecodeString(privateKeyRaw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode private key string '%s': %w", privateKeyRaw, err)
+	}
+
+	return crypto.NewECDSAKeyFromRawPrivECDSA(raw)
+}
