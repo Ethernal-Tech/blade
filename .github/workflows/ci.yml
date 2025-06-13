@@ -180,7 +180,7 @@ jobs:
     name: CI Notification
     uses: ./.github/workflows/notification-ci.yml
     needs: [build_blade, lint, unit_test, e2e_polybft_test, e2e_legacy_test, property_polybft_test, fuzz_test, benchmark_test]
-    if: success() || failure()
+    if: (success() || failure()) && github.event_name == 'schedule'
     with:
       build_blade_output: ${{ needs.build_blade.outputs.workflow_output }}
       lint_output: ${{ needs.lint.outputs.workflow_output }}
