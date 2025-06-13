@@ -1,9 +1,11 @@
 ---
 concurrency:
-  group: ${{ github.ref }}
+  group: ${{ github.event_name }}-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 name: CI
 on: # yamllint disable-line rule:truthy
+  schedule:
+    - cron: "0 0 * * *"
   push:
     branches:
       - main
@@ -109,7 +111,8 @@ jobs:
     if: |
       inputs.build_blade || 
       github.event_name == 'pull_request' || 
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) ||
+      github.event_name == 'schedule'
   lint:
     name: Lint
     uses: ./.github/workflows/lint.yml
@@ -117,7 +120,8 @@ jobs:
     if: |
       inputs.lint || 
       github.event_name == 'pull_request' || 
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) ||
+      github.event_name == 'schedule'
   unit_test:
     name: Unit Tests
     uses: ./.github/workflows/unit-test.yml
@@ -125,7 +129,8 @@ jobs:
     if: |
       inputs.unit_test || 
       github.event_name == 'pull_request' || 
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) ||
+      github.event_name == 'schedule'
   e2e_polybft_test:
     name: E2E PolyBFT Tests
     uses: ./.github/workflows/e2e-polybft-test.yml
@@ -133,7 +138,8 @@ jobs:
     if: |
       inputs.e2e_polybft_test || 
       github.event_name == 'pull_request' || 
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) ||
+      github.event_name == 'schedule'
   e2e_legacy_test:
     name: E2E Legacy Tests
     uses: ./.github/workflows/e2e-legacy-test.yml
@@ -141,7 +147,8 @@ jobs:
     if: |
       inputs.e2e_legacy_test || 
       github.event_name == 'pull_request' || 
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) ||
+      github.event_name == 'schedule'
   property_polybft_test:
     name: Property PolyBFT Tests
     uses: ./.github/workflows/property-polybft-test.yml
@@ -149,7 +156,8 @@ jobs:
     if: |
       inputs.property_polybft_test || 
       github.event_name == 'pull_request' || 
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) ||
+      github.event_name == 'schedule'
   fuzz_test:
     name: Fuzz Tests
     uses: ./.github/workflows/fuzz-test.yml
@@ -157,7 +165,8 @@ jobs:
     if: |
       inputs.fuzz_test || 
       github.event_name == 'pull_request' || 
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) ||
+      github.event_name == 'schedule'
   benchmark_test:
     name: Benchmark Tests
     uses: ./.github/workflows/benchmark-test.yml
@@ -165,4 +174,21 @@ jobs:
     if: |
       inputs.benchmark_test || 
       github.event_name == 'pull_request' || 
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) ||
+      github.event_name == 'schedule'
+  notification_ci:
+    name: CI Notification
+    uses: ./.github/workflows/notification-ci.yml
+    needs: [build_blade, lint, unit_test, e2e_polybft_test, e2e_legacy_test, property_polybft_test, fuzz_test, benchmark_test]
+    if: success() || failure()
+    with:
+      build_blade_output: ${{ needs.build_blade.outputs.workflow_output }}
+      lint_output: ${{ needs.lint.outputs.workflow_output }}
+      unit_test_output: ${{ needs.unit_test.outputs.workflow_output }}
+      e2e_polybft_test_output: ${{ needs.e2e_polybft_test.outputs.workflow_output }}
+      e2e_legacy_test_output: ${{ needs.e2e_legacy_test.outputs.workflow_output }}
+      property_polybft_test_output: ${{ needs.property_polybft_test.outputs.workflow_output }}
+      fuzz_test_output: ${{ needs.fuzz_test.outputs.workflow_output }}
+      benchmark_test_output: ${{ needs.benchmark_test.outputs.workflow_output }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
