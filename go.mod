@@ -37,7 +37,7 @@ require (
 	github.com/libp2p/go-libp2p v0.41.1
 	github.com/libp2p/go-libp2p-kbucket v0.7.0
 	github.com/libp2p/go-libp2p-pubsub v0.14.0
-	github.com/multiformats/go-multiaddr v0.15.0
+	github.com/multiformats/go-multiaddr v0.16.0
 	github.com/olekukonko/tablewriter v1.0.7
 	github.com/prometheus/client_golang v1.22.0
 	github.com/quasilyte/go-ruleguard v0.4.4
