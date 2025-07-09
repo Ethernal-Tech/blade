@@ -32,7 +32,7 @@ require (
 	github.com/hashicorp/hcl v1.0.1-vault-7
 	github.com/hashicorp/vault/api v1.16.0
 	github.com/holiman/uint256 v1.3.2
-	github.com/jellydator/ttlcache/v3 v3.3.0
+	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/json-iterator/go v1.1.12
 	github.com/libp2p/go-libp2p v0.41.1
 	github.com/libp2p/go-libp2p-kbucket v0.7.0
@@ -54,7 +54,7 @@ require (
 	github.com/valyala/fastjson v1.6.4
 	go.etcd.io/bbolt v1.4.2
 	golang.org/x/crypto v0.38.0
-	golang.org/x/sync v0.14.0
+	golang.org/x/sync v0.15.0
 	golang.org/x/tools v0.33.0
 	google.golang.org/genproto v0.0.0-20250303144028-a0af3efb3deb
 	google.golang.org/grpc v1.72.2
