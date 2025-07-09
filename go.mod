@@ -14,7 +14,7 @@ require (
 	github.com/alibabacloud-go/tea-utils/v2 v2.0.7
 	github.com/aliyun/credentials-go v1.4.6
 	github.com/aws/aws-sdk-go v1.55.5
-	github.com/btcsuite/btcd/btcec/v2 v2.3.4
+	github.com/btcsuite/btcd/btcec/v2 v2.3.5
 	github.com/cockroachdb/pebble v1.1.5
 	github.com/docker/docker v28.3.0+incompatible
 	github.com/docker/go-connections v0.5.0
