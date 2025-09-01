@@ -18,7 +18,7 @@ require (
 	github.com/cockroachdb/pebble v1.1.5
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/docker/docker v28.3.3+incompatible
-	github.com/docker/go-connections v0.5.0
+	github.com/docker/go-connections v0.6.0
 	github.com/envoyproxy/protoc-gen-validate v1.2.1
 	github.com/erigontech/mdbx-go v0.40.0
 	github.com/golang/protobuf v1.5.4
