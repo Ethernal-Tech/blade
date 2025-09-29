@@ -61,7 +61,7 @@ require (
 	golang.org/x/tools v0.35.0
 	google.golang.org/genproto v0.0.0-20250505200425-f936aa4a68b2
 	google.golang.org/grpc v1.74.2
-	google.golang.org/protobuf v1.36.6
+	google.golang.org/protobuf v1.36.8
 	gopkg.in/DataDog/dd-trace-go.v1 v1.74.3
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce
 	gopkg.in/yaml.v3 v3.0.1
