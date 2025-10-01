@@ -40,7 +40,7 @@ require (
 	github.com/libp2p/go-libp2p-pubsub v0.15.0
 	github.com/mitchellh/mapstructure v1.5.1-0.20231216201459-8508981c8b6c
 	github.com/multiformats/go-multiaddr v0.16.1
-	github.com/olekukonko/tablewriter v1.0.9
+	github.com/olekukonko/tablewriter v1.1.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/quasilyte/go-ruleguard v0.4.5
 	github.com/quasilyte/go-ruleguard/dsl v0.3.23
