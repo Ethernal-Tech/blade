@@ -43,7 +43,7 @@ require (
 	github.com/olekukonko/tablewriter v1.0.9
 	github.com/prometheus/client_golang v1.23.0
 	github.com/quasilyte/go-ruleguard v0.4.4
-	github.com/quasilyte/go-ruleguard/dsl v0.3.22
+	github.com/quasilyte/go-ruleguard/dsl v0.3.23
 	github.com/ryanuber/columnize v2.1.2+incompatible
 	github.com/schollz/progressbar/v3 v3.18.0
 	github.com/sethvargo/go-retry v0.3.0
