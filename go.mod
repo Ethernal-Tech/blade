@@ -31,7 +31,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/golang-lru v1.0.2
 	github.com/hashicorp/hcl v1.0.1-vault-7
-	github.com/hashicorp/vault/api v1.21.0
+	github.com/hashicorp/vault/api v1.22.0
 	github.com/holiman/uint256 v1.3.2
 	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/json-iterator/go v1.1.12
