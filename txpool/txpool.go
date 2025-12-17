@@ -9,11 +9,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/any"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-metrics"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/0xPolygon/polygon-edge/chain"
 	"github.com/0xPolygon/polygon-edge/helper/common"
@@ -337,7 +337,7 @@ func (p *TxPool) gossipBatcher() {
 func (p *TxPool) publish(batch *[]*types.Transaction) {
 	txs := types.Transactions(*batch)
 	tx := &proto.Txn{
-		Raw: &any.Any{
+		Raw: &anypb.Any{
 			Value: txs.MarshalRLPTo(nil),
 		},
 	}

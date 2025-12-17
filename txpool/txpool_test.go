@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/any"
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/0xPolygon/polygon-edge/chain"
 	"github.com/0xPolygon/polygon-edge/crypto"
@@ -723,7 +723,7 @@ func TestAddGossipTx(t *testing.T) {
 		txs := types.Transactions(batch)
 
 		return &proto.Txn{
-			Raw: &any.Any{
+			Raw: &anypb.Any{
 				Value: txs.MarshalRLPTo(nil),
 			},
 		}

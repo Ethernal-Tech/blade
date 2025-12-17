@@ -8,8 +8,8 @@ import (
 	"github.com/0xPolygon/polygon-edge/network/grpc"
 	"github.com/0xPolygon/polygon-edge/syncer/proto"
 	"github.com/0xPolygon/polygon-edge/types"
-	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/hashicorp/go-metrics"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 var (
@@ -83,7 +83,7 @@ func (s *syncPeerService) GetBlocks(
 // GetStatus is a gRPC endpoint to return the latest block number as a node status
 func (s *syncPeerService) GetStatus(
 	ctx context.Context,
-	req *empty.Empty,
+	req *emptypb.Empty,
 ) (*proto.SyncPeerStatus, error) {
 	var number uint64
 	if header := s.blockchain.Header(); header != nil {
@@ -95,7 +95,7 @@ func (s *syncPeerService) GetStatus(
 	}, nil
 }
 
-func (s *syncPeerService) GetTxPool(req *empty.Empty, stream proto.SyncPeer_GetTxPoolServer) error {
+func (s *syncPeerService) GetTxPool(req *emptypb.Empty, stream proto.SyncPeer_GetTxPoolServer) error {
 	if s.txPool == nil {
 		return nil
 	}
