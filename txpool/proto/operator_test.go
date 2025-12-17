@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/0xPolygon/polygon-edge/validate"
-	"github.com/golang/protobuf/ptypes/any"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 func TestRequestValidation(t *testing.T) {
@@ -29,7 +29,7 @@ func TestRequestValidation(t *testing.T) {
 		{
 			name: "AddTxnReq: allow empty address",
 			req: &AddTxnReq{
-				Raw:  &any.Any{},
+				Raw:  &anypb.Any{},
 				From: "",
 			},
 			valid: true,
@@ -37,7 +37,7 @@ func TestRequestValidation(t *testing.T) {
 		{
 			name: "AddTxnReq: invalid address",
 			req: &AddTxnReq{
-				Raw:  &any.Any{},
+				Raw:  &anypb.Any{},
 				From: "1234",
 			},
 			valid:    false,
@@ -46,7 +46,7 @@ func TestRequestValidation(t *testing.T) {
 		{
 			name: "AddTxnReq: valid address",
 			req: &AddTxnReq{
-				Raw:  &any.Any{},
+				Raw:  &anypb.Any{},
 				From: "0x9FC184A287e4BB51Eef4ecA81788eA10EF3f202f",
 			},
 			valid: true,

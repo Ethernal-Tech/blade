@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/0xPolygon/polygon-edge/command"
-	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/0xPolygon/polygon-edge/command/helper"
 	"github.com/0xPolygon/polygon-edge/server/proto"
@@ -51,5 +51,5 @@ func getSystemStatus(grpcAddress string) (*proto.ServerStatus, error) {
 		return nil, err
 	}
 
-	return client.GetStatus(context.Background(), &empty.Empty{})
+	return client.GetStatus(context.Background(), &emptypb.Empty{})
 }

@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/Ethernal-Tech/ethgo"
-	"github.com/golang/protobuf/ptypes/any"
 	libp2pCrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/0xPolygon/polygon-edge/crypto"
 	"github.com/0xPolygon/polygon-edge/helper/common"
@@ -238,7 +238,7 @@ func GenerateAddTxnReq(params GenerateTxReqParams) (*txpoolOp.AddTxnReq, error) 
 	}
 
 	msg := &txpoolOp.AddTxnReq{
-		Raw: &any.Any{
+		Raw: &anypb.Any{
 			Value: txn.MarshalRLP(),
 		},
 		From: types.ZeroAddress.String(),
