@@ -34,7 +34,7 @@ require (
 	github.com/holiman/uint256 v1.3.2
 	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/json-iterator/go v1.1.12
-	github.com/libp2p/go-libp2p v0.46.0
+	github.com/libp2p/go-libp2p v0.47.0
 	github.com/libp2p/go-libp2p-kbucket v0.8.0
 	github.com/libp2p/go-libp2p-pubsub v0.15.0
 	github.com/mitchellh/mapstructure v1.5.1-0.20231216201459-8508981c8b6c
