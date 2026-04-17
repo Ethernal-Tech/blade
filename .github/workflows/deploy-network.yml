@@ -249,4 +249,4 @@ jobs:
       deploy_network_blade_healthcheck_output: ${{ needs.deploy_network.outputs.blade_healthcheck_output }}
       rpc_url: ${{ needs.check_network.outputs.rpc_url || needs.deploy_network.outputs.rpc_url }}
     secrets:
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_UCL_WEBHOOK_URL }}

@@ -145,8 +145,6 @@ on: # yamllint disable-line rule:truthy
         required: true
       SLACK_WEBHOOK_URL:
         required: true
-      MONITORING_SLACK_WEBHOOK_URL:
-        required: true
 
 permissions:
   id-token: write
@@ -297,7 +295,7 @@ jobs:
       txpool_queued: ${{ needs.txpool_status.outputs.txpool_queued }}
       results_artifact_id: ${{ needs.load_test.outputs.results_artifact_id }}
     secrets:
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_UCL_WEBHOOK_URL }}
   destroy_load_test_runner:
     name: Destroy Load Test Runner
     environment: ${{ inputs.environment }}

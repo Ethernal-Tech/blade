@@ -154,4 +154,4 @@ jobs:
       destroy_network_terraform_logs: ${{ needs.destroy_network.outputs.terraform_output }}
     secrets:
       AWS_S3_BLADE_BUCKET: ${{ secrets.AWS_S3_BLADE_BUCKET }}
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_UCL_WEBHOOK_URL }}
