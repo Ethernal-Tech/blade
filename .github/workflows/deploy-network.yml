@@ -157,6 +157,8 @@ jobs:
         with:
           repository: Ethernal-Tech/blade-deployment
           ref: ucl
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4.0.1
         with:
