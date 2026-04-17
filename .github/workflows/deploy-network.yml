@@ -8,6 +8,10 @@ on: # yamllint disable-line rule:truthy
         description: The environment to run against
         type: choice
         options: [dev] # nightly should not be initiated manually
+      commit_hash:
+        description: Commit hash to deploy ucl from
+        type: string
+        default: "develop"
       block_gas_limit:
         description: Block Gas Limit
         type: string
@@ -32,10 +36,6 @@ on: # yamllint disable-line rule:truthy
         description: EIP-1559
         type: boolean
         default: true
-      is_bridge_active:
-        description: With Bridge
-        type: boolean
-        default: true
       gossip_msg_size:
         description: Gossip Message Size
         type: string
@@ -49,6 +49,10 @@ on: # yamllint disable-line rule:truthy
     inputs:
       environment:
         description: The environment to run against
+        type: string
+        required: true
+      commit_hash:
+        description: Commit hash to deploy ucl from
         type: string
         required: true
       block_gas_limit:
@@ -69,10 +73,6 @@ on: # yamllint disable-line rule:truthy
         required: true
       is_london_fork_active:
         description: EIP-1559
-        type: boolean
-        required: true
-      is_bridge_active:
-        description: With Bridge
         type: boolean
         required: true
       gossip_msg_size:
@@ -156,7 +156,7 @@ jobs:
         uses: actions/checkout@v4.1.1
         with:
           repository: Ethernal-Tech/blade-deployment
-          ref: main
+          ref: ucl
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4.0.1
         with:
@@ -200,8 +200,7 @@ jobs:
         run: |
           echo "${{ secrets.VAULT_PASSWORD }}" > password.txt
           sed 's/devnet/${{ inputs.environment }}/g' inventory/aws_ec2.yml > inventory/aws_ec2.yml.tmp && mv inventory/aws_ec2.yml.tmp inventory/aws_ec2.yml
-          sed 's/blade_tag: .*/blade_tag: ${{ github.sha }}/g' group_vars/all.yml > group_vars/all.yml.tmp && mv group_vars/all.yml.tmp group_vars/all.yml
-          sed 's/is_bridge_active: .*/is_bridge_active: ${{ inputs.is_bridge_active }}/g' group_vars/all.yml > group_vars/all.yml.tmp && mv group_vars/all.yml.tmp group_vars/all.yml
+          sed 's/blade_tag: .*/blade_tag: ${{ inputs.commit_hash }}/g' group_vars/all.yml > group_vars/all.yml.tmp && mv group_vars/all.yml.tmp group_vars/all.yml
           sed 's/is_london_fork_active: .*/is_london_fork_active: ${{ inputs.is_london_fork_active }}/g' group_vars/all.yml > group_vars/all.yml.tmp && mv group_vars/all.yml.tmp group_vars/all.yml
           sed 's/gossip_msg_size: .*/gossip_msg_size: ${{ inputs.gossip_msg_size }}/g' group_vars/all.yml > group_vars/all.yml.tmp && mv group_vars/all.yml.tmp group_vars/all.yml
           sed 's/tx_gossip_batch_size: .*/tx_gossip_batch_size: 10000/g' group_vars/all.yml > group_vars/all.yml.tmp && mv group_vars/all.yml.tmp group_vars/all.yml
@@ -211,8 +210,6 @@ jobs:
           sed 's/epoch_reward: .*/epoch_reward: 1000000000/g' group_vars/all.yml > group_vars/all.yml.tmp && mv group_vars/all.yml.tmp group_vars/all.yml
           sed 's/reward_wallet_balance: .*/reward_wallet_balance: 0xD3C21BCECCEDA1000000/g' group_vars/all.yml > group_vars/all.yml.tmp && mv group_vars/all.yml.tmp group_vars/all.yml
           sed 's/config_socket: .*/config_socket: ${{ vars.CONFIG_SOCKET }}/g' group_vars/all.yml > group_vars/all.yml.tmp && mv group_vars/all.yml.tmp group_vars/all.yml
-          sed 's/gh_user: .*/gh_user: ${{ secrets.PERSONAL_ACCESS_USER }}/g' group_vars/all.yml > group_vars/all.yml.tmp && mv group_vars/all.yml.tmp group_vars/all.yml
-          sed 's/gh_pat: .*/gh_pat: ${{ secrets.PERSONAL_ACCESS_TOKEN }}/g' group_vars/all.yml > group_vars/all.yml.tmp && mv group_vars/all.yml.tmp group_vars/all.yml
       - name: Setup Ansible
         working-directory: ansible
         run: |
@@ -220,7 +217,7 @@ jobs:
           ansible-galaxy install -r requirements.yml
       - name: Run Ansible (Bootstrap blade)
         working-directory: ansible
-        run: ansible-playbook site.yml --extra-vars "clean_deploy_title=${{ inputs.environment }} blade_repository=${{ github.repository }} block_gas_limit=${{ inputs.block_gas_limit }} block_time=${{ inputs.block_time }} max_slots=${{ inputs.max_slots }} max_enqueued=${{ inputs.max_enqueued }}"
+        run: ansible-playbook site.yml --extra-vars "clean_deploy_title=${{ inputs.environment }} block_gas_limit=${{ inputs.block_gas_limit }} block_time=${{ inputs.block_time }} max_slots=${{ inputs.max_slots }} max_enqueued=${{ inputs.max_enqueued }}"
       - name: Ansible Failed
         if: failure()
         id: ansible_failure
@@ -230,7 +227,7 @@ jobs:
         run: echo "url=$(terraform output -raw aws_lb_ext_domain | grep -o -E '^ext[^:]*')" >> $GITHUB_OUTPUT
       - name: Blade healthcheck
         id: blade_healthcheck
-        run: echo "healthcheck=`curl http://${{ steps.rpc_url.outputs.url }} | jq -r 'select(.name == "blade") | length != 0'`" >> $GITHUB_OUTPUT
+        run: echo "healthcheck=`curl http://${{ steps.rpc_url.outputs.url }} | jq -r 'select(.name == "polygon-edge") | length != 0'`" >> $GITHUB_OUTPUT
   notification:
     name: Deploy Notification
     needs: [check_network, deploy_network]
@@ -238,12 +235,12 @@ jobs:
     if: ((success() || failure()) && inputs.notification)
     with:
       environment: ${{ inputs.environment }}
+      commit_hash: ${{ inputs.commit_hash }}
       block_gas_limit: ${{ inputs.block_gas_limit }}
       block_time: ${{ inputs.block_time }}
       max_slots: ${{ inputs.max_slots }}
       max_enqueued: ${{ inputs.max_enqueued }}
       is_london_fork_active: ${{ inputs.is_london_fork_active }}
-      is_bridge_active: ${{ inputs.is_bridge_active }}
       gossip_msg_size: ${{ inputs.gossip_msg_size }}
       deploy_network_terraform_output: ${{ needs.deploy_network.outputs.terraform_output }}
       deploy_network_ansible_output: ${{ needs.deploy_network.outputs.ansible_output }}

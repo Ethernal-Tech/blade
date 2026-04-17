@@ -10,10 +10,10 @@ on: # yamllint disable-line rule:truthy
         description: The environment to run against
         type: choice
         options: [dev, testnet] # nightly should not be initiated manually
-      type:
-        description: The type of load test to run
-        type: choice
-        options: [EOA, ERC20, ERC721, ERC1155, MIXED, PERF-CONTRACT]
+      commit_hash:
+        description: Commit hash to deploy ucl from
+        type: string
+        default: "develop"
       dynamic:
         description: Indicates whether the load test should generate dynamic transactions
         type: boolean
@@ -52,8 +52,8 @@ on: # yamllint disable-line rule:truthy
         description: The environment to run against
         type: string
         required: true
-      type:
-        description: The type of load test to run
+      commit_hash:
+        description: Commit hash to deploy ucl from
         type: string
         required: true
       dynamic:
@@ -86,10 +86,6 @@ on: # yamllint disable-line rule:truthy
         required: true
       notification:
         description: Notification
-        type: boolean
-        required: true
-      monitoring:
-        description: Monitoring
         type: boolean
         required: true
     outputs:
@@ -137,11 +133,11 @@ on: # yamllint disable-line rule:truthy
         required: true
       AWS_S3_BLADE_BUCKET:
         required: true
-      AWS_LOADTESTRUNNER_AMI_ID:
+      AWS_UCL_LOADTESTRUNNER_AMI_ID:
         required: true
       AWS_LOADTESTRUNNER_SUBNET_ID:
         required: true
-      AWS_LOADTESTRUNNER_SG_ID:
+      AWS_UCL_LOADTESTRUNNER_SG_ID:
         required: true
       AWS_LOADTESTRUNNER_MNEMONIC:
         required: true
@@ -158,20 +154,6 @@ permissions:
   security-events: write
 
 jobs:
-  inputs_check:
-    name: Inputs Check
-    runs-on: ubuntu-latest
-    outputs:
-      monitoring: ${{ steps.monitoring_input_check.outputs.monitoring }}
-    steps:
-      - name: Monitoring Input Check
-        id: monitoring_input_check
-        run: |
-          if [[ "${{ inputs.monitoring }}" == "" ]]; then
-            echo "monitoring=${{ inputs.notification }}" >> $GITHUB_OUTPUT
-          else
-            echo "monitoring=${{ inputs.monitoring }}" >> $GITHUB_OUTPUT
-          fi
   check_network:
     name: Check if the network is already deployed
     runs-on: ubuntu-latest
@@ -179,8 +161,6 @@ jobs:
     outputs:
       rpc_url: ${{ steps.rpc_url.outputs.url }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4.1.1
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4.0.1
         with:
@@ -193,16 +173,6 @@ jobs:
         id: rpc_url
         if: contains(steps.retrieve_state.outputs.retrieve_state_output, 'download')
         run: echo "url=$(cat state.json | jq -r '.outputs.aws_lb_ext_domain.value // empty')" >> $GITHUB_OUTPUT
-  notification_before_load_test:
-    name: Notification Before Load Test
-    needs: [inputs_check, check_network]
-    if: (needs.check_network.outputs.rpc_url != '' && needs.inputs_check.outputs.monitoring == 'true')
-    uses: ./.github/workflows/notification.yml
-    with:
-      environment: ${{ inputs.environment }}
-      description: "Load Test ${{ inputs.type }} Started"
-    secrets:
-      MONITORING_SLACK_WEBHOOK_URL: ${{ secrets.MONITORING_SLACK_WEBHOOK_URL }}
   load_test_runner:
     name: Deploy Load Test Runner
     runs-on: ubuntu-latest
@@ -224,13 +194,13 @@ jobs:
         with:
           mode: start
           ec2-instance-type: ${{ vars.AWS_INSTANCE_TYPE }}
-          ec2-image-id: ${{ secrets.AWS_LOADTESTRUNNER_AMI_ID }}
+          ec2-image-id: ${{ secrets.AWS_UCL_LOADTESTRUNNER_AMI_ID }}
           subnet-id: ${{ secrets.AWS_LOADTESTRUNNER_SUBNET_ID }}
-          security-group-id: ${{ secrets.AWS_LOADTESTRUNNER_SG_ID }}
+          security-group-id: ${{ secrets.AWS_UCL_LOADTESTRUNNER_SG_ID }}
           github-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           aws-resource-tags: >
             [
-              {"Key": "Name", "Value": "${{ inputs.environment }}-load-test-runner"}
+              {"Key": "Name", "Value": "${{ inputs.environment }}-ucl-load-test-runner"}
             ]
   load_test:
     name: Run Load Test
@@ -251,6 +221,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4.1.1
+        with:
+          repository: Ethernal-Tech/ucl
+          ref: ${{ inputs.commit_hash }}
       - name: Build Blade
         run: make build
         env:
@@ -260,16 +233,16 @@ jobs:
       - name: Start Load Test
         id: load_test_results
         run: |
-          ./blade load-test --jsonrpc "http://${{ needs.check_network.outputs.rpc_url }}" --mnemonic "${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}" --name "results" --type ${{ inputs.type }} ${{ inputs.dynamic == true && '--dynamic' || '' }} --vus ${{ inputs.vus }} --txs-per-user ${{ inputs.txs_per_user }} --batch-size ${{ inputs.batch_size }} --txpool-timeout ${{ inputs.txpool_timeout }} ${{ inputs.wait_txpool == true && '--wait-txpool' || '' }} --receipts-timeout ${{ inputs.receipts_timeout }} --to-json ${{ inputs.environment == 'testnet' && '--tear-down --txpool-read-threads 4 --state-read-threads 4' || ''}}
-          echo "total_time=$(cat results_${{ inputs.type }}.json | jq -r '.totalTime')" >> $GITHUB_OUTPUT
-          echo "total_txs=$(cat results_${{ inputs.type }}.json | jq -r '.totalTxs')" >> $GITHUB_OUTPUT
-          echo "total_blocks=$(cat results_${{ inputs.type }}.json | jq -r '.totalBlocks')" >> $GITHUB_OUTPUT
-          echo "avg_txs_per_second=$(cat results_${{ inputs.type }}.json | jq -r '.avgTxsPerSecond')" >> $GITHUB_OUTPUT
-          echo "max_txs_per_second=$(cat results_${{ inputs.type }}.json | jq -r '.maxTxsPerSecond')" >> $GITHUB_OUTPUT
-          echo "total_gas_used=$(cat results_${{ inputs.type }}.json | jq -r '.totalGasUsed')" >> $GITHUB_OUTPUT
-          echo "avg_gas_per_tx=$(cat results_${{ inputs.type }}.json | jq -r '.avgGasPerTx')" >> $GITHUB_OUTPUT
-          echo "avg_gas_utilization=$(cat results_${{ inputs.type }}.json | jq -r '.avgGasUtilization')" >> $GITHUB_OUTPUT
-          echo "max_gas_utilization=$(cat results_${{ inputs.type }}.json | jq -r '.maxGasUtilization')" >> $GITHUB_OUTPUT
+          ./polygon-edge load-test --jsonrpc "http://${{ needs.check_network.outputs.rpc_url }}" --mnemonic "${{ secrets.AWS_LOADTESTRUNNER_MNEMONIC }}" --name "results" --type ERC20 ${{ inputs.dynamic == true && '--dynamic' || '' }} --vus ${{ inputs.vus }} --txs-per-user ${{ inputs.txs_per_user }} --batch-size ${{ inputs.batch_size }} --txpool-timeout ${{ inputs.txpool_timeout }} ${{ inputs.wait_txpool == true && '--wait-txpool' || '' }} --receipts-timeout ${{ inputs.receipts_timeout }} --to-json ${{ inputs.environment == 'testnet' && '--tear-down --txpool-read-threads 4 --state-read-threads 4' || ''}}
+          echo "total_time=$(cat results_ERC20.json | jq -r '.totalTime')" >> $GITHUB_OUTPUT
+          echo "total_txs=$(cat results_ERC20.json | jq -r '.totalTxs')" >> $GITHUB_OUTPUT
+          echo "total_blocks=$(cat results_ERC20.json | jq -r '.totalBlocks')" >> $GITHUB_OUTPUT
+          echo "avg_txs_per_second=$(cat results_ERC20.json | jq -r '.avgTxsPerSecond')" >> $GITHUB_OUTPUT
+          echo "max_txs_per_second=$(cat results_ERC20.json | jq -r '.maxTxsPerSecond')" >> $GITHUB_OUTPUT
+          echo "total_gas_used=$(cat results_ERC20.json | jq -r '.totalGasUsed')" >> $GITHUB_OUTPUT
+          echo "avg_gas_per_tx=$(cat results_ERC20.json | jq -r '.avgGasPerTx')" >> $GITHUB_OUTPUT
+          echo "avg_gas_utilization=$(cat results_ERC20.json | jq -r '.avgGasUtilization')" >> $GITHUB_OUTPUT
+          echo "max_gas_utilization=$(cat results_ERC20.json | jq -r '.maxGasUtilization')" >> $GITHUB_OUTPUT
       - name: Run tests success
         if: success()
         id: load_test_results_success
@@ -278,8 +251,8 @@ jobs:
         uses: actions/upload-artifact@v4.3.0
         id: artifact-upload
         with:
-          name: results_${{ inputs.type }}.tar.gz
-          path: results_${{ inputs.type }}.json
+          name: results_ERC20.tar.gz
+          path: results_ERC20.json
           retention-days: 3
   txpool_status:
     name: Check txpool status after Load Test
@@ -295,16 +268,6 @@ jobs:
           txpool_status=$(curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"txpool_status","params":[],"id":1}' http://${{ needs.check_network.outputs.rpc_url }} | jq -r .result)
           echo "txpool_pending=$(echo $txpool_status | jq -r '.pending')" >> $GITHUB_OUTPUT
           echo "txpool_queued=$(echo $txpool_status | jq -r '.queued')" >> $GITHUB_OUTPUT
-  notification_after_load_test:
-    name: Notification After Load Test
-    needs: [inputs_check, load_test, txpool_status]
-    if: needs.inputs_check.outputs.monitoring == 'true'
-    uses: ./.github/workflows/notification.yml
-    with:
-      environment: ${{ inputs.environment }}
-      description: "Load Test ${{ inputs.type }} Ended"
-    secrets:
-      MONITORING_SLACK_WEBHOOK_URL: ${{ secrets.MONITORING_SLACK_WEBHOOK_URL }}
   notification:
     name: Load Test Notification
     needs: [load_test, txpool_status]
@@ -312,7 +275,7 @@ jobs:
     if: (always() && inputs.notification && needs.load_test.outputs.test_output_success == 'true')
     with:
       environment: ${{ inputs.environment }}
-      type: ${{ inputs.type }}
+      type: ERC20
       dynamic: ${{ inputs.dynamic }}
       vus: ${{ inputs.vus }}
       txs_per_user: ${{ inputs.txs_per_user }}

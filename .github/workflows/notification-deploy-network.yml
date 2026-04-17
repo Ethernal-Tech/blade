@@ -7,6 +7,10 @@ on: # yamllint disable-line rule:truthy
         description: The environment to run against
         type: string
         required: true
+      commit_hash:
+        description: Commit hash to deploy ucl from
+        type: string
+        required: true
       block_gas_limit:
         description: Block Gas Limit
         type: string
@@ -25,10 +29,6 @@ on: # yamllint disable-line rule:truthy
         required: true
       is_london_fork_active:
         description: EIP-1559
-        type: boolean
-        required: true
-      is_bridge_active:
-        description: With Bridge
         type: boolean
         required: true
       gossip_msg_size:
@@ -63,7 +63,7 @@ jobs:
     steps:
       - name: Short SHA
         id: short_sha
-        run: echo "value=`echo ${{ github.sha }} | cut -c1-7`" >> $GITHUB_OUTPUT
+        run: echo "value=`echo ${{ inputs.commit_hash }} | cut -c1-7`" >> $GITHUB_OUTPUT
       - name: Notify Slack
         uses: slackapi/slack-github-action@v1.25.0
         env:
@@ -110,7 +110,7 @@ jobs:
                   "elements": [
                     {
                       "type": "mrkdwn",
-                      "text": "Commit: *<https://github.com/${{ github.repository }}/tree/${{ github.sha }}|${{ steps.short_sha.outputs.value }}>*"
+                      "text": "Commit: *<https://github.com/Ethernal-Tech/ucl/tree/${{ inputs.commit_hash }}|${{ steps.short_sha.outputs.value }}>*"
                     },
                     {
                       "type": "mrkdwn",
@@ -160,10 +160,6 @@ jobs:
                     {
                       "type": "mrkdwn",
                       "text": "Max Enqueued: *${{ inputs.max_enqueued }}*"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "Bridge: *${{ inputs.is_bridge_active }}*"
                     },
                     {
                       "type": "mrkdwn",
