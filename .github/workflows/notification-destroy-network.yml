@@ -46,7 +46,7 @@ jobs:
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "Destroy ${{ inputs.environment }}net"
+                    "text": "UCL | Destroy ${{ inputs.environment }}net"
                   }
                 },
                 {

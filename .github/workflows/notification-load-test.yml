@@ -7,6 +7,10 @@ on: # yamllint disable-line rule:truthy
         description: The environment to run against
         type: string
         required: true
+      commit_hash:
+        description: Commit hash to deploy ucl from
+        type: string
+        default: "develop"
       type:
         description: The type of load test to run
         type: string
@@ -99,7 +103,7 @@ jobs:
     steps:
       - name: Short SHA
         id: short_sha
-        run: echo "value=`echo ${{ github.sha }} | cut -c1-7`" >> $GITHUB_OUTPUT
+        run: echo "value=`echo ${{ inputs.commit_hash }} | cut -c1-7`" >> $GITHUB_OUTPUT
       - name: Notify Slack
         uses: slackapi/slack-github-action@v1.25.0
         env:
@@ -115,7 +119,7 @@ jobs:
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "Load Test: ${{ inputs.type }}"
+                    "text": "UCL | Load Test: ${{ inputs.type }}"
                   }
                 },
                 {
