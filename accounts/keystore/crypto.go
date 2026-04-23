@@ -85,8 +85,8 @@ func newKey() (*Key, error) {
 
 func NewKeyForDirectICAP(rand io.Reader) *Key {
 	randBytes := make([]byte, 64)
-	_, err := rand.Read(randBytes)
 
+	_, err := rand.Read(randBytes)
 	if err != nil {
 		return nil
 	}

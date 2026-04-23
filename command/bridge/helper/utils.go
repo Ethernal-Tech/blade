@@ -298,7 +298,7 @@ func DeployProxyContract(txRelayer txrelayer.TxRelayer, deployerKey crypto.Key, 
 			proxyContractName, err)
 	}
 
-	var proxyDeployInput []byte
+	var proxyDeployInput []byte //nolint:prealloc
 
 	proxyDeployInput = append(proxyDeployInput, contractsapi.TransparentUpgradeableProxy.Bytecode...)
 	proxyDeployInput = append(proxyDeployInput, constructorInput...)

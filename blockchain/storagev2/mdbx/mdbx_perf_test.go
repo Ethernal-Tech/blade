@@ -32,6 +32,7 @@ func Benchmark(b *testing.B) {
 	b.StopTimer()
 
 	s, cleanUpFn, path := openStorage(b, "/tmp/mdbx-test-perf")
+
 	defer func() {
 		s.Close()
 		cleanUpFn()

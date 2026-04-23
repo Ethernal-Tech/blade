@@ -65,7 +65,7 @@ func (g *GovernanceStore) insertGovernanceEvent(epoch uint64, event contractsapi
 			return forkParamsBucket.Put(forkHash.Bytes(), forkBlock.Bytes())
 		}
 
-		var rawEvents eventsRaw
+		var rawEvents eventsRaw //nolint:prealloc
 
 		networkParamsBucket := tx.Bucket(networkParamsEventsBucket)
 		epochKey := common.EncodeUint64ToBytes(epoch)

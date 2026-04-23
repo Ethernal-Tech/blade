@@ -229,6 +229,7 @@ func TestAccountSet_ApplyDelta(t *testing.T) {
 
 				// apply delta
 				var err error
+
 				snapshot, err = snapshot.ApplyDelta(delta)
 
 				if step.errMsg != "" {

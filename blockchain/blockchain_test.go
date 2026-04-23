@@ -603,6 +603,7 @@ func TestBlockchainWriteBody(t *testing.T) {
 
 		chain := newChain(t, txFromByTxHash)
 		defer chain.db.Close()
+
 		batchWriter := chain.db.NewWriter()
 
 		assert.NoError(
@@ -632,6 +633,7 @@ func TestBlockchainWriteBody(t *testing.T) {
 
 		chain := newChain(t, txFromByTxHash)
 		defer chain.db.Close()
+
 		batchWriter := chain.db.NewWriter()
 
 		assert.ErrorIs(
@@ -664,6 +666,7 @@ func TestBlockchainWriteBody(t *testing.T) {
 
 		chain := newChain(t, txFromByTxHash)
 		defer chain.db.Close()
+
 		batchWriter := chain.db.NewWriter()
 
 		batchWriter.PutBlockLookup(block.Hash(), block.Number())
@@ -2065,7 +2068,6 @@ func dirSize(tb testing.TB, dir string) (int64, error) {
 
 		return nil
 	})
-
 	if err != nil {
 		return 0, err
 	}

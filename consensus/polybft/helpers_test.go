@@ -148,8 +148,8 @@ func newTestState(tb testing.TB) *State {
 	tb.Helper()
 
 	dir := fmt.Sprintf("/tmp/consensus-temp_%v", time.Now().UTC().Format(time.RFC3339Nano))
-	err := os.Mkdir(dir, 0775)
 
+	err := os.Mkdir(dir, 0775)
 	if err != nil {
 		tb.Fatal(err)
 	}

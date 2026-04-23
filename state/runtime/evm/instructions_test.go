@@ -951,6 +951,7 @@ func TestExtCodeSize(t *testing.T) {
 
 		s, cancelFn := getState(&chain.ForksInTime{EIP150: true})
 		defer cancelFn()
+
 		s.push(one256)
 
 		mockHost := &mockHost{}

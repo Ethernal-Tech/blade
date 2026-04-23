@@ -64,6 +64,7 @@ func (t *BaseSanityCheckTest) fundAddress(address types.Address, amount *big.Int
 	fmt.Println("Funding address", address.String(), "Amount", amount.String())
 
 	s := time.Now().UTC()
+
 	defer func() {
 		fmt.Println("Funding address", address.String(), "took", time.Since(s))
 	}()
@@ -100,6 +101,7 @@ func (t *BaseSanityCheckTest) unstake(validatorKey *crypto.ECDSAKey, amount *big
 	fmt.Println("Unstaking for validator", validatorKey.Address(), "Amount", amount.String())
 
 	s := time.Now().UTC()
+
 	defer func() {
 		fmt.Println("Unstaking for validator", validatorKey.Address(), "took", time.Since(s))
 	}()
@@ -139,6 +141,7 @@ func (t *BaseSanityCheckTest) stake(validatorKey *crypto.ECDSAKey, amount *big.I
 	fmt.Println("Staking for validator", validatorKey.Address(), "Amount", amount.String())
 
 	s := time.Now().UTC()
+
 	defer func() {
 		fmt.Println("Staking for validator", validatorKey.Address(), "took", time.Since(s))
 	}()
@@ -176,6 +179,7 @@ func (t *BaseSanityCheckTest) approveNativeERC20(sender *crypto.ECDSAKey,
 	fmt.Println("Approving", amount.String(), "tokens for", spender.String())
 
 	s := time.Now().UTC()
+
 	defer func() {
 		fmt.Println("Approving", amount.String(), "for", spender.String(), "took", time.Since(s))
 	}()

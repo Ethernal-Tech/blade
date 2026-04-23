@@ -631,6 +631,7 @@ func (p *Polybft) startConsensusProtocol() {
 				if ev.Source == "syncer" && ev.NewChain[0].Number >= p.blockchain.CurrentHeader().Number {
 					p.logger.Info("sync block notification received", "block height", ev.NewChain[0].Number,
 						"current height", p.blockchain.CurrentHeader().Number)
+
 					syncerBlockCh <- struct{}{}
 				}
 			}
@@ -716,7 +717,7 @@ func (p *Polybft) Close() error {
 
 	close(p.closeCh)
 	p.runtime.close()
-	p.state.db.Close()
+	p.state.db.Close() //nolint:errcheck
 
 	return nil
 }

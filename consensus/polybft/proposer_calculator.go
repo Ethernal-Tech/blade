@@ -169,7 +169,6 @@ type ProposerCalculator struct {
 func NewProposerCalculator(config *runtimeConfig, logger hclog.Logger,
 	dbTx *bolt.Tx) (*ProposerCalculator, error) {
 	snap, err := NewProposerSnapshotFromState(config, dbTx)
-
 	if err != nil {
 		return nil, err
 	}

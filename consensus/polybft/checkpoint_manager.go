@@ -203,8 +203,8 @@ func (c *checkpointManager) encodeAndSendCheckpoint(header *types.Header, extra 
 
 	if isEndOfEpoch {
 		var err error
-		nextEpochValidators, err = c.consensusBackend.GetValidators(header.Number, nil)
 
+		nextEpochValidators, err = c.consensusBackend.GetValidators(header.Number, nil)
 		if err != nil {
 			return err
 		}

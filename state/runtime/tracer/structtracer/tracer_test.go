@@ -172,7 +172,7 @@ func TestStructTracerClear(t *testing.T) {
 			currentMemory: make([]([]byte), 1),
 			currentStack:  make([]([]uint256.Int), 1),
 		},
-		tracer,
+		tracer, //nolint:govet
 	)
 }
 

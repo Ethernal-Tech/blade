@@ -424,6 +424,7 @@ func blockStreamToChannel(stream proto.SyncPeer_GetBlocksClient) (<-chan *types.
 
 			if err != nil {
 				metrics.IncrCounter([]string{syncerMetrics, "bad_message"}, 1)
+
 				errorCh <- err
 
 				break
@@ -432,6 +433,7 @@ func blockStreamToChannel(stream proto.SyncPeer_GetBlocksClient) (<-chan *types.
 			block, err := fromProto(protoBlock)
 			if err != nil {
 				metrics.IncrCounter([]string{syncerMetrics, "bad_block"}, 1)
+
 				errorCh <- err
 
 				break
@@ -461,6 +463,7 @@ func fromTransactionStreamToChannel(stream proto.SyncPeer_GetTxPoolClient) (<-ch
 
 			if err != nil {
 				metrics.IncrCounter([]string{syncerMetrics, "bad_message"}, 1)
+
 				errorCh <- err
 
 				break
@@ -469,6 +472,7 @@ func fromTransactionStreamToChannel(stream proto.SyncPeer_GetTxPoolClient) (<-ch
 			txs := &types.Transactions{}
 			if err := txs.UnmarshalRLP(protoTxs.Txs); err != nil {
 				metrics.IncrCounter([]string{syncerMetrics, "bad_tx"}, 1)
+
 				errorCh <- err
 
 				break

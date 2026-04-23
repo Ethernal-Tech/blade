@@ -261,8 +261,8 @@ func (s *stateSyncManager) Commitment(blockNumber uint64) (*CommitmentMessageSig
 	// we start from the end, since last pending commitment is the largest one
 	for i := len(s.pendingCommitments) - 1; i >= 0; i-- {
 		commitment := s.pendingCommitments[i]
-		aggregatedSignature, publicKeys, err := s.getAggSignatureForCommitmentMessage(blockNumber, commitment)
 
+		aggregatedSignature, publicKeys, err := s.getAggSignatureForCommitmentMessage(blockNumber, commitment)
 		if err != nil {
 			if errors.Is(err, errQuorumNotReached) {
 				// a valid case, commitment has no quorum, we should not return an error

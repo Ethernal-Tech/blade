@@ -199,7 +199,6 @@ func (f *fsm) BuildProposal(currentRound uint64) ([]byte, error) {
 		h.ExtraData = extra.MarshalRLPTo(nil)
 		h.MixHash = PolyBFTMixDigest
 	})
-
 	if err != nil {
 		return nil, err
 	}

@@ -191,7 +191,6 @@ func runCommand(cmd *cobra.Command, _ []string) {
 		BlockNumberDeadband:  params.blockNumberDeadband,
 		TearDown:             params.tearDown,
 	})
-
 	if err != nil {
 		outputter.SetError(err)
 	}

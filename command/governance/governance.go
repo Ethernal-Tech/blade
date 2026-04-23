@@ -60,7 +60,6 @@ func runCommand(cmd *cobra.Command, _ []string) {
 			ResultsToJSON: params.toJSON,
 		},
 	)
-
 	if err != nil {
 		outputter.SetError(err)
 

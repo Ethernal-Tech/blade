@@ -91,7 +91,7 @@ func (am *Manager) Close() error {
 	defer am.lock.RUnlock()
 
 	for _, w := range am.wallets {
-		w.Close()
+		w.Close() //nolint:errcheck
 	}
 
 	errc := make(chan error)

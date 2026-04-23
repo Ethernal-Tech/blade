@@ -190,8 +190,8 @@ func TestTxPool_ErrorCodes(t *testing.T) {
 				defer waitCancelFn()
 
 				convertedHash := types.StringToHash(addResponse.TxHash)
-				_, receiptErr := tests.WaitForReceipt(receiptCtx, srv.JSONRPC(), convertedHash)
 
+				_, receiptErr := tests.WaitForReceipt(receiptCtx, srv.JSONRPC(), convertedHash)
 				if receiptErr != nil {
 					t.Fatalf("Unable to get receipt, %v", receiptErr)
 				}

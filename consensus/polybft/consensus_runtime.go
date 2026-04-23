@@ -227,7 +227,6 @@ func (c *consensusRuntime) initGovernanceManager(logger hcf.Logger, dbTx *bolt.T
 		c.config.blockchain,
 		dbTx,
 	)
-
 	if err != nil {
 		return err
 	}
@@ -406,7 +405,6 @@ func (c *consensusRuntime) FSM() error {
 		epoch.CurrentClientConfig.BlockTime.Duration,
 		c.logger,
 	)
-
 	if err != nil {
 		return fmt.Errorf("cannot create block builder for fsm: %w", err)
 	}
@@ -1087,8 +1085,8 @@ func (c *consensusRuntime) getFirstBlockOfEpoch(epochNumber uint64, latestHeader
 
 	for blockExtra.Checkpoint.EpochNumber == epoch {
 		firstBlockInEpoch = blockHeader.Number
-		blockHeader, blockExtra, err = getBlockData(blockHeader.Number-1, c.config.blockchain)
 
+		blockHeader, blockExtra, err = getBlockData(blockHeader.Number-1, c.config.blockchain)
 		if err != nil {
 			return 0, err
 		}

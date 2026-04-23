@@ -144,7 +144,6 @@ func TestAddTxErrors(t *testing.T) {
 		transaction.SetChainID(big.NewInt(100))
 
 		signedTx, signErr := poolSigner.SignTx(transaction, defaultKey)
-
 		if signErr != nil {
 			t.Fatalf("Unable to sign transaction, %v", signErr)
 		}
@@ -1356,6 +1355,7 @@ func TestPromoteHandler(t *testing.T) {
 
 		// fake a promotion
 		go signalPromotion()
+
 		pool.handlePromoteRequest(<-pool.promoteReqCh)
 		assert.Equal(t, uint64(0), pool.accounts.get(addr1).enqueued.length())
 		assert.Equal(t, uint64(0), pool.accounts.get(addr1).promoted.length())
@@ -1376,6 +1376,7 @@ func TestPromoteHandler(t *testing.T) {
 
 		// fake a promotion
 		go signalPromotion()
+
 		pool.handlePromoteRequest(<-pool.promoteReqCh)
 		assert.Equal(t, uint64(1), pool.accounts.get(addr1).enqueued.length())
 		assert.Equal(t, uint64(0), pool.accounts.get(addr1).promoted.length())
@@ -1751,6 +1752,7 @@ func TestResetAccount(t *testing.T) {
 					go pool.resetAccounts(map[types.Address]uint64{
 						addr1: test.newNonce,
 					})
+
 					pool.handlePromoteRequest(<-pool.promoteReqCh)
 				} else {
 					pool.resetAccounts(map[types.Address]uint64{
@@ -1921,6 +1923,7 @@ func TestResetAccount(t *testing.T) {
 					go pool.resetAccounts(map[types.Address]uint64{
 						addr1: test.newNonce,
 					})
+
 					pool.handlePromoteRequest(<-pool.promoteReqCh)
 					// wait for resetAccounts routine to execute before asserts
 					time.Sleep(100 * time.Millisecond)
@@ -2308,7 +2311,6 @@ func Test_TxPool_validateTx(t *testing.T) {
 		transaction.SetChainID(big.NewInt(100))
 
 		signedTx, signErr := signer.SignTx(transaction, defaultKey)
-
 		if signErr != nil {
 			t.Fatalf("Unable to sign transaction, %v", signErr)
 		}
@@ -3921,7 +3923,9 @@ func TestBatchTx_SingleAccount(t *testing.T) {
 
 			// check if valid transaction hash
 			mux.RLock()
+
 			_, hashExists := txHashMap[types.StringToHash(ev.TxHash)]
+
 			mux.RUnlock()
 
 			assert.True(t, hashExists)

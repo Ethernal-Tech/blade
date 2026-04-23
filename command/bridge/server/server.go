@@ -148,14 +148,14 @@ func runRootchain(ctx context.Context, outputter command.OutputFormatter, closeC
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
+	defer reader.Close() //nolint:errcheck
 
 	if _, err = io.Copy(outputter, reader); err != nil {
 		return fmt.Errorf("cannot copy: %w", err)
 	}
 
 	// create the client
-	args := []string{"--dev"}
+	args := []string{"--dev"} //nolint:prealloc
 
 	// add period of 2 seconds
 	args = append(args, "--dev.period", "2")
@@ -230,6 +230,7 @@ func runRootchain(ctx context.Context, outputter command.OutputFormatter, closeC
 		case status := <-statusCh:
 			outputter.SetCommandResult(newContainerStopResult(status))
 		}
+
 		close(closeCh)
 	}()
 
@@ -281,6 +282,7 @@ func handleSignals(ctx context.Context, closeCh <-chan struct{}) error {
 	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 
 	stop := true
+
 	select {
 	case <-signalCh:
 	case <-closeCh:

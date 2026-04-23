@@ -100,7 +100,7 @@ type Server struct {
 // newFileLogger returns logger instance that writes all logs to a specified file.
 // If log file can't be created, it returns an error
 func newFileLogger(config *Config) (hclog.Logger, error) {
-	logFileWriter, err := os.OpenFile(config.LogFilePath, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660)
+	logFileWriter, err := os.OpenFile(config.LogFilePath, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660) //nolint:gosec
 	if err != nil {
 		return nil, fmt.Errorf("could not create log file, %w", err)
 	}
@@ -532,7 +532,6 @@ func getAccountImpl(state state.State, root types.Hash, addr types.Address) (*st
 
 func (t *txpoolHub) GetNonce(root types.Hash, addr types.Address) uint64 {
 	account, err := getAccountImpl(t.state, root, addr)
-
 	if err != nil {
 		return 0
 	}
@@ -542,7 +541,6 @@ func (t *txpoolHub) GetNonce(root types.Hash, addr types.Address) uint64 {
 
 func (t *txpoolHub) GetBalance(root types.Hash, addr types.Address) (*big.Int, error) {
 	account, err := getAccountImpl(t.state, root, addr)
-
 	if err != nil {
 		if errors.Is(err, jsonrpc.ErrStateNotFound) {
 			return big.NewInt(0), nil
@@ -588,7 +586,6 @@ func (s *Server) setupSecretsManager() error {
 		secretsManagerConfig,
 		secretsManagerParams,
 	)
-
 	if factoryErr != nil {
 		return fmt.Errorf("unable to instantiate secrets manager, %w", factoryErr)
 	}
@@ -653,7 +650,6 @@ func (s *Server) setupConsensus() error {
 			},
 		},
 	)
-
 	if err != nil {
 		return err
 	}
@@ -1229,7 +1225,7 @@ func (s *Server) Close() {
 	s.closeDataDogProfiler()
 
 	// Close account manager
-	s.accManager.Close()
+	s.accManager.Close() //nolint:errcheck
 }
 
 // Entry is a consensus configuration entry

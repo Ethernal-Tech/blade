@@ -70,6 +70,7 @@ func (j *journal) load(add func(*types.Transaction) error) error {
 
 	// temporarily discard any journal additions (don't double add on load)
 	j.writer = new(devNull)
+
 	defer func() { j.writer = nil }()
 
 	dropped := 0
@@ -124,7 +125,7 @@ func (j *journal) rotate(local []*types.Transaction) error {
 	}
 
 	// generate a new journal with the contents of the current pool
-	replacement, err := os.OpenFile(j.path+".new", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	replacement, err := os.OpenFile(j.path+".new", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644) //nolint:gosec
 	if err != nil {
 		return err
 	}
@@ -133,13 +134,13 @@ func (j *journal) rotate(local []*types.Transaction) error {
 	for _, tx := range local {
 		_, err := replacement.Write(tx.MarshalRLP())
 		if err != nil {
-			replacement.Close()
+			replacement.Close() //nolint:errcheck
 
 			return err
 		}
 	}
 
-	replacement.Close()
+	replacement.Close() //nolint:errcheck
 
 	// replace the live journal with the newly generated one
 	if err = os.Rename(j.path+".new", j.path); err != nil {
@@ -147,7 +148,7 @@ func (j *journal) rotate(local []*types.Transaction) error {
 	}
 
 	// open a new journal
-	sink, err := os.OpenFile(j.path, os.O_WRONLY|os.O_APPEND, 0644)
+	sink, err := os.OpenFile(j.path, os.O_WRONLY|os.O_APPEND, 0644) //nolint:gosec
 	if err != nil {
 		return err
 	}

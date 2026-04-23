@@ -144,6 +144,7 @@ func TestStorage(t *testing.T) {
 
 func TestWriteReadFullBlockInParallel(t *testing.T) {
 	s, cleanUpFn, path := newStorage(t)
+
 	defer func() {
 		s.Close()
 		cleanUpFn()

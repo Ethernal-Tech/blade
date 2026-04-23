@@ -954,7 +954,7 @@ func (c *TestCluster) getOpenPort() int64 {
 func runCommand(binary string, args []string, stdout io.Writer) error {
 	var stdErr bytes.Buffer
 
-	cmd := exec.Command(binary, args...)
+	cmd := exec.Command(binary, args...) //nolint:gosec
 	cmd.Stderr = &stdErr
 	cmd.Stdout = stdout
 
@@ -1146,7 +1146,7 @@ func sliceAddressToSliceString(addrs []types.Address) []string {
 }
 
 func CopyDir(source, destination string) error {
-	err := os.Mkdir(destination, 0755)
+	err := os.Mkdir(destination, 0755) //nolint:gosec
 	if err != nil {
 		return err
 	}

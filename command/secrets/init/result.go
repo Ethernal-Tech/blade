@@ -26,7 +26,7 @@ type SecretsInitResult struct {
 	Address       types.Address `json:"address"`
 	BLSPubkey     string        `json:"bls_pubkey"`
 	NodeID        string        `json:"node_id"`
-	PrivateKey    string        `json:"private_key"`
+	PrivateKey    string        `json:"private_key"` //nolint:gosec
 	BLSPrivateKey string        `json:"bls_private_key"`
 	Insecure      bool          `json:"insecure"`
 	Generated     string        `json:"generated"`

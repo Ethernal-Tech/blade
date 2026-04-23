@@ -50,7 +50,7 @@ func (debug *DebugHandler) StartCPUProfile(file string) error {
 	}
 
 	if err := pprof.StartCPUProfile(f); err != nil {
-		f.Close()
+		f.Close() //nolint:errcheck
 
 		return err
 	}
@@ -92,13 +92,12 @@ func (debug *DebugHandler) StartGoTrace(file string) error {
 	}
 
 	f, err := os.Create(expandHomeDirectory(file))
-
 	if err != nil {
 		return err
 	}
 
 	if err := trace.Start(f); err != nil {
-		f.Close()
+		f.Close() //nolint:errcheck
 
 		return err
 	}
@@ -120,7 +119,7 @@ func (debug *DebugHandler) StopGoTrace() error {
 
 	trace.Stop()
 
-	debug.traceW.Close()
+	debug.traceW.Close() //nolint:errcheck
 	debug.traceW = nil
 	debug.traceFile = ""
 

@@ -127,6 +127,7 @@ func (g *Genesis) MarshalJSON() ([]byte, error) {
 	}
 
 	var enc Genesis
+
 	enc.Nonce = hex.EncodeToHex(g.Nonce[:])
 
 	enc.Timestamp = common.EncodeUint64(g.Timestamp)
@@ -261,7 +262,7 @@ type GenesisAccount struct {
 	Storage    map[types.Hash]types.Hash `json:"storage,omitempty"`
 	Balance    *big.Int                  `json:"balance,omitempty"`
 	Nonce      uint64                    `json:"nonce,omitempty"`
-	PrivateKey []byte                    `json:"secretKey,omitempty"` // for tests
+	PrivateKey []byte                    `json:"secretKey,omitempty"` //nolint:gosec // for tests
 }
 
 type genesisAccountEncoder struct {
@@ -269,7 +270,7 @@ type genesisAccountEncoder struct {
 	Storage    map[types.Hash]types.Hash `json:"storage,omitempty"`
 	Balance    *string                   `json:"balance"`
 	Nonce      *string                   `json:"nonce,omitempty"`
-	PrivateKey *string                   `json:"secretKey,omitempty"`
+	PrivateKey *string                   `json:"secretKey,omitempty"` //nolint:gosec
 }
 
 // ENCODING //
@@ -308,7 +309,7 @@ func (g *GenesisAccount) UnmarshalJSON(data []byte) error {
 		Storage    map[types.Hash]types.Hash `json:"storage,omitempty"`
 		Balance    *string                   `json:"balance"`
 		Nonce      *string                   `json:"nonce,omitempty"`
-		PrivateKey *string                   `json:"secretKey,omitempty"`
+		PrivateKey *string                   `json:"secretKey,omitempty"` //nolint:gosec
 	}
 
 	var dec GenesisAccount
@@ -341,7 +342,6 @@ func (g *GenesisAccount) UnmarshalJSON(data []byte) error {
 	}
 
 	g.Nonce, subErr = common.ParseUint64orHex(dec.Nonce)
-
 	if subErr != nil {
 		parseError("nonce", subErr)
 	}

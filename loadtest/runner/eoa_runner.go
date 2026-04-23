@@ -50,6 +50,7 @@ func (e *EOARunner) Run(ctx context.Context) error {
 	}
 
 	cancelableCtx, cancel := context.WithCancel(ctx)
+
 	defer func() {
 		cancel()
 

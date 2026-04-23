@@ -64,6 +64,7 @@ func (e *ERC721Runner) Run(ctx context.Context) error {
 	}
 
 	cancelableCtx, cancel := context.WithCancel(ctx)
+
 	defer func() {
 		cancel()
 
@@ -139,7 +140,6 @@ func (e *ERC721Runner) deployERC21Token() error {
 		"tokenName":   "ZexCoin",
 		"tokenSymbol": "ZEX",
 	})
-
 	if err != nil {
 		return err
 	}
