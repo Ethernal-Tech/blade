@@ -1317,7 +1317,7 @@ func TestE2E_Bridge_NonMintableERC20Token_WithPremine(t *testing.T) {
 		balance := erc20BalanceOf(t, address,
 			polybftCfg.Bridge.RootNativeERC20Addr, rootchainTxRelayer)
 		t.Log("Balance of native ERC20 token on root", balance, "Address", address)
-		require.Equal(t, rootExpected, balance)
+		require.Zero(t, rootExpected.Cmp(balance))
 
 		balance, err = childEthEndpoint.GetBalance(address, jsonrpc.LatestBlockNumberOrHash)
 		require.NoError(t, err)

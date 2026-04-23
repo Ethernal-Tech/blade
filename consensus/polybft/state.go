@@ -162,7 +162,6 @@ func bucketStats(bucketName []byte, db *bolt.DB) (*bolt.BucketStats, error) {
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, fmt.Errorf("cannot check bucket stats. Bucket name=%s: %w", string(bucketName), err)
 	}

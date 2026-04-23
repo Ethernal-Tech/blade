@@ -81,6 +81,7 @@ func (d *Dev) nextNotify() chan struct{} {
 
 	go func() {
 		<-time.After(time.Duration(d.interval) * time.Second)
+
 		d.notifyCh <- struct{}{}
 	}()
 
@@ -180,7 +181,6 @@ func (d *Dev) writeNewBlock(parent *types.Header) error {
 	}
 
 	transition, err := d.executor.BeginTxn(parent.StateRoot, header, miner)
-
 	if err != nil {
 		return err
 	}

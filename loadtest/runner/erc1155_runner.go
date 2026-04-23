@@ -46,6 +46,8 @@ func NewERC1155Runner(cfg LoadTestConfig) (*ERC1155Runner, error) {
 // 7. Waits for transaction receipts.
 // 8. Calculates the transactions per second (TPS) based on block information and transaction statistics.
 // Returns an error if any of the steps fail.
+//
+//nolint:dupl
 func (e *ERC1155Runner) Run(ctx context.Context) error {
 	fmt.Println("Running ERC1155 load test", e.cfg.LoadTestName)
 
@@ -70,6 +72,7 @@ func (e *ERC1155Runner) Run(ctx context.Context) error {
 	}
 
 	cancelableCtx, cancel := context.WithCancel(ctx)
+
 	defer func() {
 		cancel()
 

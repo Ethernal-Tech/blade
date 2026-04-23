@@ -163,6 +163,7 @@ func (b *BlockBuilder) Fill() {
 	blockTimer := time.NewTimer(b.params.BlockTime)
 
 	b.params.TxPool.Prepare()
+
 write:
 	for {
 		select {

@@ -79,7 +79,6 @@ func NewJSONRPC(logger hclog.Logger, config *Config, manager accounts.AccountMan
 		},
 		manager,
 	)
-
 	if err != nil {
 		return nil, err
 	}
@@ -247,8 +246,8 @@ func (w *wsWrapper) GetFilterID() string {
 func (w *wsWrapper) WriteMessage(messageType int, data []byte) error {
 	w.Lock()
 	defer w.Unlock()
-	writeErr := w.ws.WriteMessage(messageType, data)
 
+	writeErr := w.ws.WriteMessage(messageType, data)
 	if writeErr != nil {
 		w.logger.Error(
 			fmt.Sprintf("Unable to write WS message, %s", writeErr.Error()),

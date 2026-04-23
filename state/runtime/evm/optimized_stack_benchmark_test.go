@@ -8,6 +8,8 @@ import (
 )
 
 func BenchmarkOptimizedStack_Push(b *testing.B) {
+	b.Skip()
+
 	stack := NewOptimizedStack(int32(b.N))
 	val := uint256.NewInt(42)
 

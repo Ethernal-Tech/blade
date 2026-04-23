@@ -293,7 +293,7 @@ func (t *TestServer) RegisterValidatorWithStake(amount *big.Int) error {
 
 // WhitelistValidators invokes whitelist-validators helper CLI command that whitelists validators
 func (t *TestServer) WhitelistValidators(addresses []string) error {
-	args := []string{
+	args := []string{ //nolint:prealloc
 		"validator",
 		"whitelist-validators",
 		"--" + polybftsecrets.AccountDirFlag, t.config.DataDir,

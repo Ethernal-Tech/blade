@@ -151,8 +151,6 @@ func NewDebug(store debugStore, requestsPerSecond uint64) *Debug {
 
 // CpuProfile turns on CPU profiling for nsec seconds and writes
 // profile data to file.
-//
-//nolint:stylecheck
 func (d *Debug) CpuProfile(file string, nsec int64) (interface{}, error) {
 	return d.throttling.AttemptRequest(
 		context.Background(),
@@ -224,6 +222,7 @@ func (d *Debug) MutexProfile(file string, nsec int64) (interface{}, error) {
 		func() (interface{}, error) {
 			runtime.SetMutexProfileFraction(1)
 			time.Sleep(time.Duration(nsec) * time.Second)
+
 			defer runtime.SetMutexProfileFraction(0)
 
 			absPath, err := filepath.Abs(file)
@@ -1008,8 +1007,6 @@ func (d *Debug) Preimage(codeHash types.Hash) (interface{}, error) {
 }
 
 // DbGet returns the raw value of a key stored in the database.
-//
-//nolint:stylecheck
 func (d *Debug) DbGet(key string) (interface{}, error) {
 	return d.throttling.AttemptRequest(
 		context.Background(),

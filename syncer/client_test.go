@@ -309,6 +309,7 @@ func TestPeerConnectionUpdateEventCh(t *testing.T) {
 	go func() {
 		status := <-client.GetPeerStatusUpdateCh()
 		newStatuses = append(newStatuses, status)
+
 		doneCh <- struct{}{}
 	}()
 
@@ -561,6 +562,7 @@ func Test_EmitMultipleBlocks(t *testing.T) {
 
 		go func() {
 			defer close(c)
+
 			wg.Wait()
 		}()
 

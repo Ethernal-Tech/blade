@@ -373,7 +373,7 @@ func (p *TxPool) startJournal() {
 		for {
 			select {
 			case <-p.shutdownCh:
-				p.journal.close()
+				p.journal.close() //nolint:errcheck
 
 				return
 			case <-p.journalCh:

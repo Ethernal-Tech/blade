@@ -49,6 +49,7 @@ func TestCommitmentMessage_ToRegisterCommitmentInputData(t *testing.T) {
 	t.Parallel()
 
 	const epoch, eventsCount = uint64(100), 11
+
 	pendingCommitment, _, _ := buildCommitmentAndStateSyncs(t, eventsCount, epoch, uint64(2))
 	expectedSignedCommitmentMsg := &CommitmentMessageSigned{
 		Message: pendingCommitment.StateSyncCommitment,
@@ -74,6 +75,7 @@ func TestCommitmentMessage_VerifyProof(t *testing.T) {
 	t.Parallel()
 
 	const epoch, eventsCount = uint64(100), 11
+
 	commitment, commitmentSigned, stateSyncs := buildCommitmentAndStateSyncs(t, eventsCount, epoch, 0)
 	require.Equal(t, uint64(10), commitment.EndID.Sub(commitment.EndID, commitment.StartID).Uint64())
 

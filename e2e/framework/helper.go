@@ -129,7 +129,6 @@ func MultiJoin(t *testing.T, srvs ...*TestServer) {
 			_, err = srcClient.PeersAdd(ctxForConnecting, &proto.PeersAddRequest{
 				Id: dstAddr,
 			})
-
 			if err != nil {
 				errors.Append(fmt.Errorf("failed to connect from %d to %d, error=%w", srcIndex, dstIndex, err))
 			}
@@ -151,6 +150,7 @@ func MultiJoin(t *testing.T, srvs ...*TestServer) {
 // otherwise returns timeout
 func WaitUntilPeerConnects(ctx context.Context, srv *TestServer, requiredNum int) (*proto.PeersListResponse, error) {
 	clt := srv.Operator()
+
 	res, err := tests.RetryUntilTimeout(ctx, func() (interface{}, bool) {
 		subCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -162,7 +162,6 @@ func WaitUntilPeerConnects(ctx context.Context, srv *TestServer, requiredNum int
 
 		return nil, true
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -183,6 +182,7 @@ func WaitUntilTxPoolFilled(
 	requiredNum uint64,
 ) (*txpoolProto.TxnPoolStatusResp, error) {
 	clt := srv.TxnPoolOperator()
+
 	res, err := tests.RetryUntilTimeout(ctx, func() (interface{}, bool) {
 		subCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -194,7 +194,6 @@ func WaitUntilTxPoolFilled(
 
 		return nil, true
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -211,6 +210,7 @@ func WaitUntilTxPoolFilled(
 // otherwise returns timeout
 func WaitUntilBlockMined(ctx context.Context, srv *TestServer, desiredHeight uint64) (uint64, error) {
 	clt := srv.JSONRPC()
+
 	res, err := tests.RetryUntilTimeout(ctx, func() (interface{}, bool) {
 		height, err := clt.BlockNumber()
 		if err == nil && height >= desiredHeight {
@@ -219,7 +219,6 @@ func WaitUntilBlockMined(ctx context.Context, srv *TestServer, desiredHeight uin
 
 		return nil, true
 	})
-
 	if err != nil {
 		return 0, err
 	}
@@ -301,7 +300,7 @@ func FindAvailablePorts(n, from, to int) ([]ReservedPort, error) {
 		if newPort == nil {
 			// Close current reserved ports
 			for _, p := range ports {
-				p.Close()
+				p.Close() //nolint:errcheck
 			}
 
 			return nil, errors.New("couldn't reserve required number of ports")
@@ -414,6 +413,7 @@ func WaitForServersToSeal(servers []*TestServer, desiredHeight uint64) []error {
 
 		go func(indx int) {
 			waitCtx, waitCancelFn := context.WithTimeout(context.Background(), time.Minute)
+
 			defer func() {
 				waitCancelFn()
 				wg.Done()

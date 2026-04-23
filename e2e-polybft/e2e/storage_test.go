@@ -118,7 +118,7 @@ func checkStorage(t *testing.T, txs []*framework.TestTxn, client *jsonrpc.EthCli
 		bt, err := client.GetTransactionByHash(types.Hash(tx.Receipt().TransactionHash))
 		require.NoError(t, err)
 		assert.NotNil(t, bt)
-		assert.Equal(t, tx.Txn().Value(), bt.Value())
+		assert.Equal(t, tx.Txn().Value().Uint64(), bt.Value().Uint64())
 		assert.Equal(t, tx.Txn().Gas(), bt.Gas())
 		assert.Equal(t, tx.Txn().Nonce(), bt.Nonce())
 		assert.Equal(t, tx.Receipt().TransactionIndex, bt.TxnIndex)

@@ -496,6 +496,7 @@ func TestExtra_InitGenesisValidatorsDelta(t *testing.T) {
 		t.Parallel()
 
 		const validatorsCount = 7
+
 		vals := validator.NewTestValidators(t, validatorsCount)
 
 		delta := &validator.ValidatorSetDelta{

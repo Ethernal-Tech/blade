@@ -74,7 +74,7 @@ func RegenesisCMD() *cobra.Command {
 
 			return
 		}
-		defer trieStorage.Close()
+		defer trieStorage.Close() //nolint:errcheck
 
 		snapshotStorage, err := openStorage(params.SnapshotTrieDBPath, params.DBEngine, false)
 		if err != nil {
@@ -82,7 +82,7 @@ func RegenesisCMD() *cobra.Command {
 
 			return
 		}
-		defer snapshotStorage.Close()
+		defer snapshotStorage.Close() //nolint:errcheck
 
 		err = itrie.CopyTrie(types.StringToHash(params.TrieRoot).Bytes(), trieStorage, snapshotStorage, nil, false)
 		if err != nil {

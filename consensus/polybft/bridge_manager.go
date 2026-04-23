@@ -460,7 +460,6 @@ func (b *bridgeManager) initTracker(runtimeConfig *runtimeConfig) error {
 		},
 		store, b.eventTrackerConfig.startBlock,
 	)
-
 	if err != nil {
 		return err
 	}

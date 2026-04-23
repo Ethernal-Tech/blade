@@ -438,7 +438,6 @@ func deployContracts(outputter command.OutputFormatter, client *jsonrpc.EthClien
 	initialValidators []*validator.GenesisValidator, cmdCtx context.Context) (deploymentResultInfo, error) {
 	txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(client), txrelayer.WithWriter(outputter),
 		txrelayer.WithReceiptsTimeout(params.txTimeout))
-
 	if err != nil {
 		return deploymentResultInfo{RootchainCfg: nil, CommandResults: nil},
 			fmt.Errorf("failed to initialize tx relayer: %w", err)

@@ -404,6 +404,7 @@ func (r *BaseLoadTestRunner) waitForReceiptsParallel(ctx context.Context) {
 		timer.Stop()
 		ticker.Stop()
 		fmt.Println("Gathering results in parallel finished.")
+
 		r.resultsCollectedCh <- &stats{totalTxs: totalTxsExecuted, blockInfo: blockInfoMap, foundErrors: foundErrors}
 	}()
 
@@ -503,7 +504,9 @@ func (r *BaseLoadTestRunner) waitForReceipts(txHashes []types.Hash) (map[uint64]
 			receipt, err := r.waitForReceipt(txHash)
 			if err != nil {
 				lock.Lock()
+
 				foundErrors = append(foundErrors, err)
+
 				lock.Unlock()
 
 				continue
@@ -514,7 +517,9 @@ func (r *BaseLoadTestRunner) waitForReceipts(txHashes []types.Hash) (map[uint64]
 			block, err := client.GetBlockByNumber(jsonrpc.BlockNumber(receipt.BlockNumber), true)
 			if err != nil {
 				lock.Lock()
+
 				foundErrors = append(foundErrors, err)
+
 				lock.Unlock()
 
 				continue
@@ -1014,8 +1019,10 @@ func (r *BaseLoadTestRunner) sendTransactions(
 				}
 
 				appendMux.Lock()
+
 				foundErrs = append(foundErrs, sendErrors...)
 				allTxnHashes = append(allTxnHashes, txnHashes...)
+
 				appendMux.Unlock()
 
 				return nil

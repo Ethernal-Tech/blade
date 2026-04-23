@@ -51,6 +51,7 @@ func TestThrottling(t *testing.T) {
 	for i := 0; i < len(attempts); i++ {
 		go func(value int, duration time.Duration, delay time.Duration) {
 			defer wg.Done()
+
 			time.Sleep(delay)
 
 			var isError bool

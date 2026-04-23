@@ -55,7 +55,7 @@ func TestGovernanceStore_InsertAndGetEvents(t *testing.T) {
 
 	forkParamsEvents := []contractsapi.EventAbi{newFeatureEvent, updateFeatureEvent}
 
-	allEvents := make([]contractsapi.EventAbi, 0)
+	allEvents := make([]contractsapi.EventAbi, 0) //nolint:prealloc
 	allEvents = append(allEvents, networkParamsEvents...)
 	allEvents = append(allEvents, forkParamsEvents...)
 

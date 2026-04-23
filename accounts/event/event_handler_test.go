@@ -80,11 +80,13 @@ func TestConcurrentAccess(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
+
 		ps.Publish(topic, TestEvent{Data: "testEvent"})
 	}()
 
 	go func() {
 		defer wg.Done()
+
 		ps.Unsubscribe(topic, eventChan)
 	}()
 

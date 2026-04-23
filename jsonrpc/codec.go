@@ -304,6 +304,7 @@ func NewRPCErrorResponse(id interface{}, errCode int, err string, data []byte, j
 // NewRPCResponse returns Success/Error response object
 func NewRPCResponse(id interface{}, jsonRPCVersion string, reply []byte, err Error) Response {
 	var response Response
+
 	switch err.(type) {
 	case nil:
 		response = &SuccessResponse{JSONRPC: jsonRPCVersion, ID: id, Result: reply}

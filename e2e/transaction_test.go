@@ -62,7 +62,12 @@ func TestPreminedBalance(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			balance, err := rpcClient.GetBalance(testCase.address, jsonrpc.LatestBlockNumberOrHash)
 			require.NoError(t, err)
-			require.Equal(t, testCase.balance, balance)
+
+			if testCase.balance.BitLen() == 0 {
+				require.Zero(t, balance.BitLen())
+			} else {
+				require.Equal(t, testCase.balance, balance)
+			}
 		})
 	}
 }

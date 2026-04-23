@@ -1470,8 +1470,8 @@ func opHalt(op OpCode) instruction {
 		size := c.pop()
 
 		var ok bool
-		c.ret, ok = c.get2(c.ret[:0], offset, size)
 
+		c.ret, ok = c.get2(c.ret[:0], offset, size)
 		if !ok {
 			return
 		}

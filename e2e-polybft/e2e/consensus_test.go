@@ -124,6 +124,7 @@ func TestE2E_Consensus_BulkDrop(t *testing.T) {
 
 		go func(node *framework.TestServer) {
 			defer wg.Done()
+
 			node.Stop()
 		}(node)
 	}

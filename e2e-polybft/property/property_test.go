@@ -101,6 +101,7 @@ func TestProperty_DropValidators(t *testing.T) {
 
 			go func(node *framework.TestServer) {
 				defer wg.Done()
+
 				node.Stop()
 			}(node)
 		}

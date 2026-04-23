@@ -152,7 +152,6 @@ func (a *Account) UnmarshalRlp(b []byte) error {
 	}
 
 	elems, err := v.GetElems()
-
 	if err != nil {
 		return err
 	}

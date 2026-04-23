@@ -301,7 +301,6 @@ func (s *StateSyncStore) getMessageVotes(epoch uint64, hash []byte) ([]*MessageS
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}

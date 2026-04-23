@@ -28,7 +28,7 @@ import (
 func init() {
 	// for tests
 	forkmanager.GetInstance().RegisterFork(chain.Governance, nil)
-	forkmanager.GetInstance().ActivateFork(chain.Governance, 0) //nolint:errcheck
+	forkmanager.GetInstance().ActivateFork(chain.Governance, 0)
 }
 
 func TestConsensusRuntime_isFixedSizeOfEpochMet_NotReachedEnd(t *testing.T) {

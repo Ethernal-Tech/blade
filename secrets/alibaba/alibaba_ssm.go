@@ -38,8 +38,7 @@ type AlibabaSsmManager struct {
 
 func SecretsManagerFactory(
 	config *secrets.SecretsManagerConfig,
-	params *secrets.SecretsManagerParams) (secrets.SecretsManager, error) { //nolint
-
+	params *secrets.SecretsManagerParams) (secrets.SecretsManager, error) {
 	// Check if the node name is present
 	if config.Name == "" {
 		return nil, errors.New("no node name specified for Alibaba secrets manager")
@@ -103,6 +102,7 @@ func (a *AlibabaSsmManager) GetSecret(name string) ([]byte, error) {
 		WithDecryption: tea.Bool(true),
 	}
 	runtime := &util.RuntimeOptions{}
+
 	retVal, tryErr := func() (_b []byte, _e error) {
 		defer func() {
 			if r := tea.Recover(recover()); r != nil {
@@ -118,7 +118,6 @@ func (a *AlibabaSsmManager) GetSecret(name string) ([]byte, error) {
 
 		return []byte(tea.StringValue(response.Body.Parameter.Value)), nil
 	}()
-
 	if tryErr != nil {
 		a.logError(tryErr)
 	}
@@ -134,6 +133,7 @@ func (a *AlibabaSsmManager) SetSecret(name string, value []byte) error {
 		Value:    tea.String(string(value)),
 	}
 	runtime := &util.RuntimeOptions{}
+
 	tryErr := func() (_e error) {
 		defer func() {
 			if r := tea.Recover(recover()); r != nil {
@@ -148,7 +148,6 @@ func (a *AlibabaSsmManager) SetSecret(name string, value []byte) error {
 
 		return nil
 	}()
-
 	if tryErr != nil {
 		a.logError(tryErr)
 	}
@@ -170,6 +169,7 @@ func (a *AlibabaSsmManager) RemoveSecret(name string) error {
 		Name:     tea.String(a.constructSecretPath(name)),
 	}
 	runtime := &util.RuntimeOptions{}
+
 	tryErr := func() (_e error) {
 		defer func() {
 			if r := tea.Recover(recover()); r != nil {
@@ -184,7 +184,6 @@ func (a *AlibabaSsmManager) RemoveSecret(name string) error {
 
 		return nil
 	}()
-
 	if tryErr != nil {
 		a.logError(tryErr)
 	}
