@@ -23,7 +23,7 @@ require (
 	github.com/erigontech/mdbx-go v0.40.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/hashicorp/go-bexpr v0.1.15
+	github.com/hashicorp/go-bexpr v0.1.16
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-immutable-radix v1.3.1
 	github.com/hashicorp/go-metrics v0.5.4
