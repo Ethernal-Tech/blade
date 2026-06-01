@@ -20,7 +20,7 @@ require (
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-connections v0.7.0
 	github.com/envoyproxy/protoc-gen-validate v1.3.3
-	github.com/erigontech/mdbx-go v0.40.0
+	github.com/erigontech/mdbx-go v0.40.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/go-bexpr v0.1.16
