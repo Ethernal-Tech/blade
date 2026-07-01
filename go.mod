@@ -20,7 +20,7 @@ require (
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-connections v0.7.0
 	github.com/envoyproxy/protoc-gen-validate v1.3.3
-	github.com/erigontech/mdbx-go v0.40.0
+	github.com/erigontech/mdbx-go v0.40.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/go-bexpr v0.1.16
@@ -160,7 +160,7 @@ require (
 	github.com/hashicorp/go-version v1.7.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
-	github.com/ianlancetaylor/cgosymbolizer v0.0.0-20241129212102-9c50ad6b591e // indirect
+	github.com/ianlancetaylor/cgosymbolizer v0.0.0-20260504013507-f4b012c11129 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/ipfs/go-cid v0.6.1 // indirect
 	github.com/ipfs/go-log/v2 v2.8.0 // indirect
