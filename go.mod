@@ -54,7 +54,7 @@ require (
 	github.com/umbracle/go-eth-bn256 v0.0.0-20230125114011-47cb310d9b0b
 	github.com/valyala/fasthttp v1.70.0
 	github.com/valyala/fastjson v1.6.10
-	go.etcd.io/bbolt v1.4.3
+	go.etcd.io/bbolt v1.5.0
 	golang.org/x/crypto v0.50.0
 	golang.org/x/sync v0.20.0
 	golang.org/x/tools v0.44.0
@@ -258,7 +258,7 @@ require (
 	github.com/shirou/gopsutil/v4 v4.25.3 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	github.com/spf13/pflag v1.0.9 // indirect
+	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/theckman/httpforwarded v0.4.0 // indirect
 	github.com/tinylib/msgp v1.2.5 // indirect
@@ -296,7 +296,7 @@ require (
 	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260428171046-76f71b9afea0 // indirect
 	golang.org/x/term v0.42.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
