@@ -254,6 +254,7 @@ jobs:
       max_enqueued: ${{ inputs.max_enqueued }}
       max_promoted: ${{ inputs.max_promoted }}
       is_london_fork_active: ${{ inputs.is_london_fork_active }}
+      enable_block_access_list: ${{ vars.ENABLE_BLOCK_ACCESS_LIST }}
       gossip_msg_size: ${{ inputs.gossip_msg_size }}
       deploy_network_terraform_output: ${{ needs.deploy_network.outputs.terraform_output }}
       deploy_network_ansible_output: ${{ needs.deploy_network.outputs.ansible_output }}

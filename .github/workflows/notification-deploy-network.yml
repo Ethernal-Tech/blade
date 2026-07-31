@@ -35,6 +35,10 @@ on: # yamllint disable-line rule:truthy
         description: EIP-1559
         type: boolean
         required: true
+      enable_block_access_list:
+        description: Enable Block Access List
+        type: boolean
+        required: true
       gossip_msg_size:
         description: Gossip Message Size
         type: string
@@ -180,6 +184,10 @@ jobs:
                     {
                       "type": "mrkdwn",
                       "text": "Gossip Message Size: *${{ inputs.gossip_msg_size }}*"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "Block Access List: *${{ inputs.enable_block_access_list }}*"
                     }
                   ]
                 }
