@@ -251,6 +251,7 @@ jobs:
       block_time: ${{ inputs.block_time }}
       max_slots: ${{ inputs.max_slots }}
       max_enqueued: ${{ inputs.max_enqueued }}
+      max_promoted: ${{ inputs.max_promoted }}
       is_london_fork_active: ${{ inputs.is_london_fork_active }}
       gossip_msg_size: ${{ inputs.gossip_msg_size }}
       deploy_network_terraform_output: ${{ needs.deploy_network.outputs.terraform_output }}
