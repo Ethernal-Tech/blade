@@ -37,7 +37,7 @@ on: # yamllint disable-line rule:truthy
         required: true
       enable_block_access_list:
         description: Enable Block Access List
-        type: boolean
+        type: string
         required: true
       gossip_msg_size:
         description: Gossip Message Size
