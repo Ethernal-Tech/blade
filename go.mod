@@ -10,7 +10,7 @@ require (
 	github.com/Ethernal-Tech/merkle-tree v0.0.0-20231213143318-4db9da419e04
 	github.com/alibabacloud-go/darabonba-openapi/v2 v2.1.16
 	github.com/alibabacloud-go/oos-20190601/v4 v4.8.0
-	github.com/alibabacloud-go/tea v1.4.0
+	github.com/alibabacloud-go/tea v1.5.3
 	github.com/alibabacloud-go/tea-utils/v2 v2.0.9
 	github.com/aliyun/credentials-go v1.4.12
 	github.com/aws/aws-sdk-go v1.55.5
